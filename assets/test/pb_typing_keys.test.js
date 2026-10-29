@@ -147,6 +147,47 @@ describe("a key carries the element the author can see", () => {
   });
 });
 
+// THE ELEMENT TOOLBAR IS THE SERVER'S SELECTION, DRAWN WHERE THE RING IS. For the round trip after a
+// click it sits on the new element and still names, and deletes, the old one.
+describe("the element toolbar", () => {
+  const toolbar =
+    '<div id="pb-el-toolbar"><button id="pb-eltb-delete" type="button" phx-click="toolbar" phx-value-action="delete">x</button></div>';
+
+  let heard;
+
+  beforeEach(() => {
+    // Where LiveView listens for `phx-click`: a click that reaches this would press the button.
+    heard = vi.fn();
+    window.addEventListener("click", heard);
+  });
+
+  afterEach(() => window.removeEventListener("click", heard));
+
+  it("does nothing while it still names the element selected before", () => {
+    const ctx = canvas(PAGE + toolbar);
+    ctx.el.dataset.selection = "s1";
+
+    click($("#words"));
+    heard.mockClear();
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+    $("#pb-eltb-delete").dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it("and acts once it names the ringed one", () => {
+    const ctx = canvas(PAGE + toolbar);
+
+    click($("#words"));
+    ctx.el.dataset.selection = "h1";
+    heard.mockClear();
+    click($("#pb-eltb-delete"));
+
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("a double click is the author saying they are about to type", () => {
   // Where the e2e run's sections went: the heading had gone, the section below moved up under the
   // pointer, and the double click meant for the heading's words landed on its padding.

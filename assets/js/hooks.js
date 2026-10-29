@@ -1306,6 +1306,19 @@ const PbCanvas = {
       // so a click on its own buttons read as "clicked empty space" and dropped the ring — then
       // `placeToolbar` hid the bar the reader had just pressed. Every action on it acts on the
       // CURRENT selection, so pressing one must never change what is selected.
+      //
+      // AND IT ACTS ON THE ELEMENT IT NAMES. The bar is the server's selection, drawn where the ring
+      // is; for the round trip after a click the two differ, and the bar sits on the new element
+      // while it still names, and deletes, the old one. Its actions wait until the two agree, the
+      // same rule the keyboard follows (see `onKey`).
+      if (
+        event.target.closest('#pb-el-toolbar [phx-click="toolbar"]') &&
+        (this.el.dataset.selection || null) !== (this.selectedId || null)
+      ) {
+        event.preventDefault();
+        return event.stopImmediatePropagation();
+      }
+
       if (event.target.closest("#pb-el-toolbar")) return;
 
       const node = styleableNode(event.target);

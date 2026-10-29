@@ -475,12 +475,14 @@ describe("a double click the toolbar slid under", () => {
   });
 
   it("leaves the toolbar's own clicks alone", () => {
-    canvas(
+    const ctx = canvas(
       '<div data-node-id="p1" data-kind="tag"><span id="hit" data-node-id="c1" data-kind="eex">x</span></div>' +
         toolbar,
     );
 
     press("#hit", 1);
+    // The server's answer to the click: the toolbar now names what the ring is on.
+    ctx.el.dataset.selection = "p1";
     const single = press("#pb-eltb-delete", 1);
 
     expect(single.defaultPrevented).toBe(false);
