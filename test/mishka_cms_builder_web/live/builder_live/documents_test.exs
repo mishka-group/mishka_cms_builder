@@ -1536,6 +1536,33 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       assert_redirect(view, "/admin/dashboard/runtime/builder/page/#{record.id}")
     end
 
+    # AND IT ARRIVES INACTIVE, like a page named in the editor's own first step: both ways end in
+    # the editor, where Publish is what puts a document in front of visitors. The form's Active box
+    # came ticked from the resource's default, so this way made a page that was live, and empty,
+    # while its author was still building it in drafts.
+    test "a page created for the editor is not live until it is published", %{
+      conn: conn,
+      site: site
+    } do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/pages")
+
+      view |> element("#pb-create-open-page") |> render_click()
+
+      refute has_element?(view, "#page_form-form [name='form[active]']"),
+             "the form offered an Active switch Publish is the answer to"
+
+      view
+      |> pick_site("page_form-form", site)
+      |> form("#page_form-form", %{
+        "form" => %{"title" => "Not Yet Live", "path" => "/not-yet-live"}
+      })
+      |> render_submit()
+
+      assert record = created!(MishkaCmsCore.Runtime.Page, "not-yet-live")
+      assert_redirect(view, "/admin/dashboard/runtime/builder/page/#{record.id}")
+      refute record.active, "a page made to be built in the editor went live before its publish"
+    end
+
     # NON-VACUITY: the same form, saved without choosing it first, stays on the list. The redirect
     # above is the menu item's doing and nothing else's.
     #
@@ -1556,6 +1583,24 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       assert created!(MishkaCmsCore.Runtime.Page, "stay-put-page")
       assert render(view) =~ "Page created successfully"
+    end
+
+    # The full form is the one way that does not end in the editor, so it keeps its Active switch and
+    # what it says: there is no Publish after it.
+    test "the full form still asks whether the page is active", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/pages")
+
+      view |> element("#pb-create-form-page") |> render_click()
+      assert has_element?(view, "#page_form-form [name='form[active]']")
+
+      view
+      |> pick_site("page_form-form", site)
+      |> form("#page_form-form", %{
+        "form" => %{"title" => "Live At Once", "path" => "/live-at-once", "active" => "true"}
+      })
+      |> render_submit()
+
+      assert created!(MishkaCmsCore.Runtime.Page, "live-at-once").active
     end
 
     # AND FORGOTTEN IF THE FORM IS ABANDONED. The intent outlives the click, so a cancelled modal
