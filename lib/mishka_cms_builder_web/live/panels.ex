@@ -1729,6 +1729,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           palette_query={@palette_query}
           palette_cat={@palette_cat}
           palette={@palette}
+          block_library={@block_library}
+          element_library={@element_library}
         />
         <.blocks
           :if={@left_tab == :blocks}
@@ -1793,6 +1795,16 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:palette_cat, :string, required: true)
   attr(:palette, :any, default: nil, doc: "the AsyncResult carrying the component list")
 
+  attr(:block_library, :list,
+    default: [],
+    doc: "the Blocks tab's sections, searched with the same words as the components"
+  )
+
+  attr(:element_library, :list,
+    default: [],
+    doc: "the Blocks tab's elements, searched with the same words as the components"
+  )
+
   attr(:hidden, :boolean,
     default: false,
     doc: "kept in the DOM while another tab is showing, so coming back costs nothing"
@@ -1803,6 +1815,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       assigns
       |> assign(:entries, filter_palette(assigns))
       |> assign(:kit_prefixes, kit_prefixes(assigns.components))
+      |> assign(:block_hits, block_hits(assigns))
 
     ~H"""
     <div
@@ -2151,9 +2164,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             </div>
           </:failed>
 
+          <%!-- Closer to what follows when Blocks has an answer, so the note reads as its lead-in. --%>
           <p
             :if={@entries == []}
-            class="px-2.5 py-10 text-center text-[12px] font-medium text-[#6d6a63]"
+            class={[
+              "px-2.5 text-center text-[12px] font-medium text-[#6d6a63]",
+              (@block_hits == [] && "py-10") || "pb-4 pt-6"
+            ]}
           >
             {gettext("No components match.")}
           </p>
@@ -2177,6 +2194,73 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             {copy}
           </p>
         </.async_result>
+
+        <%!-- WHAT THE BLOCKS TAB HOLDS FOR THE SAME WORD. Someone typing "hero" or "pricing" is
+              looking for a hero or a pricing table, and those are sections one tab over: this box
+              answered "No components match." as though the editor had none. Each one places from
+              here the way it does from its own tab, and the button carries the words across.
+
+              A DIV, NOT A SECTION. `PbPalettePrefs` hides every `<section>` under the list that holds
+              no visible component tile, on every patch, and this one never holds a tile. --%>
+        <div :if={@block_hits != []} id="pb-palette-blocks" data-role="pb-palette-blocks">
+          <div class="mb-2.5 flex items-center gap-2">
+            <span class="size-[5px] flex-none rounded-full bg-[#4f4bcc]"></span>
+            <span class="text-[10px] font-bold uppercase tracking-[0.11em] text-[#6d6a63]">
+              {(@entries == [] && gettext("In Blocks")) || gettext("Also in Blocks")}
+            </span>
+            <span class="h-px flex-1 bg-[#f0efea]"></span>
+            <span class="font-['Space_Grotesk'] text-[9.5px] font-semibold text-[#6d6a63]">
+              {length(@block_hits)}
+            </span>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <button
+              :for={hit <- Enum.take(@block_hits, 4)}
+              type="button"
+              id={"pb-palette-block-#{hit.id}"}
+              phx-hook="PbPaletteItem"
+              draggable="true"
+              data-template={hit.template}
+              phx-click="pick_block"
+              phx-value-block={hit.id}
+              title={
+                gettext("%{description} — click to place, or drag onto the canvas",
+                  description: translate(hit.description)
+                )
+              }
+              class={[
+                "flex w-full cursor-grab items-center gap-2 rounded-[10px] border px-2.5 py-2 text-left",
+                (picked_block_id(@picked) == hit.id && "border-[#4f4bcc] bg-[#f2f1fc]") ||
+                  "border-[#ecebe6] bg-white hover:border-[#c9c7ee] hover:bg-[#faf9fe]"
+              ]}
+            >
+              <span class="grid size-[22px] flex-none place-items-center rounded-[6px] bg-[#f2f1ec] text-[#6d6a63]">
+                <.icon name={(hit.kind == :section && :card) || element_icon(hit.id)} size={12} />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-[11px] font-semibold text-[#3a382f]">
+                  {translate(hit.title)}
+                </span>
+                <span class="block truncate text-[10px] text-[#6d6a63]">
+                  {translate(hit.description)}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            id="pb-palette-blocks-open"
+            phx-click={open_in_blocks(@palette_query)}
+            class="mt-2 inline-flex h-[26px] items-center gap-1.5 rounded-[8px] px-2 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+          >
+            {(length(@block_hits) > 4 &&
+                gettext("Show all %{count} in Blocks", count: length(@block_hits))) ||
+              gettext("Show in Blocks")}
+            <.icon name={:arrow_right} size={11} />
+          </button>
+        </div>
       </div>
     </div>
     """
@@ -16322,6 +16406,34 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     components
     |> Enum.filter(&((cat == "all" or palette_group(&1) == cat) and matches?(&1, query)))
     |> Enum.sort_by(& &1.label)
+  end
+
+  # The Blocks tab's answer to the palette's words, through the Blocks tab's own filter, so the two
+  # tabs agree on what a word finds. Sections first: they are what no component offers, and what
+  # "hero" or "pricing" was looking for. A blank box asks nothing of either tab.
+  defp block_hits(%{palette_query: query} = assigns) do
+    case String.trim(query) do
+      "" ->
+        []
+
+      _words ->
+        Enum.map(
+          Blocks.filter(assigns.block_library, "all", query),
+          &Map.put(&1, :kind, :section)
+        ) ++
+          Enum.map(
+            Blocks.filter(assigns.element_library, "all", query),
+            &Map.put(&1, :kind, :element)
+          )
+    end
+  end
+
+  # Into the Blocks tab with the same words in its box and its chips back on All: a chip left on
+  # "Forms" from an earlier visit would hide the very hero this button offered.
+  defp open_in_blocks(query) do
+    JS.push("block_cat", value: %{cat: "all"})
+    |> JS.push("block_query", value: %{value: query})
+    |> JS.push("set_left_tab", value: %{tab: "blocks"})
   end
 
   defp matches?(_entry, ""), do: true

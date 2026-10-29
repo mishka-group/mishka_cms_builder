@@ -2978,6 +2978,53 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       assert has_element?(view, "#pb-comp-hero-card")
     end
 
+    # A WORD NO COMPONENT ANSWERS CAN STILL BE ONE THE EDITOR HAS. "pricing" here found nothing
+    # while a Pricing section sat one tab over, so the box said "No components match." about a thing
+    # the author could have placed in one click.
+    test "a search no component matches offers the Blocks that do", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_change(view, "palette_query", %{"value" => "pricing"})
+
+      assert has_element?(view, "#pb-palette", "No components match.")
+      assert has_element?(view, "#pb-palette-blocks", "In Blocks")
+      assert has_element?(view, "#pb-palette-blocks #pb-palette-block-pricing-three", "Pricing")
+
+      view |> element("#pb-palette-block-pricing-three") |> render_click()
+
+      assert editor(view).picked == {:block, "pricing-three"}
+      assert has_element?(view, "#pb-palette", "Placing pricing-three")
+    end
+
+    # AND A WORD THAT FINDS COMPONENTS STILL SAYS WHAT BLOCKS HOLD. "hero" matches a hero card, and
+    # the Hero section is no less what someone typing it may be after.
+    test "a search components match also offers the Blocks that do", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_change(view, "palette_query", %{"value" => "hero"})
+
+      assert has_element?(view, "#pb-comp-hero-card")
+      assert has_element?(view, "#pb-palette-blocks", "Also in Blocks")
+      assert has_element?(view, "#pb-palette-blocks #pb-palette-block-hero-centred", "Hero")
+
+      render_change(view, "palette_query", %{"value" => ""})
+      refute has_element?(view, "#pb-palette-blocks")
+    end
+
+    # THE WAY ACROSS CARRIES THE WORDS, and clears a chip an earlier visit left on, which would
+    # otherwise hide the very section the button offered.
+    test "the way into Blocks arrives searching for the same words", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "block_cat", %{"cat" => "Forms"})
+      render_change(view, "palette_query", %{"value" => "pricing"})
+      view |> element("#pb-palette-blocks-open") |> render_click()
+
+      assert has_element?(view, "#pb-lefttab-blocks.bg-white")
+      assert has_element?(view, ~s(#pb-block-search[value="pricing"]))
+      assert has_element?(view, "#pb-block-pricing-three")
+    end
+
     # Every admin table links the editor as `?site_id=…`, so this is how a master actually arrives.
     # It used to hand that site to `:master_read`, whose `TenantContext` validation refuses a non-nil
     # tenant on a multitenancy-bypass action — the read errored and the palette rendered empty.

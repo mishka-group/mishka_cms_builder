@@ -11,8 +11,8 @@
   {"lib/mishka_cms_builder/editor_session.ex", :call_with_opaque, 2057},
   {"lib/mishka_cms_builder/history.ex", :call_without_opaque, 427},
   {"lib/mishka_cms_builder/marketplace/kits.ex", :call_without_opaque, 61},
-  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4224},
-  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4269},
+  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4308},
+  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4353},
 
   # `Strict.violation!/2` and `Strict.check!/3` are the core's macros that compile to an
   # unconditional `raise` outside :prod (`builder_strict` in config/config.exs) and to nothing in
