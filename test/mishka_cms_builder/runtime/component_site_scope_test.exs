@@ -4,27 +4,24 @@
 
 defmodule MishkaCmsBuilder.Runtime.ComponentSiteScopeTest do
   @moduledoc """
-  Whose components a render reaches: the site this process renders for, and the global ones.
+  Whose components the editor's palette card draws: the site this process renders for, and the global
+  ones.
 
-  A component reads as its own site — the kits read `authorize?: false` with `tenant: site_id()` —
-  so a template on one site that wrote `<.component component_name="…" site="another">` drew that
-  other site's markup and rows to its own visitors, inactive or offline as that site might be, and
-  ran its `handle_event` besides. `MishkaCmsCore.Runtime.LiveViewHelpers.component/1` now refuses
-  such a name before building it, and so does `static_component/1`, which the canvas and the
-  previews render through.
-
-  The site being rendered is the one `MishkaCmsCore.Runtime.Translations.put_site/1` named for the
-  process — see the surfaces that name it in `MishkaCmsCore.Runtime.LiveViewHelpers`. A test process
-  names it the same way a page does.
+  A component reads as its own site, so a template on one site that wrote
+  `<.component component_name="…" site="another">` would draw that other site's markup to its own
+  author. The core refuses such a name before building it (see the rest of this subject in its
+  `component_site_scope_test.exs`); the palette's card renders through `MishkaCmsBuilder.CardPreview`,
+  which must name the editor's site for as long as it renders and no longer. A test process names the
+  site the way a page does, `MishkaCmsCore.Runtime.Translations.put_site/1`.
 
   `async: false` — `SiteState` and the event registry are process-global.
   """
   use MishkaCmsCore.DataCase, async: false
 
-  alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
-  alias MishkaCmsCore.Runtime.{Translations}
   alias MishkaCmsBuilder.CardPreview
+  alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
   alias MishkaCmsCore.Runtime.States.{CompileFailureState, SiteState}
+  alias MishkaCmsCore.Runtime.Translations
 
   @moduletag :integration
 

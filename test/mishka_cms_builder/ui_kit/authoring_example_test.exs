@@ -4,25 +4,17 @@
 
 defmodule MishkaCmsBuilder.UiKit.AuthoringExampleTest do
   @moduledoc """
-  The bundle in `priv/cms_ui_kits/authoring/` is the answer to "how do I import my own component",
-  and it is executable rather than illustrative.
+  The editor's side of the example bundle in the core's `priv/cms_ui_kits/authoring/`.
 
-  ## Why the example is a test
-
-  A third-party developer's first contact with this CMS is a JSON file they have to get right with no
-  feedback loop: a bundle that installs is not yet a bundle that renders, and the ways it silently
-  half-works — an undeclared assign, a `phx-hook` naming a key nothing builds, an opener the editor
-  cannot see — all surface much later, on somebody's canvas, as a red box.
-
-  So every claim the README makes is asserted here against the file it points at. A guide that has
-  drifted from the thing it documents is worse than no guide, and prose cannot drift if the prose is
-  checked.
+  The bundle is the answer to "how do I import my own component", and the guide next to it says a
+  component that opens and closes declares how on its root, where the editor reads it: an author who
+  wires a button to it is then offered the component's own verbs rather than the generic `JS.show`,
+  which on anything more elaborate than `display:none` reveals the wrong half. The core asserts the
+  rest of the guide against the file; the editor's reading of that declaration is asserted here.
   """
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsBuilder.PaletteEntry
-
-  require Ash.Query
 
   @moduletag :integration
 

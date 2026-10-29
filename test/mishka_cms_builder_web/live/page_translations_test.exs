@@ -4,21 +4,17 @@
 
 defmodule MishkaCmsBuilderWeb.Live.PageTranslationsTest do
   @moduledoc """
-  The pages table with translated pages in it, driven through the real page.
+  The pages table with translated pages in it, as far as the visual editor is concerned.
 
-  A translation is a page row of its own, so a list of rows would show "about" beside "about-fa" —
-  the same page twice. The table shows one row per page and a chip for each other language, a search
-  lifts that so a Persian title can be found, and a row's "Add translation" makes the next edition
-  through the page's own create action. A master's Delete, one row or a bulk selection, is refused
-  while a live translation remains, its Delete permanently too, and a translation's Restore is
-  refused while its master is archived — each time with the admin told why. A refused Delete comes
-  with a button that archives, or deletes for good, those translations at once.
+  A translation is a page row of its own, and the table shows a chip for each other language. A
+  chip opens that edition in the details modal, whose Visual Editor link is the editor's: it leads to
+  the edition itself, not to the page it translates. The table, its search, its Delete rules and the
+  rest of the translations are asserted in the core.
 
   See `MishkaCmsCore.Runtime.PageEditions` and `MishkaCmsCore.LanguageEditions`.
   """
   use MishkaCmsCore.ConnCase
 
-  import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -90,13 +86,6 @@ defmodule MishkaCmsBuilderWeb.Live.PageTranslationsTest do
   end
 
   defp chip(page), do: "#page-edition-#{page.id}"
-
-  @act "#translations-refusal-act"
-
-  defp act(view) do
-    view |> element(@act) |> render_click()
-    view
-  end
 
   describe "the list" do
     test "a chip opens that edition", %{conn: conn, site: site, master: master} do
