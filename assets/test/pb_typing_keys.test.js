@@ -120,6 +120,23 @@ describe("a key carries the element the author can see", () => {
     ]);
   });
 
+  // A link's click is answered by its own capture handler, which stops the page from following it;
+  // the ring moved only when the server answered, so a key pressed before then named the element
+  // ringed before. A navbar link is where the e2e run lost its "Home".
+  it("names a link the moment it is clicked", () => {
+    canvas(
+      '<nav data-node-id="n1" data-kind="tag"><a id="home" href="/" data-node-id="a1" data-kind="tag">' +
+        '<span id="home-words" data-node-id="t2" data-kind="text">Home</span></a></nav>' +
+        PAGE,
+    );
+
+    click($("#words"));
+    click($("#home-words"));
+    backspace();
+
+    expect(shortcuts(posted)[0]).toMatchObject({ key: "delete", node_id: "a1" });
+  });
+
   it("names nothing when nothing is ringed", () => {
     canvas(PAGE);
 

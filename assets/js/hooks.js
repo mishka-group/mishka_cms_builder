@@ -2007,7 +2007,10 @@ const PbCanvas = {
       // having done something, with editing off.
       if (previewing()) return;
 
+      // The ring moves now, as it does for every other click: a key pressed before the server
+      // answers names what the author clicked, not the element ringed before it.
       const node = styleableNode(event.target);
+      this.markSelected(node ? node.dataset.nodeId : null);
       this.pushEvent("select", node ? { id: node.dataset.nodeId } : {});
     };
 
