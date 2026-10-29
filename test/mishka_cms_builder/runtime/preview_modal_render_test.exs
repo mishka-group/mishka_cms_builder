@@ -4,9 +4,8 @@
 
 defmodule MishkaCmsBuilder.Runtime.PreviewModalRenderTest do
   @moduledoc """
-  Renders the runtime preview modal to validate the full-LiveView `src` wiring for ErrorPage/Layout:
-  the Preview tab points its iframe at `/_preview/:resource/:token` (with `?status=` for error pages)
-  for both the live original and a draft.
+  Renders the runtime preview modal's drafts strip to validate the Visual Editor link: it opens the
+  editor on the draft the author selected, not on whichever is newest.
   """
   use ExUnit.Case, async: true
   @moduletag :unit
@@ -25,9 +24,8 @@ defmodule MishkaCmsBuilder.Runtime.PreviewModalRenderTest do
     |> Map.merge(Map.new(overrides))
   end
 
-  # THE DRAFTS STRIP, which is the modal's answer to "which of these am I looking at" — and, since
-  # the ✖ arrived, to "and which of them can I throw away". Both questions are about a SPECIFIC
-  # badge rather than about the selection, which is what these pin.
+  # THE DRAFTS STRIP, which is the modal's answer to "which of these am I looking at". The link to
+  # the editor is about the SELECTED badge, which is what these pin.
   describe "the drafts strip" do
     defp draft(id, label, day) do
       struct(PageDraft,
@@ -61,7 +59,7 @@ defmodule MishkaCmsBuilder.Runtime.PreviewModalRenderTest do
       )
     end
 
-    defp render_strip(overrides \\ %{}),
+    defp render_strip(overrides),
       do: render_component(&RuntimePreviewModal.modal/1, preview: strip(overrides))
 
     # LEAVING FOR THE BUILDER USED TO FORGET THE CHOICE. The editor read the drafts table for itself

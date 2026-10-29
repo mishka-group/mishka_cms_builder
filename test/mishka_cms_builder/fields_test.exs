@@ -4,14 +4,16 @@
 
 defmodule MishkaCmsBuilder.FieldsTest do
   @moduledoc """
-  A previewed form field appears in a form; a dropped one does not.
+  What an insert places is never a field wrapped in a form.
 
-  The detector fails OPEN — get it wrong and every field previews bare, exactly as before, with no
-  error anywhere to notice. So the set it selects is pinned against the installed bundles rather than
-  against a fixture, and the two components that sit one signal away from inclusion are named.
+  The staged form belongs to the preview of a field and nowhere else. The set of fields is pinned
+  against the installed bundles rather than against a fixture, so a component that sits one signal
+  away from being a field is caught too.
   """
   use ExUnit.Case, async: true
 
+  alias MishkaCmsBuilder.PaletteEntry
+  alias MishkaCmsBuilder.Wizard
   alias MishkaCmsCore.Runtime.Authoring.Fields
 
   @moduletag :unit
@@ -27,7 +29,7 @@ defmodule MishkaCmsBuilder.FieldsTest do
         path |> File.read!() |> Jason.decode!() |> Map.get("components", [])
       end)
 
-    {:ok, components: components, by_name: Map.new(components, &{&1["name"], &1})}
+    {:ok, components: components}
   end
 
   defp entry(component) do
@@ -44,9 +46,6 @@ defmodule MishkaCmsBuilder.FieldsTest do
   # The staged form belongs to the preview and nowhere else. These are the two functions the INSERT
   # handlers call, so asserting the negative here is asserting it about the document.
   describe "what an insert places" do
-    alias MishkaCmsBuilder.PaletteEntry
-    alias MishkaCmsBuilder.Wizard
-
     test "a dropped field is not wrapped in a form", %{components: components} do
       wrapped =
         for component <- components,

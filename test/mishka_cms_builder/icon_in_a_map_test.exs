@@ -4,13 +4,9 @@
 
 defmodule MishkaCmsBuilder.IconInAMapTest do
   @moduledoc """
-  A label is not always a word, and a count of zero is not a component.
+  A count of zero is not a component.
 
-  Dropping a `chelekom-pagination` gave an author a strip with no pages on it and two empty boxes
-  where its arrows should be, and an Inspector with no way to change either. Three separate causes,
-  none of them about colour, which is what it was reported as.
-
-  ## The count
+  Dropping a `chelekom-pagination` gave an author a strip with no pages on it.
 
   Placement leaves a required STRING empty on purpose: the Inspector marks it Required and the save
   refuses until it is filled. A number has no empty — `blank_attr?/2` reads the text "0" as filled —
@@ -18,21 +14,8 @@ defmodule MishkaCmsBuilder.IconInAMapTest do
   render as nothing. `chelekom-pagination` builds `range(1, total)`, which for zero is the empty
   list.
 
-  ## The arrows
-
-  The canvas generates a CSS rule for every icon the document could draw, because the site's own
-  stylesheet only carries the ones its pages already render. It looked for those names in
-  `{:string, …}` attributes — and pagination's five arrows and its separator are declared as `map`,
-  each defaulting to `%{type: :icon, value: "hero-chevron-left"}`, which the bundle carries as an
-  `__atom_map__` envelope. No rule was generated, so each drew an empty box.
-
-  ## And no way to change them
-
-  Read as a plain map attribute, each of those six drew a text box with nothing an author could
-  usefully type into it. The widget is decided from the DECLARED DEFAULT rather than from the
-  attribute's name, so a kit that spells the same idea differently is covered without being named —
-  and the control writes the map back, because a component reading `Map.get(@previous_label, :type)`
-  off a binary raises.
+  The icons a map attribute draws, and the control that edits them, are pinned in core against the
+  same bundle.
   """
   use ExUnit.Case, async: true
 

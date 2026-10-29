@@ -4,16 +4,11 @@
 
 defmodule MishkaCmsBuilder.StrictTest do
   @moduledoc """
-  The checks that turn a silent wrong answer into a loud one, and the documents they catch.
-
-  Every case here is a real shape that reached production undetected: a `children` list naming an id
-  that is not in the document, which costs that subtree at the next save because the serializer is
-  total and the save's own check only proves the output parses; a node claiming a parent that does
-  not claim it back; a cycle, which turns a walk into a hang.
+  The editor's half of `MishkaCmsCore.Runtime.Authoring.Strict`: every edit the session applies
+  leaves a document the checks accept, so the funnel that turns a silent wrong answer into a loud
+  one never fires on an ordinary edit.
   """
   use ExUnit.Case, async: true
-
-  require MishkaCmsCore.Runtime.Authoring.Strict
 
   alias MishkaCmsCore.Runtime.Authoring.Strict
   alias MishkaCmsCore.Runtime.Authoring.Tree

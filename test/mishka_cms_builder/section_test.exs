@@ -4,13 +4,11 @@
 
 defmodule MishkaCmsBuilder.SectionTest do
   @moduledoc """
-  The one owner of what the builder edits, and of the three ways each of them is spelled.
+  The builder's own spelling of what it edits agrees with core's `Section`.
 
-  This exists because the same fact was written in ten places in two spellings. The address says
-  `error-page`, everything durable says `error_page`, and the difference was converted by hand in
-  nine places across five modules — three of them a bare `String.to_existing_atom/1`, which is not a
-  conversion but a crash waiting for the one section whose spellings differ. It took the builder's
-  mount down for error pages, and the editor would not open there at all.
+  The same fact was once written in ten places in two spellings, and the two lists only met when the
+  editor tried to open an error page. `MishkaCmsCore.Runtime.Authoring.Section` is the one owner;
+  the sections the history files an entry under have to be exactly its names.
   """
   use ExUnit.Case, async: true
 

@@ -4,14 +4,12 @@
 
 defmodule MishkaCmsBuilder.FieldsRoleTest do
   @moduledoc """
-  What part of a form a component plays: declared by the kit when the kit says, inferred from its
-  markup when it does not, and left at `:none` for an error component, which has no structural
-  signal.
+  What a form owner and a label are seeded with when they are dropped from the palette.
 
-  The inference fails OPEN — get it wrong and the editor writes a binding onto a component that
-  cannot take one, and `KeyError :name` lands inside LiveView's diff with nothing in the editor to
-  notice. So every branch is pinned here against a hand-built entry whose one distinguishing signal
-  is named in the test, and against the real Chelekom rows and renamed copies of them.
+  The role a component plays in a form is inferred in core (`MishkaCmsCore.Runtime.Authoring.Fields`),
+  against the same entries. What is pinned here is the palette's use of it: a wrapper dropped with
+  the wrong `for` raises a protocol error the instant the canvas renders it, with nothing in the
+  editor to notice before.
   """
   use ExUnit.Case, async: true
 

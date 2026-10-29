@@ -4,8 +4,9 @@
 
 defmodule MishkaCmsBuilder.VisibilityTest do
   @moduledoc """
-  `MishkaCmsCore.Runtime.Authoring.Visibility`: an element kept in the page and shown to nobody —
-  the marker in the markup, what the compilers leave out, and the one edit that toggles it.
+  The edit of `MishkaCmsCore.Runtime.Authoring.Visibility`: an element kept in the page and shown to
+  nobody. The marker in the markup and what the compilers leave out are pinned in core; here is the
+  one edit that toggles it.
   """
   use ExUnit.Case, async: true
 
