@@ -33,6 +33,7 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   emitting a call to anything else — defence in depth, since templates are admin-authored anyway.
   """
 
+  alias MishkaCmsCore.Install.UiKitCatalog
   alias MishkaCmsCore.Runtime.Authoring.Fields
   alias MishkaCmsCore.Runtime.Authoring.Interactions
   alias MishkaCmsBuilder.Starter
@@ -797,48 +798,34 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   @doc """
   Files every entry under one spelling of its category, decided over the whole palette at once.
 
-  KITS DO NOT AGREE ON THE WORDS. Chelekom's headless kit writes `data display` on eight components
+  KITS DO NOT AGREE ON THE WORDS. Chelekom's headless kit wrote `data display` on eight components
   and `data-display` on four, and `navigation` where its styled kit, the blog, the documentation and
   the starter header write `navigations`, so the palette drew DATA DISPLAY beside DATA-DISPLAY and
   NAVIGATION beside NAVIGATIONS: two headings and two chips, each holding half of one category.
 
-  Case, spaces, hyphens and underscores are one spelling, and a category that sits beside its own
-  plural is filed under the plural, the form most kits use. The answer is written to `group`, so the
-  chips, the headings and the filter all read the same one. An installed extension's group is its
-  name rather than a category, and stays as it is.
+  Which spelling a category is filed under is the core's rule, `UiKitCatalog.file_categories/2`,
+  the same one the installer's picker groups by, so the two never disagree. The answer is written
+  to `group`, so the chips, the headings and the filter all read the same one. An installed
+  extension's group is its name rather than a category, and stays as it is.
   """
   @spec file_by_category([t() | map()]) :: [t() | map()]
   def file_by_category(entries) do
-    spellings =
-      for entry <- entries, not extension_group?(entry), into: MapSet.new(), do: spelling(entry)
+    filed =
+      entries
+      |> Enum.reject(&extension_group?/1)
+      |> Enum.map(&category/1)
+      |> UiKitCatalog.file_categories()
 
-    Enum.map(entries, &file(&1, spellings))
-  end
-
-  defp file(entry, spellings) do
-    if extension_group?(entry),
-      do: entry,
-      else: Map.put(entry, :group, filed_under(spelling(entry), spellings))
+    Enum.map(entries, fn entry ->
+      if extension_group?(entry),
+        do: entry,
+        else: Map.put(entry, :group, Map.fetch!(filed, category(entry)))
+    end)
   end
 
   defp extension_group?(entry), do: optional(entry, :extension?) == true
 
-  defp spelling(entry) do
-    (optional(entry, :group) || optional(entry, :type) || "")
-    |> to_string()
-    |> String.downcase()
-    |> String.split(~r/[\s_-]+/u, trim: true)
-    |> Enum.join(" ")
-    |> case do
-      "" -> "general"
-      spelling -> spelling
-    end
-  end
-
-  defp filed_under(spelling, spellings) do
-    plural = spelling <> "s"
-    (MapSet.member?(spellings, plural) && plural) || spelling
-  end
+  defp category(entry), do: optional(entry, :group) || optional(entry, :type)
 
   @doc "Whether this entry renders through an extension module rather than a stored template."
   @spec module_component?(t() | map()) :: boolean()
