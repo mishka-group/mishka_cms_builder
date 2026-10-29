@@ -270,15 +270,7 @@ defmodule MishkaCmsBuilder.History do
       |> Ash.read(actor: actor)
       |> case do
         {:ok, rows} ->
-          Enum.each(rows, fn row ->
-            row
-            |> Ash.Changeset.for_update(:adopt_draft, %{draft_id: draft_id},
-              tenant: session.site_id,
-              actor: actor
-            )
-            |> Ash.update()
-          end)
-
+          Enum.each(rows, &adopt_row(&1, draft_id, session.site_id, actor))
           {:ok, length(rows)}
 
         _error ->
@@ -290,6 +282,15 @@ defmodule MishkaCmsBuilder.History do
   end
 
   def adopt_draft(_token, _draft_id, _actor), do: {:ok, 0}
+
+  defp adopt_row(row, draft_id, site_id, actor) do
+    row
+    |> Ash.Changeset.for_update(:adopt_draft, %{draft_id: draft_id},
+      tenant: site_id,
+      actor: actor
+    )
+    |> Ash.update()
+  end
 
   @doc """
   Restore the document a row was taken before, into the live editor session.
@@ -391,12 +392,7 @@ defmodule MishkaCmsBuilder.History do
       {:ok, query} ->
         query
         |> Ash.Query.filter(source_type == ^source_type and source_id == ^source_id)
-        |> then(fn query ->
-          case draft_id do
-            nil -> Ash.Query.filter(query, is_nil(draft_id))
-            id -> Ash.Query.filter(query, is_nil(draft_id) or draft_id == ^id)
-          end
-        end)
+        |> on_branch(draft_id)
         |> Ash.Query.load([:snapshot])
         |> Ash.read(actor: actor)
 
@@ -404,6 +400,10 @@ defmodule MishkaCmsBuilder.History do
         {:ok, []}
     end
   end
+
+  # The live branch alone, or the live branch and the draft's own.
+  defp on_branch(query, nil), do: Ash.Query.filter(query, is_nil(draft_id))
+  defp on_branch(query, id), do: Ash.Query.filter(query, is_nil(draft_id) or draft_id == ^id)
 
   # Deleting the snapshot nilifies `snapshot_id` on its row, which is what leaves a readable entry
   # that simply cannot be reverted into — the timeline says so rather than offering a broken button.

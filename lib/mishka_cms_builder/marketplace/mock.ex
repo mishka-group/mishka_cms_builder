@@ -366,7 +366,7 @@ defmodule MishkaCmsBuilder.Marketplace.Mock do
         gettext("%{kind} %{id} cannot be installed from the mock registry", kind: kind, id: id)}}
 
   defp filter_by(items, filters, key) do
-    case Map.get(filters, :category) || Map.get(filters, "category") do
+    case Map.get(filters, :category) do
       nil -> items
       "all" -> items
       value -> Enum.filter(items, &(Map.get(&1, key) == value))

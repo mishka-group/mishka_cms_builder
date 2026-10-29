@@ -1979,14 +1979,16 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
          entry when not is_nil(entry) <- Enum.find(components, &(&1.name == name)) do
       features = Inspector.features(entry)
 
-      Enum.find_value(Inspector.attrs(entry), [], fn attr ->
-        case Inspector.widget(attr, features, entry) do
-          {:columns, values} -> values
-          _other -> nil
-        end
-      end)
+      Enum.find_value(Inspector.attrs(entry), [], &column_widget(&1, features, entry))
     else
       _not_a_component -> []
+    end
+  end
+
+  defp column_widget(attr, features, entry) do
+    case Inspector.widget(attr, features, entry) do
+      {:columns, values} -> values
+      _other -> nil
     end
   end
 

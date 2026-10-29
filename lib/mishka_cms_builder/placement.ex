@@ -77,7 +77,7 @@ defmodule MishkaCmsBuilder.Placement do
     case Keyword.get(opts, :dragged_id) do
       id when is_binary(id) ->
         case MapSet.member?(locked, id) do
-          true -> Map.new(tree.nodes, fn {node_id, _node} -> {node_id, false} end)
+          true -> nowhere(tree)
           false -> allowed(tree, dragged, opts, locked)
         end
 
@@ -85,6 +85,8 @@ defmodule MishkaCmsBuilder.Placement do
         allowed(tree, dragged, opts, locked)
     end
   end
+
+  defp nowhere(tree), do: Map.new(tree.nodes, fn {node_id, _node} -> {node_id, false} end)
 
   defp allowed(tree, dragged, opts, locked) do
     tree

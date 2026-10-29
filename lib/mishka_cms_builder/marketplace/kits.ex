@@ -52,7 +52,7 @@ defmodule MishkaCmsBuilder.Marketplace.Kits do
 
   @impl true
   def packages(filters) do
-    site_id = Map.get(filters, :site_id) || Map.get(filters, "site_id")
+    site_id = Map.get(filters, :site_id)
     installed = installed_names(site_id)
     catalog = catalog()
 
@@ -203,7 +203,7 @@ defmodule MishkaCmsBuilder.Marketplace.Kits do
   # graph and doing that for components about to be discarded is the difference between a snappy tab
   # and a slow one.
   defp filter_category(entries, filters) do
-    case Map.get(filters, :category) || Map.get(filters, "category") do
+    case Map.get(filters, :category) do
       nil -> entries
       "all" -> entries
       value -> Enum.filter(entries, &(entry_category(&1) == value))

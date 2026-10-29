@@ -16093,22 +16093,20 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     """
   end
 
-  defp category_name(type) do
-    case type |> to_string() |> String.downcase() do
-      "layout" -> gettext("layout")
-      "text" -> gettext("text")
-      "nav" -> gettext("nav")
-      "form" -> gettext("form")
-      "forms" -> gettext("forms")
-      "media" -> gettext("media")
-      "feedback" -> gettext("feedback")
-      "data" -> gettext("data")
-      "overlay" -> gettext("overlay")
-      "general" -> gettext("general")
-      # A kit's own category, or an extension's name — `Blog` — translated where it has one.
-      _named -> Gettext.gettext(MishkaCmsCore.Gettext, to_string(type))
-    end
-  end
+  defp category_name(type), do: type |> to_string() |> String.downcase() |> category_name(type)
+
+  defp category_name("layout", _type), do: gettext("layout")
+  defp category_name("text", _type), do: gettext("text")
+  defp category_name("nav", _type), do: gettext("nav")
+  defp category_name("form", _type), do: gettext("form")
+  defp category_name("forms", _type), do: gettext("forms")
+  defp category_name("media", _type), do: gettext("media")
+  defp category_name("feedback", _type), do: gettext("feedback")
+  defp category_name("data", _type), do: gettext("data")
+  defp category_name("overlay", _type), do: gettext("overlay")
+  defp category_name("general", _type), do: gettext("general")
+  # A kit's own category, or an extension's name — `Blog` — translated where it has one.
+  defp category_name(_named, type), do: Gettext.gettext(MishkaCmsCore.Gettext, to_string(type))
 
   defp filter_palette(%{components: components, palette_query: query, palette_cat: cat}) do
     components
@@ -16531,8 +16529,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     }
   end
 
-  defp seo_tags(%{seo_tags: tags}) when is_list(tags), do: tags
+  # A tag is a plain map, string-keyed as stored and atom-keyed as cast, so its keys are read into
+  # strings once here and `find_tag/3` reads one shape.
+  defp seo_tags(%{seo_tags: tags}) when is_list(tags), do: Enum.map(tags, &string_keyed/1)
   defp seo_tags(_record), do: []
+
+  defp string_keyed(tag), do: Map.new(tag, fn {key, value} -> {to_string(key), value} end)
 
   defp record_description(%{description: description}) when is_binary(description),
     do: presence(description)
@@ -16554,8 +16556,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   defp find_tag(tags, key, value) do
     Enum.find_value(tags, fn tag ->
-      attrs = Map.get(tag, :attrs) || Map.get(tag, "attrs") || %{}
-      content = Map.get(tag, :content) || Map.get(tag, "content")
+      attrs = tag["attrs"] || %{}
+      content = tag["content"]
 
       case Map.get(attrs, key) == value or Map.get(attrs, Map.fetch!(@tag_keys, key)) == value do
         true -> presence(to_string(content || ""))

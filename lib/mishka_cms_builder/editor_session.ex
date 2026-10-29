@@ -558,18 +558,20 @@ defmodule MishkaCmsBuilder.EditorSession do
          entry when not is_nil(entry) <- furnishing_entry(parent, session),
          furnishing when furnishing != "" <- Starter.body(entry),
          [_ | _] = placeholders <- placeholder_children(tree, parent, furnishing) do
-      Enum.reduce(placeholders, tree, fn node, acc ->
-        case Tree.delete(acc, node.id) do
-          {:ok, trimmed} -> trimmed
-          _refused -> acc
-        end
-      end)
+      Enum.reduce(placeholders, tree, &without_placeholder/2)
     else
       _nothing_to_remove -> tree
     end
   end
 
   defp unfurnished(tree, _op, _session), do: tree
+
+  defp without_placeholder(node, tree) do
+    case Tree.delete(tree, node.id) do
+      {:ok, trimmed} -> trimmed
+      _refused -> tree
+    end
+  end
 
   defp furnishing_entry(parent, session) do
     name = Node.component_name(parent)
@@ -1500,20 +1502,16 @@ defmodule MishkaCmsBuilder.EditorSession do
   stable, so re-queuing them costs nothing.
   """
   @spec drain_pending(String.t()) :: {:ok, [map()]} | {:error, term()}
-  def drain_pending(token) do
-    commit(
-      token,
-      fn session ->
-        case session.pending |> Map.values() |> Enum.sort_by(& &1.at, DateTime) do
-          [] ->
-            {:ok, []}
+  def drain_pending(token), do: commit(token, &drained/1, silent: true)
 
-          entries ->
-            {:store, %{session | pending: %{}}, {:pending, :drained}, fn _ -> {:ok, entries} end}
-        end
-      end,
-      silent: true
-    )
+  defp drained(session) do
+    case session.pending |> Map.values() |> Enum.sort_by(& &1.at, DateTime) do
+      [] ->
+        {:ok, []}
+
+      entries ->
+        {:store, %{session | pending: %{}}, {:pending, :drained}, fn _ -> {:ok, entries} end}
+    end
   end
 
   @doc "Put entries back after a failed write, without disturbing anything queued since."

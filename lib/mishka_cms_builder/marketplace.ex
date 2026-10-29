@@ -31,6 +31,9 @@ defmodule MishkaCmsBuilder.Marketplace do
 
       config :mishka_cms_builder, :marketplace, MyApp.RealMarketplace
 
+  The filters every list callback takes are a map with atom keys: `:category` (a category name,
+  or `"all"`) and, for packages, `:site_id`.
+
   ## Token generators are real
 
   The four export formats are not mock-ups. `generate/2` emits a genuine `tailwind.config.js`
