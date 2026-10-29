@@ -2867,6 +2867,42 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       refute has_element?(view, "#pb-comp-kit-photo")
     end
 
+    # ONE HEADING PER KIND OF THING, HOWEVER A KIT SPELLS IT. Chelekom's headless kit files eight
+    # components under "data display" and four under "data-display", and calls "navigation" what its
+    # styled kit, the blog and the documentation call "navigations": the palette drew each pair as
+    # two headings and two chips, each holding half of one category.
+    test "files a category spelled two ways under one heading", %{conn: conn, page: page} do
+      for {name, type} <- [
+            {"kit-chart", "data display"},
+            {"kit-table", "data-display"},
+            {"kit-anchor", "navigation"},
+            {"kit-navbar", "navigations"}
+          ],
+          do: create_component!(name: name, type: type)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      groups =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s([data-role="pb-group"]))
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "data-group"))
+
+      assert groups == Enum.uniq(groups)
+      refute "data-display" in groups
+      refute "navigation" in groups
+
+      for name <- ~w(kit-chart kit-table),
+          do: assert(has_element?(view, ~s([data-group="data display"] #pb-comp-#{name})))
+
+      view |> element(~s(button[phx-value-cat="navigations"])) |> render_click()
+
+      assert has_element?(view, "#pb-comp-kit-anchor")
+      assert has_element?(view, "#pb-comp-kit-navbar")
+      refute has_element?(view, "#pb-comp-kit-chart")
+    end
+
     test "lists the site's components and filters by search", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 

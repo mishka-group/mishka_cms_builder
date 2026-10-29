@@ -1922,7 +1922,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
     components
     |> Enum.map(&palette_entry(&1, extensions))
-    |> then(&Events.collect(:components, &1))
+    |> then(&PaletteEntry.file_by_category(Events.collect(:components, &1)))
   end
 
   # EACH INSTALLED EXTENSION'S OWN KIT, by the name its components carry — `mishka_blog` — to the
