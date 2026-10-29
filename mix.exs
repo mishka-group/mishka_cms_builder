@@ -145,9 +145,10 @@ defmodule MishkaCmsBuilder.MixProject do
         "sobelow --config",
         "deps.audit",
         "dialyzer",
-        # The clones left are the Ash resource DSL blocks and the Gervaz declarations that repeat by
-        # design; a new clone fails the build.
-        "ex_dna --max-clones 0",
+        # The 4 left repeat by design: the review note's and the snippet's Ash resource header and
+        # policies, the typed-value helpers of their two Gervaz forms, and the `drag_start` answer
+        # the editor and its canvas each give; a new clone fails the build.
+        "ex_dna --max-clones 4",
         "test"
       ]
     ]
