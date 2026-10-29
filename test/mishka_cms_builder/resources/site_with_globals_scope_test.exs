@@ -4,25 +4,19 @@
 
 defmodule MishkaCmsBuilder.Resources.SiteWithGlobalsScopeTest do
   @moduledoc """
-  The reads that answer "this site's rows plus the shared ones" — `:for_tenant_with_globals` and its
-  single-row twin, the builder's `:for_editor` reads, a stylesheet's `:for_compiler` and a setting's
-  own — decide whose rows they show from WHO IS ASKING, never from a missing tenant.
+  The reads of a note and of a snippet that the editor makes — `:for_editor` — answer "this site's
+  rows plus the shared ones", and decide whose rows they show from WHO IS ASKING, never from a
+  missing tenant (core's `Resources.SiteWithGlobalsScopeTest` holds the same for its own resources).
 
   A master is a user whose `site_id` is nil. A site user, whatever it holds, reads its own site and
-  the shared rows and nothing else: not with no tenant, not by naming another site in `site_id`, not
-  by passing another site's tenant. A call made as the system (`authorize?: false`, no actor) keeps
-  the master's reach; a call made as nobody reads nothing.
+  the shared rows and nothing else: not by naming another site in `site_id`, not by passing another
+  site's tenant, not through the system read the editor's own thread list makes.
   """
   use MishkaCmsCore.DataCase, async: false
 
   import MishkaCmsCore.Test.Factory
 
-  alias MishkaCmsCore.Runtime.Component
-  alias MishkaCmsCore.Runtime.JsHook
-  alias MishkaCmsCore.Runtime.Layout
-  alias MishkaCmsBuilder.PageComment
-  alias MishkaCmsBuilder.Snippet
-  alias MishkaCmsCore.Runtime.Stylesheet
+  alias MishkaCmsBuilder.{PageComment, Snippet}
 
   @moduletag :unit
 

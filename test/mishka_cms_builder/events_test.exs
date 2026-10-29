@@ -4,20 +4,14 @@
 
 defmodule MishkaCmsBuilder.EventsTest do
   @moduledoc """
-  The builder's plugin surface: ten registries, the lifecycle announcements, the node transform
-  seams and the save/publish gates.
-
-  The gates matter most. A `builder:save:before` hook that cannot actually stop a write would be
-  decoration, and the whole point of putting content lint and link checking there is that a refusal
-  is binding. That is asserted end to end against the live editor in the `builder_live/` tests;
-  here the contract itself is pinned down.
+  What the builder contributes to a lookup through the plugin surface: a plugin that adds a block
+  to the palette is found by its id, beside the core's own blocks, in the same call.
   """
   use MishkaCmsCore.DataCase, async: false
 
-  alias MishkaCmsCore.Builder.Events
   alias MishkaCmsBuilder.Blocks
-  alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
   alias MishkaCmsBuilder.Test.Plugins.BuilderBlockPlugin
+  alias MishkaCmsCore.Builder.Events
   alias MishkaInstaller.Event.{Event, EventHandler}
 
   defp register!(plugin, event) do
@@ -55,17 +49,6 @@ defmodule MishkaCmsBuilder.EventsTest do
 
     test "an id in neither list answers nil" do
       assert Events.fetch(:blocks, Blocks.all(), "no-such-block") == nil
-    end
-
-    # `entry_id/1` answers a bare module with itself, because the icon libraries ARE modules. Nothing
-    # resolves those by id, and an entry of that shape must stay inert rather than reach a caller
-    # that will read `:template` off it.
-    test "an entry that is not a map is not an answer" do
-      assert Events.fetch(:icon_libraries, [Bundled], Bundled) == nil
-    end
-
-    test "an unknown registry raises rather than silently answering nil" do
-      assert_raise FunctionClauseError, fn -> Events.fetch(:not_a_registry, [], "x") end
     end
   end
 end

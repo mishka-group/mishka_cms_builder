@@ -4,13 +4,12 @@
 
 defmodule MishkaCmsBuilder.Resources.CodeAccessTest do
   @moduledoc """
-  Who may write code by hand, and when this deployment takes it.
+  Who may write code by hand through the editor's own save path, and what the deployment's
+  `:page_code` switch does to it.
 
-  Code is Elixir (`events`, `infos`, `helpers`), hand-written HEEx (`template`,
-  `root_layout_template`, an error page's status templates), and browser code (a JS hook's or a
-  stylesheet's `content`). Whoever may write the record writes its code; the deployment's
-  `:page_code` switch, enforced at the action boundary, stops the Elixir and the typed HEEx for
-  everyone.
+  `save_section/5` hands the actor to the changeset, so whoever may write the record writes its
+  Elixir (`events`, `infos`, `helpers`); with the switch off, the Elixir and a template the editor
+  was handed typed are refused while the template it generates from its tree still saves.
   """
   use MishkaCmsCore.DataCase, async: false
 
@@ -153,6 +152,4 @@ defmodule MishkaCmsBuilder.Resources.CodeAccessTest do
       opts
     )
   end
-
-  defp helpers, do: [%{"name" => "shout", "args" => "text", "code" => "String.upcase(text)"}]
 end

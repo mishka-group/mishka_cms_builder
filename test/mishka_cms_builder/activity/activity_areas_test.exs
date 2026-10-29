@@ -4,9 +4,10 @@
 
 defmodule MishkaCmsBuilder.Activity.ActivityAreasTest do
   @moduledoc """
-  The Activity log is the activity area's, and it shows a holder the entries of the areas it holds:
-  a resource's area is the one its own policies ask for. A full dashboard admin sees every entry;
-  an entry of a resource that names no area is a full admin's alone.
+  The editor's entries in the Activity log are shown by their document's area, like any other entry
+  (core's `Activity.ActivityAreasTest`): the activity area alone shows no job and no editor change,
+  and a holder of the media and activity areas sees no editor change or draft of a page that a full
+  dashboard admin sees.
   """
   use MishkaCmsCore.DataCase, async: false
 

@@ -4,20 +4,22 @@
 
 defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   @moduledoc """
-  Which records a site's record may name by id.
+  Which records the editor's own records may name by id.
 
-  One rule across every runtime resource that points at another site-owned record: a page's layout,
-  a draft's layout and its live record, a media file's category. The record named belongs to the
-  same site, or — where the target can be shared — to no site. Whoever writes, the system included:
-  a page wrapped in another site's layout shows that site's template on this one.
+  The rule is the one core holds for every runtime resource (`Resources.SiteReferencesTest`): the
+  record named belongs to the same site or, where the target can be shared, to no site. Whoever
+  writes, the system included. Here it is held for what the editor keeps: a review note's document,
+  parent note and author, a history row's document, draft and author, a saved snippet's document,
+  and what a master may move to another site while those name it.
   """
   use MishkaCmsCore.DataCase, async: false
 
   import MishkaCmsCore.Test.Factory
 
-  require Ash.Query
-
-  alias MishkaCmsCore.Runtime.{Page, PageDraft}
+  alias MishkaCmsBuilder.{HistoryEvent, PageComment, Snippet}
+  alias MishkaCmsCore.Accounts.User
+  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout, Page, PageDraft}
+  alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
 
   @moduletag :unit
 
@@ -47,12 +49,6 @@ defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   end
 
   describe "an id whose kind another field names" do
-    alias MishkaCmsCore.Runtime.Component
-    alias MishkaCmsCore.Runtime.ErrorPage
-    alias MishkaCmsCore.Runtime.Layout
-    alias MishkaCmsBuilder.PageComment
-    alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
-
     defp kinds_opts do
       {:ok, opts} =
         SameSiteReference.init(
@@ -148,10 +144,6 @@ defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   end
 
   describe "a user named by a site's record" do
-    alias MishkaCmsCore.Accounts.User
-    alias MishkaCmsBuilder.PageComment
-    alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
-
     defp check_user(site_id, user_id, extra_opts \\ [shared?: true]) do
       {:ok, opts} =
         SameSiteReference.init(
@@ -192,8 +184,6 @@ defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   end
 
   describe "the site a record is judged by" do
-    alias MishkaCmsBuilder.{HistoryEvent, PageComment, Snippet}
-
     defp history_row(tenant, attrs, actor, authorize?) do
       HistoryEvent
       |> Ash.Changeset.for_create(
@@ -284,8 +274,6 @@ defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   end
 
   describe "a builder history row" do
-    alias MishkaCmsBuilder.HistoryEvent
-
     defp event(context, attrs, actor, opts \\ []) do
       attrs =
         Map.merge(
@@ -395,8 +383,6 @@ defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   end
 
   describe "a review note" do
-    alias MishkaCmsBuilder.PageComment
-
     defp note_as(actor, tenant, attrs) do
       action = if actor.site_id, do: :create, else: :master_create
 
@@ -537,8 +523,6 @@ defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   end
 
   describe "a saved snippet" do
-    alias MishkaCmsBuilder.Snippet
-
     defp snippet_as(actor, tenant, attrs) do
       action = if actor.site_id, do: :create, else: :master_create
 
@@ -620,12 +604,6 @@ defmodule MishkaCmsBuilder.Resources.SiteReferencesTest do
   end
 
   describe "a record other records name, moved to another site" do
-    alias MishkaCmsCore.Accounts.User
-    alias MishkaCmsCore.Runtime.Component
-    alias MishkaCmsCore.Runtime.Layout
-    alias MishkaCmsBuilder.PageComment
-    alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
-
     @moved_away "still use this"
 
     defp move(record, site_id, master) do

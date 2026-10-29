@@ -4,16 +4,11 @@
 
 defmodule MishkaCmsBuilder.Resources.SiteTest do
   @moduledoc """
-  Comprehensive tests for Site resource.
-
-  Site is the tenant entity in the multi-tenant architecture.
-  Most actions are master-only except read/get which allow tenant users to see their own site.
+  The editor's helpers keep no AST built from a site's builder resources and no cache for it. The
+  raw read that fed them is refused on the Site resource itself (core's `Resources.SiteTest`).
   """
-  use MishkaCmsCore.DataCase
-
   use ExUnit.Case, async: false
-  import Ash.Test
-  require Ash.Query
+
   @moduletag :unit
 
   # NO READ OF ANY SITE'S BUILDER RESOURCES BY AN ID IN INPUT. The raw action took a `site_id` and
@@ -24,16 +19,7 @@ defmodule MishkaCmsBuilder.Resources.SiteTest do
     # What that read fed: an AST built from every row it returned, each page wrapped in whatever
     # layout its id named, and a cache for it. Nothing calls either.
     test "nor the AST it was encoded into, nor the cache that held it" do
-      Code.ensure_loaded!(MishkaCmsBuilder.Helpers)
-
-      for arity <- [2, 3] do
-        refute function_exported?(
-                 MishkaCmsBuilder.Helpers,
-                 :builder_encoded_ast,
-                 arity
-               )
-      end
-
+      refute Keyword.has_key?(MishkaCmsBuilder.Helpers.__info__(:functions), :builder_encoded_ast)
       refute Code.ensure_loaded?(MishkaCmsCore.Runtime.States.PageBuilderAstState)
     end
   end

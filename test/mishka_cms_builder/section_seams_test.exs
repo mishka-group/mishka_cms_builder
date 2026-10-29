@@ -4,22 +4,18 @@
 
 defmodule MishkaCmsBuilder.SectionSeamsTest do
   @moduledoc """
-  The sections of the editor that had no seam, each driven by a registered plugin.
+  The two sections of the editor that read through a seam of the builder's own, each driven by a
+  registered plugin: the review composer's gate and the history timeline's read.
 
   Every test here registers a real `MishkaInstaller` plugin and compiles the event, because that is
   the only way to tell a working seam from a declared one: without a plugin listening, an event that
   fires and an event that does not are indistinguishable — both return the value unchanged.
-
-  The last describe is the one that matters most in practice. A plugin nobody in this project wrote
-  will raise one day, and when it does the editor must keep working with the value it already had.
   """
   use MishkaCmsCore.DataCase, async: false
 
-  alias MishkaCmsCore.Builder.Events
   alias MishkaCmsBuilder.PageComment
-
   alias MishkaCmsBuilder.Test.Plugins.{BuilderCommentGate, BuilderHistoryScope}
-
+  alias MishkaCmsCore.Builder.Events
   alias MishkaInstaller.Event.{Event, EventHandler}
 
   @moduletag :integration

@@ -20,14 +20,14 @@ defmodule MishkaCmsBuilder.Accounts.UserDestroyTest do
 
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsBuilder.{HistoryEvent, PageComment}
   alias MishkaCmsCore.Accounts.User
   alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsBuilder.HistoryEvent
-  alias MishkaCmsBuilder.PageComment
 
   require Ash.Query
 
   @moduletag :unit
+  @repo Application.compile_env!(:mishka_cms_core, :repo)
 
   setup do
     site = create_site!(active: true)
@@ -203,6 +203,36 @@ defmodule MishkaCmsBuilder.Accounts.UserDestroyTest do
 
       assert event(context, other.event.id).author_id == other.worker.id
       assert note(context, other.note.id).author_id == other.worker.id
+    end
+  end
+
+  # The class guard of core's `Accounts.UserDestroyTest`, read here against the schema that holds the
+  # editor's tables too: a history row, a note or a snippet that points at an account without saying
+  # what happens to it fails here, by name.
+  describe "every foreign key to users" do
+    # `a` NO ACTION and `r` RESTRICT refuse the delete, which is what surfaces as a raw constraint
+    # error. A key either goes with the account (`c`, its own grants and codes) or lets go of it
+    # (`n`, history and notes). A table that is neither has to refuse on purpose, with a message of
+    # its own, and be named here when it does.
+    test "lets the account go: it cascades or it is released" do
+      %{rows: rows} =
+        Ecto.Adapters.SQL.query!(
+          @repo,
+          """
+          SELECT conrelid::regclass::text, conname, confdeltype::text
+          FROM pg_constraint
+          WHERE contype = 'f' AND confrelid = 'users'::regclass
+          ORDER BY 1, 2
+          """
+        )
+
+      assert rows != [], "the query found no foreign key to users at all"
+
+      refusing = for [table, name, rule] <- rows, rule not in ["c", "n"], do: "#{table}.#{name}"
+
+      assert refusing == [],
+             "deleting an account is refused by #{Enum.join(refusing, ", ")}: " <>
+               "give the reference `on_delete: :nilify` (history) or `:delete` (what the account owns)"
     end
   end
 end
