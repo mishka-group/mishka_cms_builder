@@ -801,6 +801,23 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
+  # A WRITE ANSWERS WITH THE ROW IT WROTE, with nothing loaded on it, and the header reads
+  # `record.site.name` for its scope badge — so assigning that row as it came turned "localhost" into
+  # "This site" after every publish until a reload. No save here moves a document to another site
+  # (`update` accepts no `site_id`), so the site the mount loaded is still the row's and is carried
+  # over rather than read again.
+  defp assign_written(socket, %{site: %Ash.NotLoaded{}, site_id: site_id} = record) do
+    case socket.assigns[:record] do
+      %{site_id: ^site_id, site: %{id: ^site_id} = site} ->
+        assign(socket, :record, %{record | site: site})
+
+      _other ->
+        assign(socket, :record, record)
+    end
+  end
+
+  defp assign_written(socket, record), do: assign(socket, :record, record)
+
   defp load_record(_section, nil, _actor), do: :none
 
   defp load_record(section, id, actor) do
@@ -2340,7 +2357,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # showing — `@record` feeds the Interface tab's undeclared advice and the tab's own count, so a
   # stale one would go on offering to declare an attribute that now exists.
   def handle_info({:form_saved, _mode, %MishkaCmsCore.Runtime.Component{} = record}, socket),
-    do: {:noreply, assign(socket, :record, record)}
+    do: {:noreply, assign_written(socket, record)}
 
   def handle_info({:form_cancelled, MediaCategory}, socket),
     do: {:noreply, assign(socket, :folder_form?, false)}
@@ -6174,7 +6191,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
       socket
       |> collect_history(stage, editor, record)
-      |> assign(:record, record)
+      |> assign_written(record)
       |> assign(:stage, next_stage(stage))
       |> assign(:applied, {stage, editor.revision})
       |> assign(:applied_stage, stage)
@@ -6998,7 +7015,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
          ) do
       {:ok, record} ->
         socket
-        |> assign(:record, record)
+        |> assign_written(record)
         |> put_flash(:info, gettext("Declared — every page using this component reads it."))
 
       # `Validations.InterfaceDeclaration` is what refuses a declaration that will not compile, so a
@@ -7015,7 +7032,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     case store_code(socket, followed(fragments, socket.assigns.editor.tree, retagged(socket))) do
       {:ok, record} ->
         socket
-        |> assign(:record, record)
+        |> assign_written(record)
         |> assign(:fragments, code_fragments(record))
         |> assign(:retagged, %{})
         |> assign(:code_fault, nil)
@@ -7095,7 +7112,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     case store_code(socket, fragments) do
       {:ok, record} ->
         socket
-        |> assign(:record, record)
+        |> assign_written(record)
         |> assign(:fragments, followed(socket.assigns.fragments, tree, retagged(socket)))
         |> assign(:retagged, %{})
         |> put_flash(:info, gettext("Its handlers were renamed with the form."))

@@ -344,6 +344,31 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
              "the scope badge stopped naming the site after a settings save"
     end
 
+    # AND AFTER A PUBLISH, which answers with the row it wrote just the same: nothing loaded on it.
+    test "the site the document belongs to is still named after a publish", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      badge = "[data-role='pb-scope']"
+      assert has_element?(view, badge, site.name)
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => node_with_tag(view, "h1").id,
+        "name" => "class",
+        "value" => "published-now"
+      })
+
+      publish!(view)
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).template =~ "published-now"
+
+      assert has_element?(view, badge, site.name),
+             "the scope badge stopped naming the site after a publish"
+    end
+
     test "closing it leaves the editor where it was", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 
