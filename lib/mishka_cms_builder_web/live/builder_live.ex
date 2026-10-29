@@ -1431,11 +1431,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # table's own filter and its depth is whatever the reader built. The keys are PREFIXED because
   # Gervaz turns a path param named after an attribute into an equality filter, and `site_id == X`
   # would drop exactly the global snippets this list exists to include.
+  #
+  # The site is the DOCUMENT'S (`editor.site_id`), never the reader's. A master's own `site_id` is nil,
+  # and a read naming no site lets a master see every site's snippets.
   defp assign_snippets_url_state(socket) do
     %{editor: editor, record: record} = socket.assigns
 
     assign(socket, :snippets_url_state, %{
       path_params: %{
+        editor_site_id: editor.site_id,
         editor_section: editor.section,
         editor_document_id: record && record.id,
         revision: Map.get(socket.assigns, :snippets_revision, 0)

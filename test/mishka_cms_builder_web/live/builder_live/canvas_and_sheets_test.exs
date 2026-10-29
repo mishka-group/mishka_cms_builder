@@ -1913,6 +1913,74 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert render_async(view) =~ "No snippets saved yet."
     end
 
+    # THE LIST IS THE DOCUMENT'S SITE PLUS THE SHARED ONES, whoever is reading it. A master's own
+    # `site_id` is nil, which `SiteWithGlobals` reads as "every site" when nothing names one — so the
+    # editor has to name the site of the document it has open, or a master on a localhost page is
+    # offered every other site's markup to paste into it.
+    test "a master is offered this site's snippets and the shared ones, not another site's", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      other = create_site!(name: "elsewhere", host: "elsewhere.test")
+
+      own = studio_snippet!("Own site's", site.id)
+      shared = studio_snippet!("Every site's", nil)
+      foreign = studio_snippet!("Another site's", other.id)
+
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-snippets") |> render_click()
+      _settled = render_async(view)
+
+      assert has_element?(view, "#pb-snippet-insert-#{own.id}")
+      assert has_element?(view, "#pb-snippet-insert-#{shared.id}")
+
+      refute has_element?(view, "#pb-snippet-insert-#{foreign.id}"),
+             "a master was offered a snippet of a site this document does not belong to"
+    end
+
+    # AND A SHARED DOCUMENT BELONGS TO NO SITE, so its list is the shared snippets alone. Every site
+    # renders a global layout; a snippet one site kept for itself has no business in it.
+    test "a global document is offered the shared snippets alone", %{conn: conn, site: site} do
+      layout =
+        create_layout!(
+          site_id: nil,
+          template: ~s(<body class="page"><main>{@inner_content}</main><h1>Title</h1></body>)
+        )
+
+      own = studio_snippet!("A site's layout part", site.id, :layout)
+      shared = studio_snippet!("Every site's layout part", nil, :layout)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+      _settled = render_async(view)
+      view |> element("#pb-studio") |> render_click()
+      _settled = render_async(view)
+      view |> element("#pb-studio-snippets") |> render_click()
+      _settled = render_async(view)
+
+      assert has_element?(view, "#pb-snippet-insert-#{shared.id}")
+
+      refute has_element?(view, "#pb-snippet-insert-#{own.id}"),
+             "a shared layout was offered one site's own snippet"
+    end
+
+    # A shared snippet of `site_id` — nil for one offered to every site — written as the system.
+    defp studio_snippet!(name, site_id, section \\ :page) do
+      MishkaCmsBuilder.Snippet
+      |> Ash.Changeset.for_create(
+        :master_create,
+        %{
+          name: name,
+          source: "<p>#{name}</p>",
+          section: section,
+          scope: :shared,
+          site_id: site_id
+        },
+        authorize?: false
+      )
+      |> Ash.create!()
+    end
+
     # Presets and packages come from the configured adapter, and the shipped one is a SAMPLE. A card
     # that looks installable next to an Install button that refuses is the demo lying about itself,
     # so the two tabs that show adapter data say where it comes from. Tokens and snippets do not —

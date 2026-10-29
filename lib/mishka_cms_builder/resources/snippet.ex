@@ -295,6 +295,11 @@ defmodule MishkaCmsBuilder.Snippet do
     # narrowed to the editor asking and to the document it has open. A `:page` snippet belongs beside
     # the document it came out of; offering it on every other page is how a snippet list becomes
     # unusable after a month.
+    #
+    # A nil `site_id` is a document that belongs to no site — a shared layout or component — and what
+    # it is offered is the shared snippets alone (`fallback: :globals`). Read as "every site", a
+    # master editing a shared layout was offered each site's own markup to put in front of all of
+    # them.
     read :for_editor do
       multitenancy :bypass
 
@@ -302,7 +307,7 @@ defmodule MishkaCmsBuilder.Snippet do
       argument :section, :atom, allow_nil?: false
       argument :document_id, :uuid, allow_nil?: true
 
-      prepare MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals
+      prepare {MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals, fallback: :globals}
 
       prepare fn query, _context ->
         section = Ash.Query.get_argument(query, :section)
