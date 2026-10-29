@@ -40,6 +40,19 @@ defmodule MishkaCmsBuilder.PlacementTest do
 
   defp source(session), do: Serializer.serialize(session.tree)
 
+  defp navbar(session),
+    do: Enum.find(Tree.walk(session.tree), &(Tree.Node.component_name(&1) == "chelekom-navbar"))
+
+  # A palette card clicked while `node_id` is selected: armed, then placed where the click means.
+  defp click_card(session, element, node_id) do
+    {:ok, _armed} = EditorSession.pick(session.token, {:block, element})
+
+    case EditorSession.place_at(session.token, node_id) do
+      {:ok, placed} -> placed
+      {:relocated, placed, _note} -> placed
+    end
+  end
+
   defp scopes(markup),
     do: ~r/pb-[a-f0-9]{8}/ |> Regex.scan(markup) |> List.flatten() |> Enum.uniq()
 
@@ -131,6 +144,69 @@ defmodule MishkaCmsBuilder.PlacementTest do
         EditorSession.place_template(session.token, "<section>One</section>", box.id)
 
       assert newest(session, placed).parent_id == box.id
+    end
+  end
+
+  # THE LANDING PAGE A USER BUILT. With the kit navbar selected, the Footer element clicked in the
+  # palette became the navbar's own content; with a heading selected, the Paragraph became the
+  # heading's child. Neither element can hold what arrived, so both land after the selection — the
+  # way the Section clicked with the navbar selected always did.
+  describe "a card clicked in while something that cannot hold it is selected" do
+    @navbar ~s(<.component component_name="chelekom-navbar" site="Global" variant="bordered">) <>
+              ~s(<:list><a href="/about">About</a></:list></.component>) <>
+              ~s(<section class="py-16"><h1>Build the site</h1><p>Copy</p></section>)
+
+    setup do
+      {:ok, kit: MishkaCmsCore.Test.Factory.chelekom_rows(~w(chelekom-navbar))}
+    end
+
+    test "a footer lands after the navbar, not inside it", %{kit: kit} do
+      session = open(@navbar, %{components: kit})
+      bar = navbar(session)
+
+      added = newest(session, placed = click_card(session, "el-footer", bar.id))
+
+      assert added.tag == "footer"
+      assert added.parent_id == nil
+      assert Tree.index_of(placed.tree, added.id) == Tree.index_of(placed.tree, bar.id) + 1
+    end
+
+    test "and so does a section, as it always did", %{kit: kit} do
+      session = open(@navbar, %{components: kit})
+      bar = navbar(session)
+
+      added = newest(session, placed = click_card(session, "el-section", bar.id))
+
+      assert added.parent_id == nil
+      assert Tree.index_of(placed.tree, added.id) == Tree.index_of(placed.tree, bar.id) + 1
+    end
+
+    test "a paragraph lands after the heading, and a heading after the paragraph", %{kit: kit} do
+      session = open(@navbar, %{components: kit})
+      heading = find(session, "h1")
+
+      added = newest(session, placed = click_card(session, "el-paragraph", heading.id))
+
+      assert added.tag == "p"
+      assert added.parent_id == heading.parent_id
+      assert Tree.index_of(placed.tree, added.id) == Tree.index_of(placed.tree, heading.id) + 1
+
+      paragraph = Tree.get(placed.tree, added.id)
+      second = newest(placed, click_card(placed, "el-h2", paragraph.id))
+
+      assert second.tag == "h2"
+      assert second.parent_id == heading.parent_id
+    end
+
+    test "and the drag hints agree with the click", %{kit: kit} do
+      session = open(@navbar, %{components: kit})
+      footer = MishkaCmsCore.Runtime.Authoring.Elements.get("el-footer").template
+
+      {:ok, accepts} = EditorSession.drop_hints(session.token, %{"template" => footer})
+
+      refute accepts[navbar(session).id]
+      refute accepts[find(session, "h1").id]
+      assert accepts[find(session, "section").id]
     end
   end
 
