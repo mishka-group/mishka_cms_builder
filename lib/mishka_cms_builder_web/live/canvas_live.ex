@@ -187,7 +187,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   def mount(%{"token" => token, "name" => name, "index" => index}, _session, socket) do
     with {:ok, session} <- visible_session(token, socket.assigns[:current_user]),
-         examples = Examples.for_name(name, session.site_id),
+         examples = Examples.offered(name, session.site_id),
          example when not is_nil(example) <- Enum.at(examples, to_index(index)),
          entry = Enum.find(session.components, &(&1.name == name)),
          {:ok, tree} <- Tree.parse(Fields.stage(example.source, entry)) do

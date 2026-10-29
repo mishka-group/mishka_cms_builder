@@ -3577,7 +3577,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
      # Curated for THIS component only, and only now. The palette carries no examples at all — see
      # `palette_entry/1` — because parsing every component's took 7.8 seconds at open.
      |> MishkaGervaz.Messages.assign_async(:examples, fn ->
-       {:ok, %{examples: curated_examples(name, site_id)}}
+       {:ok, %{examples: Examples.offered(name, site_id)}}
      end)}
   end
 
@@ -5998,10 +5998,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
        do: examples
 
   defp loaded_examples(_assigns), do: []
-
-  # An extension that ships a component can ship its examples too, or reorder the ones a kit provides.
-  defp curated_examples(name, site_id),
-    do: Events.examples(Examples.for_name(name, site_id), %{entry: name, site_id: site_id})
 
   # Placement follows the same rule as the palette: into the selection when it can hold children,
   # otherwise beside it, otherwise at the end of the document.

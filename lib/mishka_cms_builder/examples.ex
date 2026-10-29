@@ -37,6 +37,7 @@ defmodule MishkaCmsBuilder.Examples do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
@@ -84,8 +85,8 @@ defmodule MishkaCmsBuilder.Examples do
 
   The palette deliberately carries no examples: curating all 183 components parses every example
   each one ships and cost 7.8 seconds at editor open, to fill a modal that is opened for a single
-  component. Both readers of that modal — the panel and the preview iframe — come through here
-  instead, and only when the modal is opened.
+  component. Both readers of that modal come through here, by way of `offered/2`, and only when the
+  modal is opened.
   """
   @spec for_name(String.t(), String.t() | nil) :: [example()]
   def for_name(name, site_id \\ nil) do
@@ -102,6 +103,20 @@ defmodule MishkaCmsBuilder.Examples do
       _none -> []
     end
   end
+
+  @doc """
+  The examples the modal offers for one component: `for_name/2`, as a plugin answering
+  `builder:examples` leaves it — an extension that ships a component can ship its examples too, or
+  reorder the ones a kit provides.
+
+  THE LIST AND THE PREVIEW ARE ONE LIST. The modal names example N and the preview iframe renders
+  example N, by index, in a second LiveView. The modal asked the plugin and the iframe did not, so
+  an example a plugin added drew "This example is no longer available." and one it reordered drew
+  its neighbour. Both read this now.
+  """
+  @spec offered(String.t(), String.t() | nil) :: [example()]
+  def offered(name, site_id \\ nil),
+    do: Events.examples(for_name(name, site_id), %{entry: name, site_id: site_id})
 
   @doc "How many examples a component would offer — what the palette's badge counts."
   @spec count(map()) :: non_neg_integer()

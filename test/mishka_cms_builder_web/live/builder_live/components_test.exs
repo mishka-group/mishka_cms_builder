@@ -8,6 +8,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
   """
   use MishkaCmsBuilder.LiveCase
 
+  alias MishkaCmsBuilder.Test.Plugins.BuilderExamplesPlugin
+
   # A READER HAS TO BE ABLE TO TELL THE TWO APART. A live component answers clicks and keeps
   # state between renders; a function component structurally cannot. Two cards, two rows and two
   # inspector panels that look identical are a choice the author cannot make, and they find out
@@ -465,6 +467,28 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       {:ok, _preview, body} = live(conn, example_path(token(view), "promo-card", 99))
 
       assert body =~ "no longer available"
+    end
+
+    # ONE LIST, TWO READERS. The modal lists the examples as `builder:examples` leaves them and the
+    # preview renders example N by index — and it read the kit's list without asking the plugin, so
+    # the example a plugin put first previewed as the kit's first, and one it appended as "no longer
+    # available".
+    test "the preview renders the example a plugin added, at the index the list shows it", %{
+      conn: conn,
+      page: page
+    } do
+      register_plugin(BuilderExamplesPlugin, "builder:examples")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "promo-card")
+
+      assert view |> element("#pb-example-0") |> render() =~ "From the plugin"
+
+      {:ok, _preview, first} = live(conn, example_path(token(view), "promo-card", 0))
+      assert first =~ BuilderExamplesPlugin.heading()
+
+      {:ok, _preview, last} = live(conn, example_path(token(view), "promo-card", 2))
+      refute last =~ "no longer available"
     end
 
     test "closing the modal leaves the document untouched", %{conn: conn, page: page} do
