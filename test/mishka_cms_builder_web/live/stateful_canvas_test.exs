@@ -25,6 +25,8 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -156,8 +158,6 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
     _settled = render_async(view)
     view
   end
-
-  defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
 
   # THE INSPECTOR IS A TAB, and a selection made through the event leaves whichever one was showing.
   defp inspect_counter(view) do

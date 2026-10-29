@@ -70,18 +70,17 @@ defmodule MishkaCmsBuilder.NestedMenuTest do
     test "the nested attribute folds to the maps the component reads, rather than being dropped" do
       {:ok, items} = nested_example("chelekom-menu") |> menu_items() |> CanvasLive.literal()
 
-      assert is_list(items)
+      assert [_ | _] = items
 
       parent = Enum.find(items, &Map.has_key?(&1, :sub_items))
       assert parent, "the example's menu_items carries no entry with sub_items"
 
-      assert is_list(parent.sub_items)
-      assert length(parent.sub_items) >= 2
+      assert [_, _ | _] = parent.sub_items
 
       # Every leaf is a real link, which is what makes the sub-menu usable rather than decorative.
       for item <- parent.sub_items do
-        assert is_binary(item.title)
-        assert is_binary(item.navigate)
+        assert item.title =~ ~r/\S/
+        assert item.navigate =~ ~r/\S/
       end
     end
 

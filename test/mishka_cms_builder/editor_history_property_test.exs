@@ -250,8 +250,11 @@ defmodule MishkaCmsBuilder.EditorHistoryPropertyTest do
         # One attribute on one element: the step must not be proportional to the document.
         assert Patch.weight(patch) <= 2
 
-        assert Patch.bytes(patch) < document_bytes or Tree.size(session.tree) < 8,
-               "a step cost as much as the whole document"
+        # A document of a few nodes can weigh no more than one step does; past that, the step is
+        # always the lighter of the two.
+        if Tree.size(session.tree) >= 8 do
+          assert Patch.bytes(patch) < document_bytes, "a step cost as much as the whole document"
+        end
       end
     end
   end

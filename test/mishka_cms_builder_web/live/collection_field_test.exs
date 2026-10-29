@@ -16,6 +16,8 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
+  import MishkaCmsBuilder.LiveCase, only: [token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -123,7 +125,7 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
     {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
     _settled = render_async(view)
 
-    token = :sys.get_state(view.pid).socket.assigns.token
+    token = token(view)
     {:ok, editor} = MishkaCmsBuilder.EditorSession.fetch(token)
     component = editor.tree |> Tree.walk() |> Enum.find(&(&1.kind == :component))
 
@@ -149,7 +151,7 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
 
   describe "editing an item's field" do
     defp placed(view) do
-      token = :sys.get_state(view.pid).socket.assigns.token
+      token = token(view)
       {:ok, editor} = MishkaCmsBuilder.EditorSession.fetch(token)
       Enum.find(Tree.walk(editor.tree), &(&1.kind == :component))
     end

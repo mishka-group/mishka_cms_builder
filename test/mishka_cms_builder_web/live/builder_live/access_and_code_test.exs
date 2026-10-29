@@ -8,6 +8,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
   """
   use MishkaCmsBuilder.LiveCase
 
+  alias MishkaCmsBuilder.Presence
+
   # THE PAGE AREA WRITES THE PAGE'S CODE: its own type needs no code name of its own.
   describe "a page admin" do
     setup %{site: site} do
@@ -120,7 +122,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
 
       {:ok, canvas, _html} = live(narrow_conn(site, ["admin:dashboard:runtime:page"]), path)
 
-      refute :sys.get_state(canvas.pid).socket.assigns.missing?
+      refute live_assigns(canvas).missing?
     end
 
     test "a plugin's rail is drawn for a holder of the name it names and nobody else", %{
@@ -228,7 +230,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
             {narrow_conn(site, ["admin:dashboard:runtime:page"]), false}
           ] do
         {:ok, view, _html} = open_builder(who, page)
-        sections = :sys.get_state(view.pid).socket.assigns.inspector_sections
+        sections = live_assigns(view).inspector_sections
 
         assert Enum.any?(sections, &(to_string(&1.key) == "element")), "the core's are held"
         assert Enum.any?(sections, &(to_string(&1.key) == key)) == held?
@@ -769,7 +771,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       assert render(first) =~ "pb-avatars"
 
       assert Enum.any?(
-               MishkaCmsBuilder.Presence.editors(shared),
+               Presence.editors(shared),
                &(&1.id == other.id)
              )
     end
@@ -792,7 +794,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       assert token(second) == shared
       assert avatars(second) == ["TJ", "M"]
       assert avatars(first) == ["B", "TJ"]
-      refute MishkaCmsBuilder.Presence.editors(shared) |> inspect() =~ "@"
+      refute Presence.editors(shared) |> inspect() =~ "@"
     end
 
     test "a stale or foreign session token falls back to a fresh session", %{
@@ -807,8 +809,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
     end
 
     test "initials come from the email's local part" do
-      alias MishkaCmsBuilder.Presence
-
       assert Presence.initials(%{email: "ada.lovelace@example.com"}) == "AL"
       assert Presence.initials(%{email: "boss@example.com"}) == "B"
       assert Presence.initials(%{email: "a_b_c@example.com"}) == "AB"
@@ -876,8 +876,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
         |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
         |> Ash.read(page: [limit: 10])
 
-      draft = Enum.find(drafts.results, &(&1.source_page_id == page.id))
-      assert draft
+      assert draft = Enum.find(drafts.results, &(&1.source_page_id == page.id))
       assert draft.template =~ ~s(class="auto")
       assert String.starts_with?(draft.label, "Draft · "), draft.label
     end
@@ -946,7 +945,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       #
       # Raising the ceiling again would have been the wrong repair — it trades away the very
       # sensitivity the test exists for. The median keeps it.
-      median = times |> Enum.sort() |> Enum.at(div(length(times), 2))
+      sorted = Enum.sort(times)
+      median = Enum.at(sorted, div(length(sorted), 2))
 
       assert median < 400,
              "a selection cost #{median}ms (median) on a #{Tree.size(tree)}-node page: #{inspect(times)}"
@@ -1012,7 +1012,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
 
       assert render(view) =~ "turned off on this deployment"
       refute has_element?(view, "#pb-code-entry-events-0")
-      assert :sys.get_state(view.pid).socket.assigns.fragments[:events] in [nil, []]
+      assert fragments(view)[:events] in [nil, []]
     end
 
     # The block's source is markup, and markup is what the Template tab keeps for everybody.
@@ -1171,7 +1171,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       render_click(view, "apply_source", %{"source" => "<div><p>half written"})
       render_click(view, "apply_source", %{"source" => "<div><p>mended</p></div>"})
 
-      assert :sys.get_state(view.pid).socket.assigns.source_draft == nil
+      assert live_assigns(view).source_draft == nil
       assert Serializer.serialize(editor(view).tree) =~ "mended"
     end
 
@@ -1185,7 +1185,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       render_click(view, "apply_source", %{"source" => "<div><p>half written"})
       render_click(view, "close_source", %{})
 
-      assert :sys.get_state(view.pid).socket.assigns.source_draft == nil
+      assert live_assigns(view).source_draft == nil
     end
   end
 
@@ -1332,7 +1332,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
 
       node =
         view
-        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> then(&live_assigns(&1).editor.tree)
         |> Tree.walk()
         |> Enum.find(&(&1.tag == "p"))
 
@@ -1372,7 +1372,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
 
       render_click(view, "save_element_css", %{"node_id" => node.id, "css" => body})
 
-      stored = :sys.get_state(view.pid).socket.assigns.element_css_rules
+      stored = live_assigns(view).element_css_rules
 
       assert stored |> Map.values() |> Enum.join() =~ "</style>"
     end
@@ -1393,7 +1393,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
 
       node =
         view
-        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> then(&live_assigns(&1).editor.tree)
         |> Tree.walk()
         |> Enum.find(&(&1.tag == "p"))
 
@@ -1404,7 +1404,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
 
       render_click(view, "select", %{"id" => node.id})
 
-      assert :sys.get_state(view.pid).socket.assigns.element_css_advice =~ "INSIDE this element"
+      assert live_assigns(view).element_css_advice =~ "INSIDE this element"
     end
 
     test "and says nothing about a body that is only declarations", %{conn: conn, site: site} do
@@ -1415,14 +1415,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
 
       node =
         view
-        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> then(&live_assigns(&1).editor.tree)
         |> Tree.walk()
         |> Enum.find(&(&1.tag == "p"))
 
       render_click(view, "save_element_css", %{"node_id" => node.id, "css" => "color: red;"})
       render_click(view, "select", %{"id" => node.id})
 
-      assert :sys.get_state(view.pid).socket.assigns.element_css_advice == nil
+      assert live_assigns(view).element_css_advice == nil
     end
   end
 

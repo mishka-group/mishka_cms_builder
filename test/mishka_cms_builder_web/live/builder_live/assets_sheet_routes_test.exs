@@ -77,7 +77,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AssetsSheetRoutesTest do
         go(unquote(route), view, context)
         html = render_async(view)
 
-        assert :sys.get_state(view.pid).socket.assigns.sheet == :assets
+        assert live_assigns(view).sheet == :assets
         assert html =~ ~s(id="pb-folder-#{folder.id}"), "the folder never arrived"
         refute html =~ ~s(data-role="pb-folder-skeleton"), "the rail is still a placeholder"
       end
@@ -91,7 +91,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AssetsSheetRoutesTest do
       render_click(view, "ctx", %{"action" => "snippet", "node_id" => h1.id})
       render_async(view)
 
-      assigns = :sys.get_state(view.pid).socket.assigns
+      assigns = live_assigns(view)
       assert assigns.sheet == :studio
       assert is_map(assigns.studio_data), "the Studio is still a skeleton"
     end
@@ -100,7 +100,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AssetsSheetRoutesTest do
       render_click(view, "set_mob_panel", %{"panel" => "studio"})
       render_async(view)
 
-      assert is_map(:sys.get_state(view.pid).socket.assigns.studio_data)
+      assert %{tokens: _, packages: _} = live_assigns(view).studio_data
     end
   end
 

@@ -27,7 +27,7 @@ defmodule MishkaCmsBuilder.MarketplaceKitsTest do
     test "offers the kit's components", %{site: site} do
       packages = Kits.packages(%{site_id: site.id})
 
-      assert length(packages) > 0
+      assert packages != []
       assert Enum.all?(packages, &String.starts_with?(&1.id, "chelekom-"))
     end
 

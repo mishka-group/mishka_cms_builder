@@ -29,6 +29,9 @@ defmodule MishkaCmsBuilder.FormsTest do
   alias MishkaCmsBuilder.Blocks
   alias MishkaCmsCore.Runtime.Authoring.Elements
   alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsBuilder.PaletteEntry
+
+  require Ash.Query
 
   @moduletag :integration
 
@@ -162,7 +165,7 @@ defmodule MishkaCmsBuilder.FormsTest do
           failures =
             for component <- components,
                 template =
-                  MishkaCmsBuilder.PaletteEntry.template(palette_entry(component), "Global"),
+                  PaletteEntry.template(palette_entry(component), "Global"),
                 match?({:error, _}, render(template)),
                 do: component.name
 
@@ -171,8 +174,6 @@ defmodule MishkaCmsBuilder.FormsTest do
     end
 
     defp installed_form_components do
-      require Ash.Query
-
       MishkaCmsCore.Runtime.Component
       |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
       |> Ash.Query.filter(type == "forms")
@@ -199,8 +200,6 @@ defmodule MishkaCmsBuilder.FormsTest do
   # assign at all, so the component's own `@label` is a `KeyError` and the render dies — which is why
   # five of the kit's form components crashed on being dropped.
   describe "what the palette seeds into a dropped card" do
-    alias MishkaCmsBuilder.PaletteEntry
-
     defp entry(attrs, template) do
       %{name: "probe", template: template, attrs: attrs, slots: [], helpers: []}
     end
@@ -301,12 +300,10 @@ defmodule MishkaCmsBuilder.FormsTest do
 
       params = %{"name" => "Ada", "email" => "ada@example.com", "message" => "Hello"}
 
-      {:noreply, socket} =
-        module.handle_event("contact_submit", params, %Phoenix.LiveView.Socket{
-          assigns: %{__changed__: %{}}
-        })
-
-      assert socket.assigns.submitted == params
+      assert {:noreply, %{assigns: %{submitted: ^params}}} =
+               module.handle_event("contact_submit", params, %Phoenix.LiveView.Socket{
+                 assigns: %{__changed__: %{}}
+               })
     end
 
     # An event nobody named — neither the author on the Events tab nor a form in the markup — is

@@ -19,6 +19,8 @@ defmodule MishkaCmsBuilderWeb.Live.StalePanelWriteTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
+  import MishkaCmsBuilder.LiveCase, only: [live_assigns: 1, token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -115,8 +117,6 @@ defmodule MishkaCmsBuilderWeb.Live.StalePanelWriteTest do
     view
   end
 
-  defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
-
   defp stored_tree(view) do
     {:ok, session} = EditorSession.fetch(token(view))
     session.tree
@@ -160,7 +160,7 @@ defmodule MishkaCmsBuilderWeb.Live.StalePanelWriteTest do
     end
 
     test "a hook keeps it", %{view: view, heading: heading, paragraph: paragraph} do
-      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+      [hook] = live_assigns(view).js_hooks
 
       render_click(view, "save_hook", %{"node_id" => heading.id, "hook" => hook.name})
 

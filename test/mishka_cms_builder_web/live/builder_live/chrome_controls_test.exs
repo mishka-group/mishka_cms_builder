@@ -58,7 +58,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       |> render_submit(%{"node_id" => heading.id, "css" => "letter-spacing: 3px;"})
 
       scope = Tree.scope(editor(view).tree, heading.id)
-      assert :sys.get_state(view.pid).socket.assigns.element_css_rules[scope] =~ "letter-spacing"
+      assert live_assigns(view).element_css_rules[scope] =~ "letter-spacing"
     end
 
     # THE LEFT PANE TAKES WHAT YOU TYPE TOO. It was a picture of the markup: the reader could see
@@ -307,7 +307,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       |> render_submit(%{"node_id" => heading.id, "css" => "gap: 1px; } body { display: none; "})
 
       assert has_element?(view, "#pb-drawer-css-error")
-      assert :sys.get_state(view.pid).socket.assigns.element_css_rules == %{}
+      assert live_assigns(view).element_css_rules == %{}
     end
 
     # The upper Code menu. What it shows has to be what a save WRITES, which is `to_heex/1`
@@ -323,7 +323,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       p = node_with_tag(view, "p")
       render_click(view, "select", %{"id" => p.id})
 
-      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+      [hook] = live_assigns(view).js_hooks
       render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
 
       node = Tree.get(editor(view).tree, p.id)
@@ -340,7 +340,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       {:ok, view, _html} = open_builder(conn, page)
       p = node_with_tag(view, "p")
-      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+      [hook] = live_assigns(view).js_hooks
 
       render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
 
@@ -356,7 +356,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       {:ok, view, _html} = open_builder(conn, page)
       p = node_with_tag(view, "p")
-      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+      [hook] = live_assigns(view).js_hooks
 
       render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
       render_click(view, "save_hook", %{"node_id" => p.id, "hook" => ""})
@@ -374,7 +374,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       {:ok, view, _html} = open_builder(conn, page)
       p = node_with_tag(view, "p")
-      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+      [hook] = live_assigns(view).js_hooks
 
       render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
       render_click(view, "save_hook", %{"node_id" => p.id, "hook" => ""})
@@ -408,7 +408,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       {:ok, view, _html} = open_builder(conn, page)
       p = node_with_tag(view, "p")
-      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+      [hook] = live_assigns(view).js_hooks
 
       render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
       minted = Node.attr(Tree.get(editor(view).tree, p.id), "id")
@@ -442,7 +442,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       {:ok, view, _html} = open_builder(conn, page)
       p = node_with_tag(view, "p")
-      offered = :sys.get_state(view.pid).socket.assigns.js_hooks
+      offered = live_assigns(view).js_hooks
 
       assert contributed.name in Enum.map(offered, & &1.name)
 
@@ -460,7 +460,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       page = create_page!(site_id: site.id, template: ~s(<div><p>One</p></div>))
 
       {:ok, view, _html} = open_builder(conn, page)
-      hooks = :sys.get_state(view.pid).socket.assigns.js_hooks
+      hooks = live_assigns(view).js_hooks
       own = Enum.find(hooks, &(&1.hook == "mine"))
 
       refute own.global?
@@ -538,7 +538,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       })
 
       aim = Tree.scope(editor(view).tree, dialog.id)
-      assert is_binary(aim)
+      assert aim =~ ~r/\S/
 
       render_click(view, "op", %{
         "kind" => "set_attr",
@@ -736,11 +736,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       render_click(view, "select", %{"id" => button.id})
       render_change(view, "pick_interaction", %{"action" => "say"})
-      assert :sys.get_state(view.pid).socket.assigns.act_action == "say"
+      assert live_assigns(view).act_action == "say"
 
       render_click(view, "select", %{"id" => other.id})
-      assert :sys.get_state(view.pid).socket.assigns.act_action == nil
-      assert :sys.get_state(view.pid).socket.assigns.aim_target == nil
+      assert live_assigns(view).act_action == nil
+      assert live_assigns(view).aim_target == nil
     end
 
     # WHEN AN ELEMENT IS ON THE PAGE AT ALL. HEEx already has the feature, so the panel writes the
@@ -806,7 +806,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert scope =~ ~r/^pb-[a-f0-9]{8}$/, "the element was named"
       assert Serializer.serialize(tree) =~ scope, "and the name is in the markup"
 
-      css = :sys.get_state(view.pid).socket.assigns.element_css_rules[scope]
+      css = live_assigns(view).element_css_rules[scope]
       assert css =~ "padding: 20px;"
       assert css =~ "&:hover"
     end
@@ -979,7 +979,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
         })
 
       assert html =~ "unmatched"
-      assert :sys.get_state(view.pid).socket.assigns.element_css_rules == %{}
+      assert live_assigns(view).element_css_rules == %{}
     end
 
     # A RULE IS KEYED ON A CLASS IN THE MARKUP, so deleting the element takes the only reference to
@@ -1068,7 +1068,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       render_click(view, "publish", %{})
 
       {:ok, reopened, _html} = open_builder(conn, page)
-      rules = :sys.get_state(reopened.pid).socket.assigns.element_css_rules
+      rules = live_assigns(reopened).element_css_rules
 
       assert Map.has_key?(rules, scope),
              "the open read a different row than the save wrote"
@@ -1228,7 +1228,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert Tree.get(editor(view).tree, section.id).meta.styles[:base]["align"] == "items-center"
 
       scope = Tree.scope(editor(view).tree, section.id)
-      css = :sys.get_state(view.pid).socket.assigns.element_css_rules[scope]
+      css = live_assigns(view).element_css_rules[scope]
 
       refute css =~ "align-items"
       assert css =~ "border-image", "the line it could not take is left where it was"
@@ -1348,7 +1348,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       assert html =~ "no longer there"
       scope = Tree.scope(editor(view).tree, section.id)
-      assert :sys.get_state(view.pid).socket.assigns.element_css_rules[scope] =~ "gap: 4px"
+      assert live_assigns(view).element_css_rules[scope] =~ "gap: 4px"
     end
 
     # Moving the last line empties the box, and an empty box takes the scope class back off — but
@@ -1483,7 +1483,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       refute has_element?(view, "#pb-source-modal")
       assert editor(view).selection == heading.id
-      assert :sys.get_state(view.pid).socket.assigns.left_tab == :inspector
+      assert live_assigns(view).left_tab == :inspector
     end
 
     test "a handler can be added, written and kept", %{conn: conn, page: page} do
@@ -1926,7 +1926,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       page: page
     } do
       {:ok, view, _html} = open_builder(conn, page)
-      zoom = fn -> :sys.get_state(view.pid).socket.assigns.zoom end
+      zoom = fn -> live_assigns(view).zoom end
 
       set = fn value ->
         render_hook(view |> element("#pb-zoom"), "zoom_set", %{"value" => value})
@@ -2001,7 +2001,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
     } do
       {:ok, view, _html} = open_builder(conn, page)
       render_click(view, "set_device", %{"device" => "frames"})
-      zoom = fn -> :sys.get_state(view.pid).socket.assigns.frame_zoom end
+      zoom = fn -> live_assigns(view).frame_zoom end
 
       set = fn value ->
         render_hook(view |> element("#pb-frzoom"), "frame_zoom_set", %{"value" => value})
@@ -2108,7 +2108,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert html =~ "hero-bg"
       assert html =~ "team-photo"
 
-      state = :sys.get_state(view.pid).socket.assigns
+      state = live_assigns(view)
       refute state[:media_query], "the sheet no longer keeps a search of its own"
     end
 
@@ -2192,7 +2192,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       on_exit(fn -> Application.delete_env(:mishka_cms_builder, :marketplace) end)
 
       {:ok, view, _html} = open_builder(conn, page)
-      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      actor = actor(view)
       assert is_nil(actor.site_id), "this suite logs in a master"
 
       render_click(view, "open_sheet", %{"sheet" => "studio"})

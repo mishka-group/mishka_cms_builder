@@ -62,11 +62,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ClientNamesTest do
   describe "the right rail" do
     test "opens a tab it has, and falls back to the layers for one it has not", %{view: view} do
       render_click(view, "set_right_tab", %{"tab" => "assistant"})
-      assert :sys.get_state(view.pid).socket.assigns.right_tab == :assistant
+      assert live_assigns(view).right_tab == :assistant
 
       name = stray()
       render_click(view, "set_right_tab", %{"tab" => name})
-      assert :sys.get_state(view.pid).socket.assigns.right_tab == :layers
+      assert live_assigns(view).right_tab == :layers
       nothing_made_of(name)
     end
   end
@@ -75,13 +75,13 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ClientNamesTest do
     test "opens the sheet it names", %{view: view} do
       render_click(view, "set_mob_panel", %{"panel" => "studio"})
 
-      assert :sys.get_state(view.pid).socket.assigns.sheet == :studio
+      assert live_assigns(view).sheet == :studio
     end
 
     test "opens a panel it has", %{view: view} do
       render_click(view, "set_mob_panel", %{"panel" => "inspector"})
 
-      assigns = :sys.get_state(view.pid).socket.assigns
+      assigns = live_assigns(view)
       assert assigns.mob_panel == :inspector
     end
   end

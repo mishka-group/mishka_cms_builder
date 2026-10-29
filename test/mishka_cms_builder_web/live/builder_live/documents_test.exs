@@ -168,7 +168,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
          %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
       draft_id = autosave!(view)
-      assert is_binary(draft_id)
+      assert {:ok, _id} = Ecto.UUID.cast(draft_id)
 
       open_settings(view)
 
@@ -1343,8 +1343,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
         site
       )
 
-      record = created!(MishkaCmsCore.Runtime.Page, "essentials-page")
-      assert record
+      assert record = created!(MishkaCmsCore.Runtime.Page, "essentials-page")
       assert_redirect(view, "/admin/dashboard/runtime/builder/page/#{record.id}")
 
       # AND IT IS AN EMPTY DOCUMENT, not a record with a hole in it: the starter chooser only offers
@@ -1395,8 +1394,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
         site
       )
 
-      record = created!(MishkaCmsCore.Runtime.Layout, "essentials-layout")
-      assert record
+      assert record = created!(MishkaCmsCore.Runtime.Layout, "essentials-layout")
 
       # AND IT WRAPS SOMETHING. A layout renders the page inside it through `@inner_content`; one
       # without it would swallow every page that used it, which is a broken site rather than an
@@ -1415,8 +1413,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
         site
       )
 
-      record = created!(MishkaCmsCore.Runtime.ErrorPage, "essentials-error-page")
-      assert record
+      assert record = created!(MishkaCmsCore.Runtime.ErrorPage, "essentials-error-page")
       assert_redirect(view, "/admin/dashboard/runtime/builder/error-page/#{record.id}")
     end
 
@@ -1510,8 +1507,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       })
       |> render_submit()
 
-      record = created!(MishkaCmsCore.Runtime.Page, "carry-on-page")
-      assert record
+      assert record = created!(MishkaCmsCore.Runtime.Page, "carry-on-page")
       assert_redirect(view, "/admin/dashboard/runtime/builder/page/#{record.id}")
     end
 
@@ -1569,8 +1565,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       |> form("#component_form-form", %{"form" => %{"name" => "carry-on-component"}})
       |> render_submit()
 
-      record = created!(MishkaCmsCore.Runtime.Component, "carry-on-component")
-      assert record
+      assert record = created!(MishkaCmsCore.Runtime.Component, "carry-on-component")
       assert_redirect(view, "/admin/dashboard/runtime/builder/component/#{record.id}")
     end
 
@@ -1682,7 +1677,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       editor = editor(view)
       assert editor.draft_label == "Black Friday"
-      assert is_binary(editor.draft_id)
+      assert {:ok, _id} = Ecto.UUID.cast(editor.draft_id)
 
       # And it is listed, so it can be reopened.
       render_click(view, "draft_sheet", %{})
@@ -1715,7 +1710,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       render_click(view, "history_tab", %{"tab" => "drafts"})
       render_click(view, "fork_draft", %{"id" => original})
 
-      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      actor = actor(view)
       labels = "page" |> Drafts.list(page, actor) |> Enum.map(& &1.label)
 
       assert "Promo" in labels
@@ -1742,7 +1737,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       assert is_nil(editor(view).draft_id), "the deleted draft is no longer the save target"
       assert is_nil(editor(view).draft_label)
 
-      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      actor = actor(view)
       refute Enum.any?(Drafts.list("page", page, actor), &(&1.id == draft_id))
     end
 
@@ -1798,7 +1793,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
       _written = render_async(view)
       without_h1 = editor(view).draft_id
-      assert is_binary(without_h1)
+      assert {:ok, _id} = Ecto.UUID.cast(without_h1)
 
       # "Save as" forks a SECOND draft and points the session at it, so the undo below lands there.
       render_click(view, "save_as_draft", %{"label" => "Alt"})
@@ -1839,10 +1834,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       _written = render_async(second)
 
-      assert is_binary(editor(second).draft_id)
+      assert {:ok, _id} = Ecto.UUID.cast(editor(second).draft_id)
       assert editor(second).draft_id != first_id, "a sitting keeps its own row"
 
-      actor = :sys.get_state(second.pid).socket.assigns.current_user
+      actor = actor(second)
       labels = "page" |> Drafts.list(page, actor) |> Enum.map(& &1.label)
 
       assert length(labels) == 2
@@ -1982,7 +1977,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       {_autosave_id, view} = resumable_session(conn, page)
 
       render_click(view, "discard_autosave", %{})
-      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      actor = actor(view)
 
       refute has_element?(view, "#pb-resume-bar")
       assert Drafts.list("page", page, actor) == []
@@ -2009,7 +2004,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
     } do
       {:ok, first, _html} = open_builder(conn, page)
       draft_id = autosave!(first)
-      assert is_binary(draft_id)
+      assert {:ok, _id} = Ecto.UUID.cast(draft_id)
 
       again = reopen(first, conn, page)
 
@@ -2112,7 +2107,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       _written = render_async(view)
       chosen = editor(view).draft_id
 
-      assert is_binary(chosen)
+      assert {:ok, _id} = Ecto.UUID.cast(chosen)
       refute has_element?(view, "#pb-resume-bar")
     end
 
@@ -2123,11 +2118,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       draft_id = autosave!(view)
 
       render_click(view, "set_stage", %{"stage" => "published"})
-      assert :sys.get_state(view.pid).socket.assigns.stage == :published
+      assert live_assigns(view).stage == :published
 
       render_click(view, "open_draft", %{"id" => draft_id})
 
-      assert :sys.get_state(view.pid).socket.assigns.stage == :draft
+      assert live_assigns(view).stage == :draft
       assert view |> element("#pb-stage-menu") |> render() =~ "animate-pulse"
 
       # ONE WRITE, NOT TWO. The stage used to be a second `set_stage/2` call — a second ETS read
@@ -2214,9 +2209,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
     test "publishing deletes the draft it published", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
       draft_id = autosave!(view)
-      assert is_binary(draft_id)
+      assert {:ok, _id} = Ecto.UUID.cast(draft_id)
 
-      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      actor = actor(view)
       assert Enum.any?(Drafts.list("page", page, actor), &(&1.id == draft_id))
 
       publish!(view)
@@ -2243,7 +2238,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       _written = render_async(view)
 
-      assert is_binary(editor(view).draft_id)
+      assert {:ok, _id} = Ecto.UUID.cast(editor(view).draft_id)
       assert editor(view).draft_id != first
     end
 
@@ -2597,7 +2592,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       assert row.op == :set_text
       assert row.source_type == :page
       assert row.site_id == page.site_id
-      assert row.author_id == :sys.get_state(view.pid).socket.assigns.current_user.id
+      assert row.author_id == actor(view).id
     end
 
     test "the sheet lists what the log holds", %{conn: conn, page: page} do
@@ -2726,7 +2721,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       render_click(view, "history_revert", %{"id" => row.id})
       _restored = render_async(view)
 
-      refute :sys.get_state(view.pid).socket.assigns.history_reverting?
+      refute live_assigns(view).history_reverting?
     end
 
     test "clearing takes the whole page's history", %{conn: conn, page: page} do

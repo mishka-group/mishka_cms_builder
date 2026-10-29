@@ -21,6 +21,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -123,7 +125,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
   defp canvas_html(conn, page) do
     {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
     render_async(view)
-    token = :sys.get_state(view.pid).socket.assigns.token
+    token = token(view)
     {:ok, _canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token}")
     html
   end

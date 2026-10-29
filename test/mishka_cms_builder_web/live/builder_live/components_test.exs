@@ -1223,7 +1223,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       render_click(view, "drop", %{"node_id" => h1.id, "parent_id" => "root", "index" => "0"})
       undo!(view)
 
-      assert Tree.get(view |> editor() |> Map.fetch!(:tree), h1.id).parent_id != nil
+      assert Tree.get(view |> editor() |> Map.fetch!(:tree), h1.id).parent_id == h1.parent_id
     end
 
     # 183 components carrying their templates, attrs, slots and examples is 3.4 MB and 1.6 seconds.
@@ -2946,15 +2946,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       {:ok, view, _html} = open_builder(conn, page)
       html = render(view)
 
-      [short, long] =
-        for name <- ~w(kit-x kit-with-a-very-long-name-that-wraps-twice) do
-          [_before, after_id] = String.split(html, ~s(id="pb-comp-#{name}"), parts: 2)
-          [tag, _rest] = String.split(after_id, ">", parts: 2)
-          tag =~ "h-[92px]"
-        end
+      for name <- ~w(kit-x kit-with-a-very-long-name-that-wraps-twice) do
+        [_before, after_id] = String.split(html, ~s(id="pb-comp-#{name}"), parts: 2)
+        [tag, _rest] = String.split(after_id, ">", parts: 2)
+        assert tag =~ "h-[92px]", "the #{name} card is not the fixed height"
+      end
 
-      assert short
-      assert long
       assert html =~ "line-clamp-2 w-full flex-none"
     end
 
@@ -3023,7 +3020,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         |> Tree.walk()
         |> Enum.find(&(&1.kind == :component))
 
-      assert placed
+      assert %Node{} = placed
       # Inside the clicked container, as its last child — and the arming is spent.
       assert placed.parent_id == section.id
       refute render(view) =~ "Placing hero-card"
@@ -3061,7 +3058,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       tree = view |> editor() |> Map.fetch!(:tree)
       placed = tree |> Tree.walk() |> Enum.find(&(Node.component_name(&1) == "hero-card"))
 
-      assert placed
+      assert %Node{} = placed
       # A sibling of the leaf, not a child of it.
       assert placed.parent_id == leaf.parent_id
       assert Tree.index_of(tree, placed.id) == Tree.index_of(tree, leaf.id) + 1

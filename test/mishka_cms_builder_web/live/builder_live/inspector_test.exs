@@ -4,7 +4,7 @@
 
 defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
   @moduledoc """
-  The inspector panels, attributes that hold expressions, and layouts, components and error pages.
+  Inspector panels, attributes that hold expressions, and layouts, components and error pages.
   """
   use MishkaCmsBuilder.LiveCase
 
@@ -774,10 +774,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       {:ok, view, _html} = open_builder(conn, page)
 
       render_click(view, "icon_library", %{"library" => "heroicons"})
-      assert :sys.get_state(view.pid).socket.assigns.icon_library == "heroicons"
+      assert live_assigns(view).icon_library == "heroicons"
 
       render_click(view, "icon_library", %{"library" => "heroicons"})
-      assert is_nil(:sys.get_state(view.pid).socket.assigns.icon_library)
+      assert is_nil(live_assigns(view).icon_library)
     end
 
     # The examples modal answers "show me one the kit already wrote". The wizard answers the other
@@ -876,7 +876,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert view |> editor() |> Map.fetch!(:wizard) == %{},
              "the session kept choices the closed modal made"
 
-      assert :sys.get_state(view.pid).socket.assigns.wizard == %{}
+      assert live_assigns(view).wizard == %{}
     end
 
     test "and inserting from it does too", %{conn: conn, page: page, site: site} do
@@ -1055,7 +1055,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       {:ok, view, _html} = open_builder(conn, page)
       show_examples!(view, "wizardonly")
 
-      assert :sys.get_state(view.pid).socket.assigns.example_tab == :wizard
+      assert live_assigns(view).example_tab == :wizard
     end
 
     test "a component with examples still opens on Examples", %{
@@ -1077,7 +1077,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       {:ok, view, _html} = open_builder(conn, page)
       show_examples!(view, "exampley")
 
-      assert :sys.get_state(view.pid).socket.assigns.example_tab == :examples
+      assert live_assigns(view).example_tab == :examples
     end
 
     test "a component with no option lists gets no wizard tab", %{
@@ -2572,8 +2572,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
 
       signed_out = LiveViewCompiler.render_template(editor_html(view), %{})
 
-      assert is_binary(signed_out)
-
       refute signed_out =~ "secret",
              "the condition the add box was typed at is no longer guarding"
     end
@@ -3317,7 +3315,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       # Ash hands typed map entries back atom-keyed even when they were written with string keys.
       by_status =
         Map.new(reloaded.error_pages, fn entry ->
-          {entry["status"] || entry[:status], entry["template"] || entry[:template]}
+          {entry[:status], entry[:template]}
         end)
 
       assert by_status[404] =~ "Missing"
@@ -3486,7 +3484,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
 
       by_status =
         Map.new(reloaded.error_pages, fn entry ->
-          {entry["status"] || entry[:status], entry["template"] || entry[:template]}
+          {entry[:status], entry[:template]}
         end)
 
       assert by_status[500] =~ "Boom", "the 404 tree was published over the 500 entry"

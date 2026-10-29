@@ -146,7 +146,6 @@ defmodule MishkaCmsBuilder.OpenThatTest do
       {:ok, tree} = Tree.set_attr(tree, button, "phx-click", {:expr, source})
       html = LiveViewCompiler.render_template(Serializer.serialize(tree), %{})
 
-      assert is_binary(html)
       assert html =~ ".#{scope}"
     end
   end

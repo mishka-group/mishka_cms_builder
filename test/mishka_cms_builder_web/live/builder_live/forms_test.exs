@@ -257,7 +257,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormsTest do
       {:ok, canvas, _html} =
         live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}/wizard/acme-contact")
 
-      previewed = fn -> contact_in(:sys.get_state(canvas.pid).socket.assigns.tree) end
+      previewed = fn -> contact_in(live_assigns(canvas).tree) end
 
       assert Node.attr(previewed.(), "for") == {:expr, "%{}"}
 
@@ -849,7 +849,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormsTest do
 
       assert Enum.map(reloaded.events, & &1.name) == ["contact-k7m2q-submit"]
 
-      refute Map.has_key?(:sys.get_state(view.pid).socket.assigns.flash, "error"),
+      refute Map.has_key?(live_assigns(view).flash, "error"),
              "leaving the form must not try a code write this deployment refuses"
     end
 

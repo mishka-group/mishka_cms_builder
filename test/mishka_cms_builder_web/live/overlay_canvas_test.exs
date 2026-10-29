@@ -29,6 +29,8 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -146,8 +148,6 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
     {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
     {canvas, html}
   end
-
-  defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
 
   defp editor(view), do: elem(EditorSession.fetch(token(view)), 1)
 

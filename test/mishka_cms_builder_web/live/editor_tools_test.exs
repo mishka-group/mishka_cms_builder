@@ -20,6 +20,8 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [actor: 1, live_assigns: 1, token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -150,7 +152,6 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
     {view, record}
   end
 
-  defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
   defp editor(view), do: elem(EditorSession.fetch(token(view)), 1)
   defp tree(view), do: editor(view) |> Map.fetch!(:tree)
   defp nodes(view), do: view |> tree() |> Tree.walk()
@@ -234,7 +235,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
         })
 
         assert view |> tree() |> Tree.get(target.id) |> Node.attr_text("class") == "hero-star"
-        assert :sys.get_state(view.pid).socket.assigns.icon_picker == nil
+        assert live_assigns(view).icon_picker == nil
       end
     end
 
@@ -632,7 +633,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
 
         classes =
           MishkaCmsBuilder.Classes.all(
-            :sys.get_state(view.pid).socket.assigns.current_user,
+            actor(view),
             nil
           )
 

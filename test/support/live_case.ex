@@ -356,6 +356,13 @@ defmodule MishkaCmsBuilder.LiveCase do
     |> Ash.read!(authorize?: false)
   end
 
+  # THE LIVEVIEW'S OWN STATE, for what its markup does not show: the rules a scope stores, the tab or
+  # sheet the session is on, the hooks it offers, the user it reads as. A test that reads it still
+  # asserts on the page wherever the page shows the outcome. `token/1`, `actor/1`, `fragments/1` and
+  # the other readers here are this for one assign each.
+  @doc false
+  def live_assigns(view), do: :sys.get_state(view.pid).socket.assigns
+
   @doc false
   def token(view), do: :sys.get_state(view.pid).socket.assigns.token
 

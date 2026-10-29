@@ -804,8 +804,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
 
       render_click(view, "ctx", %{"action" => "snippet", "node_id" => h1.id})
 
-      assert :sys.get_state(view.pid).socket.assigns.sheet == :studio
-      assert :sys.get_state(view.pid).socket.assigns.studio_tab == :snippets
+      assert live_assigns(view).sheet == :studio
+      assert live_assigns(view).studio_tab == :snippets
     end
 
     # The action is a word off the wire. Anything the menu does not offer is dropped rather than
@@ -1208,7 +1208,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       _written = render_async(view)
 
       refute view |> editor() |> Map.fetch!(:dirty?)
-      assert is_binary(editor(view).draft_id)
+      assert {:ok, _id} = Ecto.UUID.cast(editor(view).draft_id)
     end
 
     test "Save draft first saves, then reloads", %{conn: conn, page: page} do
@@ -2018,7 +2018,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
     end
 
     test "a style edit lands in the base bucket and compiles to a class on save", %{
-      conn: conn,
       page: page,
       view: view,
       node: node
@@ -2040,7 +2039,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
         Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
 
       assert reloaded.template =~ "gap-[20px]"
-      assert conn
     end
 
     # Firing `op` directly proves the HANDLER. This proves the CONTROL, which is a different claim:
@@ -2121,7 +2119,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       as_grid = render(view)
 
       for prop <- Styles.properties() do
-        assert control_for?(as_flex, prop) or control_for?(as_grid, prop),
+        assert Enum.any?([as_flex, as_grid], &control_for?(&1, prop)),
                "no control for the #{prop} override"
       end
 
@@ -2190,7 +2188,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
     # Display and its flex-only neighbours are pictures rather than a `<select>` of raw utilities:
     # the value still written is the bare Tailwind class, which is what makes the round trip work.
     test "picking a Layout picture writes the bare Tailwind utility", %{
-      conn: conn,
       page: page,
       view: view,
       node: node
@@ -2206,7 +2203,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
         Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
 
       assert reloaded.template =~ "grid"
-      assert conn
     end
 
     # §3 — the layout vocabulary as pictures. What is pinned is the behaviour a non-technical author

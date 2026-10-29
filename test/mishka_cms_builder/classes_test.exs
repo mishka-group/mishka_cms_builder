@@ -78,7 +78,7 @@ defmodule MishkaCmsBuilder.ClassesTest do
     test "a name that is not a CSS class is refused", %{site: site, master: master} do
       for name <- ["My Class", "my<script>", "", "9lives", "a"] do
         assert {:error, message} = Classes.put(master, site.id, name, "p-6")
-        assert is_binary(message)
+        assert message =~ ~r/\S/
       end
     end
 
@@ -141,7 +141,7 @@ defmodule MishkaCmsBuilder.ClassesTest do
     } do
       for utilities <- ["bg-white; } body { display: none", "bg-white }", "p-6; color: red"] do
         assert {:error, message} = Classes.put(master, site.id, "card", utilities)
-        assert is_binary(message)
+        assert message =~ ~r/\S/
       end
 
       assert Classes.all(master, site.id) == []

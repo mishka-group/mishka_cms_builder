@@ -156,7 +156,7 @@ defmodule MishkaCmsBuilder.MarketplaceTest do
 
     test "every format produces something for an empty token list without crashing" do
       for {format, _label, _file, _hint} <- Marketplace.formats() do
-        assert is_binary(Marketplace.generate(format, []))
+        assert Marketplace.generate(format, []) =~ ~r/\S/
       end
     end
 

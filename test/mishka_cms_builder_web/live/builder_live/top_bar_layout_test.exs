@@ -83,7 +83,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.TopBarLayoutTest do
 
         for kid <- found do
           assert "flex-none" not in kid, "#{selector} cannot shrink"
-          assert "truncate" in kid or "min-w-0" in kid, "#{selector} cannot shrink"
+          assert Enum.any?(~w(truncate min-w-0), &(&1 in kid)), "#{selector} cannot shrink"
         end
       end
 

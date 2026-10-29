@@ -32,6 +32,8 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [actor: 1, live_assigns: 1, token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -166,16 +168,14 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     case section do
       :error_page ->
         reloaded.error_pages
-        |> Enum.find(&((&1["status"] || &1[:status]) == 404))
-        |> then(&(&1["template"] || &1[:template]))
+        |> Enum.find(&(&1[:status] == 404))
+        |> then(& &1[:template])
 
       _attribute ->
         reloaded.template
     end
   end
 
-  defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
-  defp actor(view), do: :sys.get_state(view.pid).socket.assigns.current_user
   defp editor(view), do: elem(EditorSession.fetch(token(view)), 1)
   defp tree(view), do: editor(view) |> Map.fetch!(:tree)
   defp source(view), do: view |> tree() |> Serializer.serialize()
@@ -183,7 +183,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
   defp node_with_tag(view, tag), do: Enum.find(nodes(view), &(&1.tag == tag))
 
   # The invitation as the builder itself writes it, off the live socket's own assigns.
-  defp share_url(view), do: BuilderLive.share_url(:sys.get_state(view.pid).socket.assigns)
+  defp share_url(view), do: BuilderLive.share_url(live_assigns(view))
 
   defp drafts_of(error_page, actor),
     do: MishkaCmsCore.Runtime.Authoring.Drafts.list("error-page", error_page, actor)
@@ -200,7 +200,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
   # row hold the same list, so both are read the same way.
   defp by_status(%{error_pages: entries}) do
     Map.new(entries, fn entry ->
-      {entry["status"] || entry[:status], entry["template"] || entry[:template]}
+      {entry[:status], entry[:template]}
     end)
   end
 
@@ -283,7 +283,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     reloaded
     |> Map.get(String.to_existing_atom(tab))
     |> List.wrap()
-    |> Enum.map(&(Map.get(&1, :name) || Map.get(&1, "name")))
+    |> Enum.map(&Map.get(&1, :name))
   end
 
   defp more!(view, id) do
@@ -683,7 +683,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         # `refresh_folders/1` only runs when the guard passes, so the new folder appearing in the
         # rail IS the guard passing.
         names =
-          :sys.get_state(view.pid).socket.assigns.media_categories
+          live_assigns(view).media_categories
           |> Map.fetch!(:result)
           |> Enum.map(& &1.name)
 
@@ -1126,7 +1126,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         {:ok, reloaded} =
           Ash.get(resource(unquote(section)), record.id, action: :master_get, authorize?: false)
 
-        names = Enum.map(reloaded.helpers || [], &(Map.get(&1, :name) || Map.get(&1, "name")))
+        names = Enum.map(reloaded.helpers || [], &Map.get(&1, :name))
 
         assert "greet" in names,
                "the helper never reached this section's own record"
@@ -1148,7 +1148,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         {:ok, reloaded} =
           Ash.get(resource(unquote(section)), record.id, action: :master_get, authorize?: false)
 
-        names = Enum.map(reloaded.helpers || [], &(Map.get(&1, :name) || Map.get(&1, "name")))
+        names = Enum.map(reloaded.helpers || [], &Map.get(&1, :name))
         refute "broken" in names, "unparseable code was written to the record"
       end
     end
@@ -1264,7 +1264,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       {:ok, reloaded} =
         Ash.get(MishkaCmsCore.Runtime.Page, record.id, action: :master_get, authorize?: false)
 
-      names = Enum.map(reloaded.events || [], &(Map.get(&1, :name) || Map.get(&1, "name")))
+      names = Enum.map(reloaded.events || [], &Map.get(&1, :name))
 
       refute "typed_never_saved" in names, "switching tabs wrote to the record"
     end
@@ -1347,8 +1347,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       refute "placeable-card" in names
 
       # And a sibling component is still offered — this removes one row, not the panel.
-      other = create_component!(site_id: site.id, name: "other-card", template: "<div>x</div>")
-      assert other
+      create_component!(site_id: site.id, name: "other-card", template: "<div>x</div>")
 
       view = open_record(conn, :component, component)
       render_async(view)
@@ -1407,7 +1406,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         {:ok, loaded} =
           Ash.get(resource(unquote(section)), record.id, action: :master_get, authorize?: false)
 
-        assert is_binary(loaded.preview_token)
+        assert loaded.preview_token =~ ~r/^[A-Za-z0-9_-]{43}$/
 
         MishkaCmsCore.Runtime.States.AssetsState.save(%{
           id: loaded.preview_token,

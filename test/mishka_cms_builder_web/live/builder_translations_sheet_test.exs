@@ -25,6 +25,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderTranslationsSheetTest do
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [live_assigns: 1, token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -187,7 +189,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderTranslationsSheetTest do
 
   defp chips(row), do: "#pb-translations-languages-#{row.id}"
 
-  defp group(view), do: :sys.get_state(view.pid).socket.assigns.translation_group
+  defp group(view), do: live_assigns(view).translation_group
 
   defp open_word(view, row) do
     send(view.pid, {:row_action, "edit_translation", %{"id" => row.id}})
@@ -217,7 +219,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderTranslationsSheetTest do
   end
 
   defp expression(view, text) do
-    {:ok, editor} = EditorSession.fetch(:sys.get_state(view.pid).socket.assigns.token)
+    {:ok, editor} = EditorSession.fetch(token(view))
     Enum.find(Tree.walk(editor.tree), &(&1.kind == :eex and &1.text == text))
   end
 

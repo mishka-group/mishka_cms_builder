@@ -17,6 +17,10 @@ defmodule MishkaCmsBuilder.Resources.PageCommentTest do
 
   alias MishkaCmsBuilder.Review
   alias MishkaCmsBuilder.PageComment
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaGervaz.Form.Web.State.Helpers, as: FormState
+  alias MishkaGervaz.Resource.Info.Form, as: FormInfo
+  alias MishkaGervaz.Resource.Info.Table, as: TableInfo
 
   setup do
     site = create_site!()
@@ -73,10 +77,6 @@ defmodule MishkaCmsBuilder.Resources.PageCommentTest do
   # A NOTE IS NEVER EDITED. The review form creates; edit mode is closed for everyone, so nothing can
   # open a composer whose save would do nothing.
   describe "the review form and thread" do
-    alias MishkaGervaz.Form.Web.State.Helpers, as: FormState
-    alias MishkaGervaz.Resource.Info.Form, as: FormInfo
-    alias MishkaGervaz.Resource.Info.Table, as: TableInfo
-
     test "the form opens for a new note and never for editing one" do
       source = FormInfo.config(PageComment).source
 
@@ -699,8 +699,6 @@ defmodule MishkaCmsBuilder.Resources.PageCommentTest do
   end
 
   describe "finding the element a note is about" do
-    alias MishkaCmsCore.Runtime.Authoring.Tree
-
     test "answers with the node when it is still there" do
       {:ok, tree} = Tree.parse(~s(<section><h1>Hi</h1></section>))
       [root] = tree.roots

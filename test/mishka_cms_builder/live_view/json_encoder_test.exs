@@ -30,12 +30,12 @@ defmodule MishkaCmsBuilder.LiveView.JsonEncoderTest do
     assert cp["attrs"] == %{"foo" => "bar"}
     assert cp["content"] == ["hi"]
     refute Map.has_key?(cp, "rendered_html")
-    assert is_binary(Jason.encode!(ast))
+    assert {:ok, _json} = Jason.encode(ast)
   end
 
   test "an eex expression with a missing assign degrades gracefully (no tuple leak)" do
     ast = encode!(~s|<span><%= @missing %></span>|)
-    assert is_binary(Jason.encode!(ast))
+    assert {:ok, _json} = Jason.encode(ast)
   end
 
   test "plain markup round-trips with its structure preserved" do
@@ -44,7 +44,7 @@ defmodule MishkaCmsBuilder.LiveView.JsonEncoderTest do
     assert [%{"tag" => "div", "attrs" => %{"class" => "a"}, "content" => [span]}] = ast
     assert span["tag"] == "span"
     assert span["content"] == ["hi"]
-    assert is_binary(Jason.encode!(ast))
+    assert {:ok, _json} = Jason.encode(ast)
   end
 
   test "an eex if-block is encoded with its preview and nested ast" do
@@ -52,8 +52,8 @@ defmodule MishkaCmsBuilder.LiveView.JsonEncoderTest do
 
     assert [%{"tag" => "eex_block", "arg" => "if true do"} = block] = ast
     assert block["rendered_html"] =~ "yes"
-    assert is_binary(block["ast"])
-    assert is_binary(Jason.encode!(ast))
+    assert block["ast"] =~ ~r/\S/
+    assert {:ok, _json} = Jason.encode(ast)
   end
 
   test "an eex for-block renders each iteration" do
@@ -63,7 +63,7 @@ defmodule MishkaCmsBuilder.LiveView.JsonEncoderTest do
     assert block["tag"] == "eex_block"
     assert block["rendered_html"] =~ "1"
     assert block["rendered_html"] =~ "3"
-    assert is_binary(Jason.encode!(ast))
+    assert {:ok, _json} = Jason.encode(ast)
   end
 
   test "an eex block with an unknown component keeps its ast but drops the preview" do
@@ -72,7 +72,7 @@ defmodule MishkaCmsBuilder.LiveView.JsonEncoderTest do
     assert [%{"tag" => "div", "content" => [block]}] = ast
     assert block["tag"] == "eex_block"
     assert block["rendered_html"] == nil
-    assert is_binary(block["ast"])
-    assert is_binary(Jason.encode!(ast))
+    assert block["ast"] =~ ~r/\S/
+    assert {:ok, _json} = Jason.encode(ast)
   end
 end

@@ -265,7 +265,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       {:ok, canvas, _html} =
         live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
 
-      assigns = :sys.get_state(canvas.pid).socket.assigns
+      assigns = live_assigns(canvas)
 
       refute assigns[:admin_css], "the canvas must not pull the dashboard's stylesheet"
       assert assigns[:admin_fonts], "its chrome names the admin faces in inline `font:` shorthand"
@@ -511,7 +511,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
     # The builder SHELL is admin chrome and keeps all three.
     test "the builder shell keeps the admin stylesheet", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
-      assigns = :sys.get_state(view.pid).socket.assigns
+      assigns = live_assigns(view)
 
       assert assigns[:admin_css]
       assert assigns[:admin_fonts]
@@ -1350,7 +1350,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
 
       node =
         view
-        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> then(&live_assigns(&1).editor.tree)
         |> Tree.walk()
         |> Enum.find(&(&1.tag == "span"))
 
@@ -1698,7 +1698,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       view |> element("#pb-studio-registry") |> render_click()
       _loaded = render_async(view)
 
-      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      actor = actor(view)
       assert is_nil(actor.site_id), "this suite logs in a master"
 
       package = first_uninstalled_package(view)
@@ -1965,7 +1965,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
 
       assert render(view) =~ "drag and drop", "Gervaz's own dropzone copy"
 
-      refute :sys.get_state(view.pid).socket.assigns[:uploads],
+      refute live_assigns(view)[:uploads],
              "BuilderLive must not register an uploader of its own"
     end
 
@@ -2082,7 +2082,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       render_click(view, "pick_media", %{"node_id" => placed.id, "name" => "image_url"})
       _loaded = render_async(view)
 
-      assert :sys.get_state(view.pid).socket.assigns.media_target.accepts == :images
+      assert live_assigns(view).media_target.accepts == :images
       assert media_filter(view)[:type] == :images
     end
 
@@ -2101,7 +2101,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       render_click(view, "pick_media", %{"node_id" => video.id, "name" => "src"})
       _loaded = render_async(view)
 
-      assert :sys.get_state(view.pid).socket.assigns.media_target.accepts == :any
+      assert live_assigns(view).media_target.accepts == :any
       refute Map.has_key?(media_filter(view), :type)
     end
 
@@ -2137,7 +2137,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
     defp media_filter(view) do
       view
       |> render()
-      |> then(fn _html -> :sys.get_state(view.pid).socket.assigns end)
+      |> then(fn _html -> live_assigns(view) end)
       |> then(&MishkaCmsBuilderWeb.Live.Panels.media_scope_params/1)
     end
 
@@ -2417,18 +2417,18 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       render_click(view, "open_sheet", %{"sheet" => "assets"})
       _loaded = render_async(view)
 
-      refute :sys.get_state(view.pid).socket.assigns.assets_category
+      refute live_assigns(view).assets_category
 
       render_click(view, "select_asset_category", %{
         "id" => "6c5cf4ee-0000-4000-8000-000000000001"
       })
 
-      assert :sys.get_state(view.pid).socket.assigns.assets_category ==
+      assert live_assigns(view).assets_category ==
                "6c5cf4ee-0000-4000-8000-000000000001"
 
       # …and "All files" puts it back, rather than filtering for a folder called "__all__".
       render_click(view, "select_asset_category", %{"id" => "__all__"})
-      refute :sys.get_state(view.pid).socket.assigns.assets_category
+      refute live_assigns(view).assets_category
     end
 
     # A FOLDER INSIDE ANOTHER SITS UNDER IT in the rail, stepped in by how deep it is — the library's
@@ -2566,10 +2566,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       {:ok, view, _html} = open_builder(conn, page)
       render_click(view, "open_sheet", %{"sheet" => "review"})
 
-      before = :sys.get_state(view.pid).socket.assigns.review_revision
+      before = live_assigns(view).review_revision
       post_note(view, "First note", "bug")
 
-      assert :sys.get_state(view.pid).socket.assigns.review_revision > before,
+      assert live_assigns(view).review_revision > before,
              "the revision is what rebuilds the composer"
     end
 
@@ -3014,18 +3014,18 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       {:ok, canvas, _html} =
         live(conn, "/admin/dashboard/runtime/builder-canvas/#{token}")
 
-      refute :sys.get_state(canvas.pid).socket.assigns.missing?
+      refute live_assigns(canvas).missing?
 
       MishkaCmsBuilder.States.EditorSessionState.delete(token)
 
       send(canvas.pid, {:builder_session, token, {:review, :changed}})
       _rendered = render(canvas)
-      refute :sys.get_state(canvas.pid).socket.assigns.missing?, "a note is not a document change"
+      refute live_assigns(canvas).missing?, "a note is not a document change"
 
       # …and anything that IS a document change still is.
       send(canvas.pid, {:builder_session, token, {:op_applied, :insert}})
       _rendered = render(canvas)
-      assert :sys.get_state(canvas.pid).socket.assigns.missing?
+      assert live_assigns(canvas).missing?
     end
 
     # REPLIES. The shape is `MishkaBlog.Comment`'s — a nullable self-reference and its reverse — and
@@ -3625,7 +3625,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
              "the write re-read the thread once; the broadcast must not re-read it again"
     end
 
-    defp revision(view), do: :sys.get_state(view.pid).socket.assigns.review_revision
+    defp revision(view), do: live_assigns(view).review_revision
 
     # §Reply — the composer announces what it is for, so the caret has to be in it.
     test "replying puts the caret in the composer", %{conn: conn, page: page, site: site} do

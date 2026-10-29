@@ -117,8 +117,7 @@ defmodule MishkaCmsBuilder.CardPreviewTest do
     test "says what is wrong instead of drawing a blank box" do
       assert {:error, message} = CardPreview.document("<p>{@missing_assign_here}</p>", nil)
 
-      assert is_binary(message)
-      assert message != ""
+      assert message =~ ~r/\S/
     end
 
     test "and the message is a sentence, not an exception struct" do

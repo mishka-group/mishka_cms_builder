@@ -50,7 +50,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormRecoveryTest do
       for form <- forms, form =~ "phx-submit" do
         assert form =~ ~r/\sid="/, "a form with no id: #{form}"
 
-        assert form =~ "phx-change" or form =~ ~s(phx-auto-recover="ignore"),
+        assert form =~ ~r/phx-change|phx-auto-recover="ignore"/,
                "a form that comes back empty after a reconnect: #{form}"
       end
     end
@@ -62,7 +62,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormRecoveryTest do
 
       for form <- forms_in(html), form =~ "phx-submit" do
         assert form =~ ~r/\sid="/, "a form with no id: #{form}"
-        assert form =~ "phx-change" or form =~ ~s(phx-auto-recover="ignore")
+        assert form =~ ~r/phx-change|phx-auto-recover="ignore"/
       end
     end
   end

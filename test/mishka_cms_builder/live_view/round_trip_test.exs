@@ -285,7 +285,6 @@ defmodule MishkaCmsBuilder.LiveView.RoundTripTest do
 
       html = LiveViewCompiler.render_template(HeexDecoder.decode(ast), %{})
 
-      assert is_binary(html)
       assert html =~ ~s|class="card"|
       assert html =~ "Title"
       assert html =~ "Body text"
@@ -311,7 +310,8 @@ defmodule MishkaCmsBuilder.LiveView.RoundTripTest do
     test "an unrenderable component degrades to a non-binary result (endpoint returns nil)" do
       ast = [%{"tag" => ".cp", "attrs" => %{}, "content" => ["x"]}]
 
-      refute is_binary(LiveViewCompiler.render_template(HeexDecoder.decode(ast), %{}))
+      assert {:error, _message} =
+               LiveViewCompiler.render_template(HeexDecoder.decode(ast), %{})
     end
   end
 

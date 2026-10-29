@@ -4,8 +4,8 @@
 
 defmodule MishkaCmsBuilder.PaletteEntryTest do
   @moduledoc """
-  The extension seam for the palette (§22): a component that cannot be a stored template registers
-  as a descriptor on `builder:components` and appears alongside the database ones.
+  A component that cannot be a stored template registers as a descriptor on `builder:components`
+  (the palette's extension seam, §22) and appears alongside the database ones.
 
   The registry conventions are asserted here rather than assumed — seeded with core (never `[]`),
   first declaration wins, and the module-call whitelist that keeps the editor from being talked into

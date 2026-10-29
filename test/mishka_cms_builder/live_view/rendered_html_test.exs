@@ -31,7 +31,6 @@ defmodule MishkaCmsBuilder.LiveView.RenderedHtmlTest do
     ast = encode!(~s|<div><.icon name="hero-x-mark" /></div>|)
 
     assert [%{"tag" => "div", "content" => [icon]}] = ast
-    assert is_binary(icon["rendered_html"])
     assert icon["rendered_html"] =~ "hero-x-mark"
   end
 

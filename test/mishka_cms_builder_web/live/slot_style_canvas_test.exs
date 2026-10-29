@@ -23,6 +23,8 @@ defmodule MishkaCmsBuilderWeb.Live.SlotStyleCanvasTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
+  import MishkaCmsBuilder.LiveCase, only: [token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -131,8 +133,6 @@ defmodule MishkaCmsBuilderWeb.Live.SlotStyleCanvasTest do
     _settled = render_async(view)
     view
   end
-
-  defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
 
   defp canvas(conn, view) do
     {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")

@@ -653,7 +653,7 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
 
     test "undo clears a selection that no longer exists", %{session: session} do
       {:ok, undone} = EditorSession.undo(session.token)
-      assert is_nil(undone.selection) or Tree.get(undone.tree, undone.selection)
+      assert is_nil(undone.selection)
     end
   end
 
@@ -1822,8 +1822,7 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
                  h1.id
                )
 
-      hero = find(session, "section")
-      assert hero.id != nil
+      assert %{tag: "section"} = find(session, "section")
       assert Enum.count(session.tree.roots) == 2
       assert note =~ "beside each other"
 
