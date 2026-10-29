@@ -9,6 +9,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
   use MishkaCmsBuilder.LiveCase
 
   alias MishkaCmsBuilder.Presence
+  alias MishkaCmsBuilderWeb.Live.BuilderLive
 
   # THE PAGE AREA WRITES THE PAGE'S CODE: its own type needs no code name of its own.
   describe "a page admin" do
@@ -795,6 +796,38 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       assert avatars(second) == ["TJ", "M"]
       assert avatars(first) == ["B", "TJ"]
       refute Presence.editors(shared) |> inspect() =~ "@"
+    end
+
+    # THE INVITATION IS SOMETHING THE EDITOR HANDS OUT. `?session=` was the only way in, and nothing
+    # on screen produced it, so two people opening one page sat in two sessions and never saw each
+    # other. The top bar offers the address, whole, with a copy button, and the address it offers is
+    # the one that joins.
+    test "the top bar hands out the link that joins this session", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      shared = token(first)
+
+      assert has_element?(first, "#pb-invite")
+
+      assert has_element?(first, "#pb-invite-menu.hidden"),
+             "the invitation should ship folded away"
+
+      url =
+        first
+        |> element("#pb-invite-url")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.attribute("value")
+        |> List.first()
+
+      assert url == "http://localhost" <> BuilderLive.share_url(live_assigns(first))
+      assert url =~ "session=#{shared}"
+      assert has_element?(first, ~s(#pb-invite-copy[phx-hook="PbCopy"][data-copy="#{url}"]))
+
+      colleague = log_in(build_conn_for_host(), create_admin("invited@example.com"))
+      {:ok, second, _html} = live(colleague, URI.parse(url) |> then(&"#{&1.path}?#{&1.query}"))
+
+      assert token(second) == shared, "the link it hands out opened a session of its own"
+      assert length(avatars(first)) == 2
     end
 
     test "a stale or foreign session token falls back to a fresh session", %{

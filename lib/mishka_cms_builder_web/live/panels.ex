@@ -605,6 +605,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:back_path, :string, required: true)
   attr(:current_user, :any, default: nil)
   attr(:editors, :list, default: [])
+
+  attr(:invite_url, :string,
+    default: nil,
+    doc: "the address that joins this editing session, or nil before there is one to join"
+  )
+
   attr(:draft, :any, default: nil)
   attr(:drafts_enabled?, :boolean, default: false)
   attr(:dirty?, :boolean, default: false)
@@ -1277,6 +1283,62 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         >
           {initials}
         </span>
+      </div>
+      <%!-- THE WAY A SECOND PERSON GETS INTO THIS SESSION. The avatars count who is here; this
+            hands out the address that brings someone else in (`BuilderLive.share_url/1`). Opening
+            the same page without it starts a session of its own, and the two editors never see each
+            other. The copy button is the Studio's own `PbCopy`; the field is there to read and select
+            when the clipboard is refused. --%>
+      <div
+        :if={@invite_url}
+        data-role="pb-invite"
+        class="relative flex-none max-[1180px]:hidden"
+        phx-click-away={menu_close("#pb-invite-menu")}
+      >
+        <button
+          id="pb-invite"
+          type="button"
+          phx-click={menu_toggle("#pb-invite-menu")}
+          title={gettext("Invite someone to edit with you")}
+          aria-controls="pb-invite-menu"
+          class="grid size-8 place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+        >
+          <.icon name={:link} size={15} />
+        </button>
+        <div
+          id="pb-invite-menu"
+          phx-window-keydown={menu_close("#pb-invite-menu")}
+          phx-key="escape"
+          class="absolute right-0 top-[38px] z-[70] hidden w-[300px] rounded-[13px] border border-[#ecebe6] bg-white p-3 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
+        >
+          <div class="font-['Space_Grotesk'] text-[12px] font-bold text-[#1b1a18]">
+            {gettext("Edit together")}
+          </div>
+          <p class="mt-1 text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
+            {gettext(
+              "Anyone you send this link to who may edit here joins this session: you see each other in the avatars, and each other's changes as they happen."
+            )}
+          </p>
+          <div class="mt-2.5 flex items-center gap-1.5">
+            <input
+              id="pb-invite-url"
+              type="text"
+              readonly
+              value={@invite_url}
+              aria-label={gettext("Invitation link")}
+              class="h-7 min-w-0 flex-1 rounded-[8px] border border-[#ecebe6] bg-[#f7f6f3] px-2 font-['Space_Grotesk'] text-[10.5px] text-[#3a382f]"
+            />
+            <button
+              type="button"
+              id="pb-invite-copy"
+              phx-hook="PbCopy"
+              data-copy={@invite_url}
+              class="h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-[11px] text-[10px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+            >
+              {gettext("Copy")}
+            </button>
+          </div>
+        </div>
       </div>
     </header>
     """

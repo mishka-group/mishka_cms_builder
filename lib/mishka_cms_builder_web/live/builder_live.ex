@@ -482,6 +482,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     # nil until the socket connects, which is what tells the centre column to draw the frame's loading
     # state instead of an iframe pointing at a session that is about to be replaced.
     |> assign(:token, connected?(socket) && editor.token)
+    # WHERE THIS EDITOR IS SERVED FROM, so the invitation the top bar hands out is an address a
+    # colleague can open from a chat, not a path that only means something on this tab.
+    |> assign(:origin, origin(socket.host_uri))
     |> assign(:editors, Presence.others(editor.token, actor))
     |> assign_offers(section, params, record, actor, editor, opened, connected?(socket))
     |> assign_session_draft(section, record, actor, editor, connected?(socket))
@@ -752,6 +755,16 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
        do: "?" <> URI.encode_query(session: token, status: status)
 
   defp invitation(token, _assigns), do: "?" <> URI.encode_query(session: token)
+
+  # THE INVITATION THE TOP BAR OFFERS: `share_url/1` on this editor's own origin. Nothing to offer
+  # before the socket connects, because there is no session to join yet.
+  defp invite_url(%{token: token, origin: origin} = assigns) when is_binary(token),
+    do: origin <> share_url(assigns)
+
+  defp invite_url(_assigns), do: nil
+
+  defp origin(%URI{} = uri), do: URI.to_string(%{uri | path: nil, query: nil, fragment: nil})
+  defp origin(_not_mounted_at_router), do: ""
 
   # The freshly written row, read back the way the mount reads it — or the one the save answered
   # with, when that read cannot be made. A record with a thin `site` is still the right name and the
@@ -7464,6 +7477,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         back_path={@back_path}
         current_user={@current_user}
         editors={@editors}
+        invite_url={invite_url(assigns)}
         draft={@draft}
         drafts_enabled?={@drafts_enabled?}
         dirty?={@dirty?}
