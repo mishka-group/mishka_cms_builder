@@ -31,7 +31,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderTranslationsSheetTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.{Translation, Translations}
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.States.{SiteState, TranslationsState}
   alias MishkaCmsCore.Settings
 

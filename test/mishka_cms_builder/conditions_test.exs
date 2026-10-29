@@ -18,9 +18,9 @@ defmodule MishkaCmsBuilder.ConditionsTest do
 
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsBuilder.Conditions
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsBuilder.Test.Plugins.BuilderConditionPlugin
   alias MishkaInstaller.Event.{Event, EventHandler}
 

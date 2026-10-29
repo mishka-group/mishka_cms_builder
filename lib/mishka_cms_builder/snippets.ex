@@ -18,8 +18,8 @@ defmodule MishkaCmsBuilder.Snippets do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Localized
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Snippet
 
   # The prototype's own palette, kept because the point of the swatch is to tell two rows apart at a

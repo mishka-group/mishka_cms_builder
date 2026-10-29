@@ -117,7 +117,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       assert is_binary(helper.signature),
              "the handler was stored unsigned, so it would compile to an inert clause"
 
-      assert MishkaCmsCore.Runtime.PageBuilder.CodeSignature.trusted?(helper)
+      assert MishkaCmsCore.Runtime.Authoring.CodeSignature.trusted?(helper)
     end
   end
 
@@ -2299,7 +2299,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       Enum.find(
         Tree.walk(editor(view).tree),
         &(&1.kind == :component and
-            MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "inner-one")
+            MishkaCmsCore.Runtime.Authoring.Tree.Node.component_name(&1) == "inner-one")
       )
     end
 
@@ -2372,7 +2372,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         Enum.find(
           Tree.walk(editor(view).tree),
           &(&1.kind == :component and
-              MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "recursive-one")
+              MishkaCmsCore.Runtime.Authoring.Tree.Node.component_name(&1) == "recursive-one")
         )
 
       render_click(view, "set_left_tab", %{"tab" => "inspector"})
@@ -2408,7 +2408,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         Enum.find(
           Tree.walk(editor(view).tree),
           &(&1.kind == :component and
-              MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "needful-self")
+              MishkaCmsCore.Runtime.Authoring.Tree.Node.component_name(&1) == "needful-self")
         )
 
       assert view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ "1 needed"
@@ -2441,7 +2441,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         Enum.find(
           Tree.walk(editor(view).tree),
           &(&1.kind == :component and
-              MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "badge_dismiss")
+              MishkaCmsCore.Runtime.Authoring.Tree.Node.component_name(&1) == "badge_dismiss")
         )
 
       assert node, "a dotted tag is a component node"
@@ -2998,7 +2998,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         |> Enum.find(&(&1.kind == :component))
 
       assert inserted.tag == ".component"
-      assert MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(inserted) == "hero-card"
+      assert MishkaCmsCore.Runtime.Authoring.Tree.Node.component_name(inserted) == "hero-card"
       refute render(view) =~ "Placing hero-card"
     end
 

@@ -25,9 +25,9 @@ defmodule MishkaCmsBuilder.BlocksTest do
   @moduletag :unit
 
   alias MishkaCmsBuilder.Blocks
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @bands ~w(section header footer main)
 

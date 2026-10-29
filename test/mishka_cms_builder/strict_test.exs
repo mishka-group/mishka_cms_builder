@@ -13,10 +13,10 @@ defmodule MishkaCmsBuilder.StrictTest do
   """
   use ExUnit.Case, async: true
 
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Tree
 
   @moduletag :unit
 

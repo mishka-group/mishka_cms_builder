@@ -24,7 +24,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     * an **error page** keeps a list of `%{status, template, layout}`, so "the template" is one entry
       of it and a save replaces that entry rather than an attribute;
     * a **component** keeps no drafts at all — publishing is its only persistence, which
-      `MishkaCmsCore.Runtime.PageBuilder.Drafts` states and the editor reports honestly.
+      `MishkaCmsCore.Runtime.Authoring.Drafts` states and the editor reports honestly.
 
   The Assistant is out of scope here on purpose: it does not edit the document. The Audit rail is
   asked one thing only — that it agrees with what the editor just did, because a finding the editor's
@@ -37,10 +37,10 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.ElementScopes
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsBuilderWeb.Live.BuilderLive
 
@@ -186,7 +186,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
   defp share_url(view), do: BuilderLive.share_url(:sys.get_state(view.pid).socket.assigns)
 
   defp drafts_of(error_page, actor),
-    do: MishkaCmsCore.Runtime.PageBuilder.Drafts.list("error-page", error_page, actor)
+    do: MishkaCmsCore.Runtime.Authoring.Drafts.list("error-page", error_page, actor)
 
   defp live_error_page!(error_page) do
     {:ok, reloaded} =
@@ -1639,7 +1639,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       refute has_element?(view, "#pb-draft-target"),
              "a component has no draft target to choose"
 
-      assert MishkaCmsCore.Runtime.PageBuilder.Drafts.resource("component") == nil
+      assert MishkaCmsCore.Runtime.Authoring.Drafts.resource("component") == nil
     end
 
     # AND IT SAYS SO RATHER THAN DOING NOTHING. The stage control still offers Draft — it is one
@@ -1724,7 +1724,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         labels =
           unquote(to_string(section))
           |> String.replace("_", "-")
-          |> MishkaCmsCore.Runtime.PageBuilder.Drafts.list(record, actor)
+          |> MishkaCmsCore.Runtime.Authoring.Drafts.list(record, actor)
           |> Enum.map(& &1.label)
 
         assert "Original" in labels
@@ -1825,7 +1825,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       copy =
         "page"
-        |> MishkaCmsCore.Runtime.PageBuilder.Drafts.list(moved, actor(view))
+        |> MishkaCmsCore.Runtime.Authoring.Drafts.list(moved, actor(view))
         |> Enum.find(&(&1.label == "After the move"))
 
       assert copy, "the new name wrote no row"
@@ -1868,7 +1868,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       # unsaved rule has no home in the record and is orphaned already.
       publish!(four)
 
-      four_rules = MishkaCmsCore.Runtime.PageBuilder.ElementCss.all(actor, site.id, owner)
+      four_rules = MishkaCmsCore.Runtime.Authoring.ElementCss.all(actor, site.id, owner)
       assert map_size(four_rules) == 1, "the 404's rule was not written"
 
       # … and then the 500 is opened and published.
@@ -1881,7 +1881,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       publish!(five)
 
-      after_publish = MishkaCmsCore.Runtime.PageBuilder.ElementCss.all(actor, site.id, owner)
+      after_publish = MishkaCmsCore.Runtime.Authoring.ElementCss.all(actor, site.id, owner)
 
       for {scope, _body} <- four_rules do
         assert Map.has_key?(after_publish, scope),
@@ -1981,7 +1981,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       publish!(four)
 
-      four_rules = MishkaCmsCore.Runtime.PageBuilder.ElementCss.all(actor, site.id, owner)
+      four_rules = MishkaCmsCore.Runtime.Authoring.ElementCss.all(actor, site.id, owner)
       assert map_size(four_rules) == 1, "the 404's rule was not written"
 
       render_click(five, "save_element_css", %{
@@ -1991,7 +1991,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       publish!(five)
 
-      after_publish = MishkaCmsCore.Runtime.PageBuilder.ElementCss.all(actor, site.id, owner)
+      after_publish = MishkaCmsCore.Runtime.Authoring.ElementCss.all(actor, site.id, owner)
 
       for {scope, _body} <- four_rules do
         assert Map.has_key?(after_publish, scope),

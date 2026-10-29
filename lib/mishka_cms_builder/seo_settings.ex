@@ -55,9 +55,9 @@ defmodule MishkaCmsBuilder.SeoSettings do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.{Languages, Layout, PageEditions, Seo}
-  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsBuilder.Helpers
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
 
   @type t :: struct()
 

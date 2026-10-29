@@ -95,22 +95,22 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   alias MishkaCmsBuilder.PaletteEntry
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.LiveViewHelpers
-  alias MishkaCmsCore.Runtime.PageBuilder.Containment
-  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.Containment
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
-  alias MishkaCmsCore.Runtime.PageBuilder.Icons
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Fields
+  alias MishkaCmsCore.Runtime.Authoring.Icons
   alias MishkaCmsBuilder.Wizard
   alias MishkaCmsBuilder.Examples
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
-  alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
-  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
+  alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Styles
+  alias MishkaCmsCore.Runtime.Authoring.Visibility
   alias MishkaCmsCore.Runtime.DraftPreviewAssets
   alias MishkaCmsCore.Runtime.Layout
   alias MishkaCmsCore.Runtime.Page
@@ -2872,7 +2872,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # `<.link>` and friends live in the host's core components or in Phoenix itself, in that order —
   # the same precedence a compiled page module's imports give them, and the order
-  # `MishkaCmsCore.Runtime.PageBuilder.Fields.local_modules/0` names. A remote tag names its own
+  # `MishkaCmsCore.Runtime.Authoring.Fields.local_modules/0` names. A remote tag names its own
   # module.
   defp function_component(%Node{tag: "." <> name}),
     do: Enum.find_value(Fields.local_modules(), &resolve_component(&1, name))
@@ -3200,7 +3200,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # AN EMPTY BOX HAS TO BE VISIBLE OR IT IS NOT A BOX. A `<section>` with nothing in it is zero
   # pixels tall: it cannot be clicked, cannot be dropped into, and reads as a drop that failed —
   # which made every structural element in
-  # `MishkaCmsCore.Runtime.PageBuilder.Elements` unusable until this existed.
+  # `MishkaCmsCore.Runtime.Authoring.Elements` unusable until this existed.
   #
   # EDITING ONLY. `wrapper_style/1`'s preview clause is above this one, so a visitor never sees it,
   # and it is never saved — this is computed at render, not written into the document.
@@ -3285,7 +3285,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # Only `<` and `>` are escaped, which is the whole difference from interpolation. The browser then
   # reads the run exactly as it will on the page — every entity resolves, a bare `&` stays a bare `&`
   # — and no text can open a tag, so a run the tokenizer read as text cannot restructure the canvas.
-  # `MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer` emits the same bytes back, so nothing here is
+  # `MishkaCmsCore.Runtime.Authoring.Tree.Serializer` emits the same bytes back, so nothing here is
   # a conversion: the document is unchanged, only what the reader is shown.
   defp text_html(nil), do: Phoenix.HTML.raw("")
 
@@ -3327,7 +3327,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   #
   # A `div` stands in. It nests, it takes the same `data-node-id`, the same classes and the same
   # overrides, so selection, hover, drag and every style control work on it exactly as on any other
-  # container — and `MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer` still writes `<body>`, because
+  # container — and `MishkaCmsCore.Runtime.Authoring.Tree.Serializer` still writes `<body>`, because
   # the substitution is what the canvas draws and never what the document says.
   defp canvas_tag(tag) do
     case tag in Node.document_tags() do

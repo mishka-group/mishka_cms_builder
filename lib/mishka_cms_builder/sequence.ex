@@ -36,9 +36,9 @@ defmodule MishkaCmsBuilder.Sequence do
   digits is a label.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @numeric ~w(integer pos_integer)
 

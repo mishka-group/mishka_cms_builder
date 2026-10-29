@@ -29,7 +29,7 @@ defmodule MishkaCmsBuilderWeb.Live.SlotStyleCanvasTest do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.States.SiteState
 
   @moduletag :integration
@@ -180,7 +180,7 @@ defmodule MishkaCmsBuilderWeb.Live.SlotStyleCanvasTest do
       })
 
       markup =
-        editor(view).tree |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize()
+        editor(view).tree |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize()
 
       {:ok, tree} = Tree.parse(markup)
       reparsed = tree |> Tree.walk() |> Enum.find(&(&1.kind == :slot))
@@ -206,7 +206,7 @@ defmodule MishkaCmsBuilderWeb.Live.SlotStyleCanvasTest do
       })
 
       markup =
-        editor(view).tree |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize()
+        editor(view).tree |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize()
 
       assert markup =~ "p-[8px]!",
              "the saved template drops the bang, so the published page loses the override"

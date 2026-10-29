@@ -104,7 +104,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       empty =
         create_page!(
           site_id: site.id,
-          template: MishkaCmsCore.Runtime.PageBuilder.PageStarter.blank()
+          template: MishkaCmsCore.Runtime.Authoring.PageStarter.blank()
         )
 
       {:ok, view, _html} = open_builder(conn, empty)
@@ -126,7 +126,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
 
       tree = editor(view).tree
       assert length(tree.roots) == 1, "a structure arrives as ONE undoable insert"
-      assert MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize(tree) =~ "grid-cols-2"
+      assert MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize(tree) =~ "grid-cols-2"
     end
 
     # AND A STARTER AN EXTENSION BROUGHT IS ONE OF THEM. The chooser has always drawn the merged
@@ -2027,7 +2027,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
              |> editor()
              |> Map.fetch!(:tree)
              |> Tree.get(placed.id)
-             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Node.attr_text("image_url") ==
+             |> MishkaCmsCore.Runtime.Authoring.Tree.Node.attr_text("image_url") ==
                "/uploads/hero.png"
 
       # The sheet closes and stops offering to pick, so browsing later writes nothing.

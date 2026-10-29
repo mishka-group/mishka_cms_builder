@@ -18,14 +18,14 @@ defmodule MishkaCmsBuilder.LayoutSlot do
   is not a rendering of it, and `{@inner_content}`, `<%= @inner_content %>` and
   `<%= render_slot(@inner_content) %>` are all the same thing to the compiler.
 
-  See `MishkaCmsCore.Runtime.PageBuilder.PageStarter`, whose blank layout ships with the slot already
+  See `MishkaCmsCore.Runtime.Authoring.PageStarter`, whose blank layout ships with the slot already
   in it for the same reason.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.LiveView.HtmlTokenizer
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
-  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Visibility
 
   @assign :inner_content
 
@@ -35,7 +35,7 @@ defmodule MishkaCmsBuilder.LayoutSlot do
 
   @doc """
   Whether `tree` renders `@inner_content` for a visitor: somewhere outside every element hidden from
-  visitors (`MishkaCmsCore.Runtime.PageBuilder.Visibility`), which the layout compiler leaves out.
+  visitors (`MishkaCmsCore.Runtime.Authoring.Visibility`), which the layout compiler leaves out.
 
   Total: an expression Elixir cannot read answers `false` rather than raising, because a template
   the compiler will reject is not one that renders the page either.

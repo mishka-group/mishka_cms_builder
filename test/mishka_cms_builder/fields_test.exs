@@ -12,7 +12,7 @@ defmodule MishkaCmsBuilder.FieldsTest do
   """
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
+  alias MishkaCmsCore.Runtime.Authoring.Fields
 
   @moduletag :unit
 

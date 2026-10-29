@@ -38,9 +38,9 @@ defmodule MishkaCmsBuilder.OpenCommandTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.PaletteEntry
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilderWeb.Live.Panels
 
   @moduletag :unit

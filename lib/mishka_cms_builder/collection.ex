@@ -32,7 +32,7 @@ defmodule MishkaCmsBuilder.Collection do
   """
 
   alias MishkaCmsCore.Builder.Literal
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @doc """
   The collection an attribute holds on this node, or the declared default when it holds nothing.

@@ -24,7 +24,7 @@ defmodule MishkaCmsBuilder.UiKit.WizardRenderableTest do
 
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Wizard
 
   @moduletag :unit

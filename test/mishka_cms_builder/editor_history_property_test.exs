@@ -21,9 +21,9 @@ defmodule MishkaCmsBuilder.EditorHistoryPropertyTest do
   import StreamData
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Tree.Patch
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
 
   @moduletag :property
 
@@ -205,7 +205,7 @@ defmodule MishkaCmsBuilder.EditorHistoryPropertyTest do
           # carry.
           if held && replaced.selection, do: assert_same_element(held, replaced)
 
-          assert :ok = MishkaCmsCore.Runtime.PageBuilder.Strict.inspect_tree(replaced.tree)
+          assert :ok = MishkaCmsCore.Runtime.Authoring.Strict.inspect_tree(replaced.tree)
         end
       end
     end

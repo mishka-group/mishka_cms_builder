@@ -16,7 +16,7 @@ defmodule MishkaCmsBuilder.EventsTest do
 
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsBuilder.Blocks
-  alias MishkaCmsCore.Runtime.PageBuilder.Icons.Bundled
+  alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
   alias MishkaCmsBuilder.Test.Plugins.BuilderBlockPlugin
   alias MishkaInstaller.Event.{Event, EventHandler}
 

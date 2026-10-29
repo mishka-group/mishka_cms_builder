@@ -42,7 +42,7 @@ defmodule MishkaCmsBuilder.Classes do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.StylesheetRow
+  alias MishkaCmsCore.Runtime.Authoring.StylesheetRow
   alias MishkaCmsCore.Runtime.Stylesheet
 
   # WHAT THE BUILDER WRITES IT GENERATED: the stylesheet row is written by whoever may open a

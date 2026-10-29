@@ -16,8 +16,8 @@ defmodule MishkaCmsBuilder.SessionEdgesTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @moduletag :unit
 
@@ -33,7 +33,7 @@ defmodule MishkaCmsBuilder.SessionEdgesTest do
 
   # THE TEMPLATE IS PASSED IN NOW. `edit_draft/3` used to reach for `draft.template`, which only
   # three of the four draft resources have — `ErrorPageDraft` keeps `error_pages` — so the caller
-  # asks `MishkaCmsCore.Runtime.PageBuilder.Section.template/3` and hands over the answer.
+  # asks `MishkaCmsCore.Runtime.Authoring.Section.template/3` and hands over the answer.
   describe "opening a draft into a live session" do
     test "replaces the document and names what is being edited" do
       session = open()

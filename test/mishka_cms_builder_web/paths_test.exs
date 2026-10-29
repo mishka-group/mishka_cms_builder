@@ -9,7 +9,7 @@ defmodule MishkaCmsBuilderWeb.PathsTest do
   """
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsBuilderWeb.Paths
 
   @moduletag :unit

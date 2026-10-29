@@ -55,9 +55,9 @@ defmodule MishkaCmsBuilder.EditorSession.Journal do
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Op
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Op
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.Tree.Patch
   alias MishkaCmsBuilder.States.EditorHistoryState
 

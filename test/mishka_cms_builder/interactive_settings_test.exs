@@ -10,7 +10,7 @@ defmodule MishkaCmsBuilder.InteractiveSettingsTest do
   ## The question this answers
 
   "How do I set up a popover?" — asked of a component whose whole surface is hidden until something
-  opens it. Opening it is one half, and `MishkaCmsCore.Runtime.PageBuilder.OpenCommandTest` covers
+  opens it. Opening it is one half, and `MishkaCmsCore.Runtime.Authoring.OpenCommandTest` covers
   that. The other half is whether the panel an author lands on after clicking it is usable: whether
   the options the kit enumerates reach the Inspector as SELECTS rather than as free-text boxes,
   whether a value it will refuse can be typed in, and whether a required attribute is marked as one.
@@ -25,10 +25,10 @@ defmodule MishkaCmsBuilder.InteractiveSettingsTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.PaletteEntry
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilderWeb.Live.Panels
 
   @moduletag :unit

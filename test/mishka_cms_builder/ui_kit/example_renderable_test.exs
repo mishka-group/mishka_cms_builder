@@ -21,8 +21,8 @@ defmodule MishkaCmsBuilder.UiKit.ExampleRenderableTest do
 
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilderWeb.Live.CanvasLive
 
   @moduletag :unit

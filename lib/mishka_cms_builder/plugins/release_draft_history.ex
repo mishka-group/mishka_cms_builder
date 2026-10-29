@@ -25,7 +25,7 @@ defmodule MishkaCmsBuilder.Plugins.ReleaseDraftHistory do
   the draft resources' own destroy — the same level the constraint was at, rather than any one
   caller. That matters because a draft is deleted from several places: the picker's Delete goes
   through the resource's own destroy, publishing spends the draft through
-  `MishkaCmsCore.Runtime.PageBuilder.Drafts.discard/3`, and the twenty-draft sweep prunes through
+  `MishkaCmsCore.Runtime.Authoring.Drafts.discard/3`, and the twenty-draft sweep prunes through
   `prune/3`. Only the resource sees all of them, and its announcements are how the editor hears of
   each without the drafts naming the editor.
 

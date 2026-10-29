@@ -14,7 +14,7 @@ defmodule MishkaCmsBuilder.AiBackend do
       config :mishka_cms_builder, :ai_backend, MyApp.RealAssistant
 
   A real backend returns the same `t:message/0`, optionally carrying `ops` — validated
-  `MishkaCmsCore.Runtime.PageBuilder.Op` structs the session applies through the ordinary funnel, so
+  `MishkaCmsCore.Runtime.Authoring.Op` structs the session applies through the ordinary funnel, so
   an AI edit is undoable, containment-checked and plugin-visible exactly like a human one.
   """
   use Gettext, backend: MishkaCmsCore.Gettext

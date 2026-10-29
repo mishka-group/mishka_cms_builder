@@ -26,7 +26,7 @@ defmodule MishkaCmsBuilder.HistorySectionsTest do
 
   alias MishkaCmsBuilder.EditorSession
   alias MishkaCmsBuilder.History
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.HistoryEvent
 
   require Ash.Query

@@ -1204,7 +1204,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert view
              |> editor()
              |> Map.fetch!(:tree)
-             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize() =~ "kind={:danger}"
+             |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize() =~ "kind={:danger}"
 
       # …and the control marks it chosen, matching the stored `:danger` against the bare label.
       pill =
@@ -1383,7 +1383,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
         |> LazyHTML.text()
         |> String.trim()
 
-      layered = MishkaCmsCore.Runtime.PageBuilder.Icons.layer_order() <> "\n@layer components{"
+      layered = MishkaCmsCore.Runtime.Authoring.Icons.layer_order() <> "\n@layer components{"
 
       assert String.starts_with?(icons, layered)
       assert String.ends_with?(icons, "}")

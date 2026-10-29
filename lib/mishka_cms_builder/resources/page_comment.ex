@@ -514,7 +514,7 @@ defmodule MishkaCmsBuilder.PageComment do
 
   policies do
     # A REVIEW NOTE IS LEFT IN ONE BUILDER, so writing, reading, resolving and deleting one needs a
-    # name that opens that builder (`MishkaCmsCore.Runtime.PageBuilder.Section`), the same as for a
+    # name that opens that builder (`MishkaCmsCore.Runtime.Authoring.Section`), the same as for a
     # snippet.
     policy action_type([:create, :read, :update, :destroy]) do
       authorize_if {MishkaCmsBuilder.BuilderAccess, field: :section}

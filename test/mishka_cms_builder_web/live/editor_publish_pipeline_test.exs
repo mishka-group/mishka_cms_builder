@@ -153,7 +153,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorPublishPipelineTest do
     view
     |> editor()
     |> Map.fetch!(:tree)
-    |> MishkaCmsCore.Runtime.PageBuilder.Tree.walk()
+    |> MishkaCmsCore.Runtime.Authoring.Tree.walk()
     |> Enum.find(&(&1.tag == tag))
   end
 

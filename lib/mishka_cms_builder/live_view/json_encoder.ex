@@ -89,7 +89,7 @@ defmodule MishkaCmsBuilder.LiveView.JsonEncoder do
 
   def encode(template, render_node_fun)
       when is_binary(template) and is_function(render_node_fun, 1) do
-    case MishkaCmsCore.Runtime.PageBuilder.LiveView.HtmlTokenizer.build_tokenize(template) do
+    case MishkaCmsCore.Runtime.Authoring.HtmlTokenizer.build_tokenize(template) do
       {:ok, tokens} ->
         {:ok, encode_tokens(tokens, render_node_fun)}
 

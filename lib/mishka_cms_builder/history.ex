@@ -37,15 +37,15 @@ defmodule MishkaCmsBuilder.History do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsCore.Runtime.Authoring.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsBuilder.{HistoryEvent, HistorySnapshot}
 
   require Ash.Query
   require Logger
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
   # ONLY KINDS THAT CAN ACTUALLY OCCUR. These listed two that never do — `:paste_styles`, which
   # reaches the log as a run, and `:redo`, because a step row is minted as `:undo` in both

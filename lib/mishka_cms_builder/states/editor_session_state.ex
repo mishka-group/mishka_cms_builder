@@ -30,9 +30,9 @@ defmodule MishkaCmsBuilder.States.EditorSessionState do
   """
   use GenServer
 
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Strict
 
   require Logger
 

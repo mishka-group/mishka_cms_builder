@@ -22,8 +22,8 @@ defmodule MishkaCmsBuilder.SequenceTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.Sequence
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @moduletag :unit
 

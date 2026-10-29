@@ -23,7 +23,7 @@ defmodule MishkaCmsBuilder.Ids do
   ## The arrival yields
 
   `arrived` is the node ids the op just created, and they are the ones renamed — the same rule, and
-  for the same reason, that `MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming.dedupe/2` follows.
+  for the same reason, that `MishkaCmsCore.Runtime.Authoring.PageForms.Naming.dedupe/2` follows.
   Renaming in document order would rewrite the dialog already on the page whenever the new one was
   dropped above it, and that dialog is the one whose id an author has already written a handler,
   a link or an interaction against.
@@ -48,8 +48,8 @@ defmodule MishkaCmsBuilder.Ids do
   still has it, and they are right.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   # Attributes whose value is a bare id rather than a selector. `for`, `form`, `list` and
   # `popovertarget` name exactly one; `headers` and the three `aria-*` relations take a

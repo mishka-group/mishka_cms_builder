@@ -38,8 +38,8 @@ defmodule MishkaCmsBuilder.Tree.Patch do
   `MishkaCmsBuilder.EditorSession` does because it is the thing that knows the
   order. Measured at 79 µs to walk back a hundred of them.
   """
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @enforce_keys [:restore, :drop, :roots]
   defstruct restore: %{}, drop: [], roots: []

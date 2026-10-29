@@ -334,7 +334,7 @@ defmodule MishkaCmsBuilder.Snippet do
 
   policies do
     # A SNIPPET BELONGS TO THE BUILDER IT WAS SAVED FROM, so saving, listing, renaming and deleting
-    # one needs a name that opens that builder (`MishkaCmsCore.Runtime.PageBuilder.Section`).
+    # one needs a name that opens that builder (`MishkaCmsCore.Runtime.Authoring.Section`).
     # Someone who cannot open the editor has no business writing markup into it.
     policy action_type([:create, :read, :update, :destroy]) do
       authorize_if {MishkaCmsBuilder.BuilderAccess, field: :section}
@@ -453,7 +453,7 @@ defmodule MishkaCmsBuilder.Snippet do
   defp blank?(_value), do: true
 
   defp parses?(source) do
-    case MishkaCmsCore.Runtime.PageBuilder.Tree.parse(String.trim(source)) do
+    case MishkaCmsCore.Runtime.Authoring.Tree.parse(String.trim(source)) do
       {:ok, %{roots: [_first | _rest]}} -> true
       _other -> false
     end

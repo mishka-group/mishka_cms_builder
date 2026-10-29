@@ -4,15 +4,15 @@
 
 defmodule MishkaCmsBuilder.VisibilityTest do
   @moduledoc """
-  `MishkaCmsCore.Runtime.PageBuilder.Visibility`: an element kept in the page and shown to nobody —
+  `MishkaCmsCore.Runtime.Authoring.Visibility`: an element kept in the page and shown to nobody —
   the marker in the markup, what the compilers leave out, and the one edit that toggles it.
   """
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Visibility
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
 
   defp node(tree, tag), do: Enum.find(Tree.walk(tree), &(&1.tag == tag))
 

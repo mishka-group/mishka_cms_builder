@@ -38,9 +38,9 @@ defmodule MishkaCmsBuilder.Wizard do
   """
 
   alias MishkaCmsBuilder.PaletteEntry
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeReads
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.PageBuilder.Markup
+  alias MishkaCmsCore.Runtime.Authoring.CodeReads
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Markup
   alias MishkaCmsBuilder.Starter
 
   @doc """

@@ -27,8 +27,8 @@ defmodule MishkaCmsBuilder.FormsTest do
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
   alias MishkaCmsBuilder.Blocks
-  alias MishkaCmsCore.Runtime.PageBuilder.Elements
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.Elements
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
 
   @moduletag :integration
 

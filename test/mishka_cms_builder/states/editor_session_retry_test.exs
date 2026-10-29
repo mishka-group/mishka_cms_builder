@@ -16,7 +16,7 @@ defmodule MishkaCmsBuilder.States.EditorSessionRetryTest do
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Test.Plugins.BuilderNodeLanding
   alias MishkaCmsBuilder.Test.Plugins.BuilderNodeProbe
   alias MishkaInstaller.Event.{Event, EventHandler}

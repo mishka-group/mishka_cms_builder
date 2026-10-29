@@ -48,10 +48,10 @@ defmodule MishkaCmsBuilder.Blocks do
   Five attributes carry everything a form needs and all five come from one seed the author types
   once: `contact` gives `id="contact-form"`, `as={:contact}`, `for={assigns[:contact_form]}`,
   `phx-change="contact_validate"` and `phx-submit="contact_submit"`.
-  `MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming` mints and renumbers them, so dropping one
+  `MishkaCmsCore.Runtime.Authoring.PageForms.Naming` mints and renumbers them, so dropping one
   block twice gives `contact` and `contact_2` rather than two forms sharing one page assign, and
   gives each form a token as it lands (`contact-k7m2q-validate`, `contact-k7m2q-submit`). The page
-  compiler reads the markup back through `MishkaCmsCore.Runtime.PageBuilder.PageForms` and generates
+  compiler reads the markup back through `MishkaCmsCore.Runtime.Authoring.PageForms` and generates
   both handlers, so a dropped form works with no Elixir written anywhere.
 
   What is checked is the HTML constraint attributes already on the field — `required`, `minlength`,
@@ -447,7 +447,7 @@ defmodule MishkaCmsBuilder.Blocks do
   `handle_event/3` — a Layout, a Component and an error page have no `events` column to hold one.
   Dropping one of those anywhere else produced markup whose form could never be submitted.
 
-  The same rule `MishkaCmsCore.Runtime.PageBuilder.Elements.for_section/1` applies, for the same
+  The same rule `MishkaCmsCore.Runtime.Authoring.Elements.for_section/1` applies, for the same
   reason and with the same requirement that the section be named rather than defaulted.
   """
   @spec for_section(String.t()) :: [block()]

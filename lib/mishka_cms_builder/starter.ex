@@ -29,7 +29,7 @@ defmodule MishkaCmsBuilder.Starter do
   """
 
   alias MishkaCmsCore.Builder.Furnishing
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
 
   # Matched longest-first, so `chelekom-card-title` never picks up `chelekom-card`'s copy. The names
   # are the kit's own, minus the vendor prefix, so a second kit shipping `foo-alert` gets the same

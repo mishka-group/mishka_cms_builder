@@ -7,7 +7,7 @@ defmodule MishkaCmsBuilder.Helpers do
   Saves a builder section through its resource's own actions.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
 
   # WHAT THE BUILDER WRITES IT GENERATED, so its template is not typed by hand; Elixir from the code
   # drawer is still code. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.
@@ -25,7 +25,7 @@ defmodule MishkaCmsBuilder.Helpers do
   ROW BEING WRITTEN — an error page's `error_pages` is the whole list with one entry
   replaced — and it is resolved here, against the record this function has just read and is
   about to update, rather than by the caller against whatever copy it happens to hold. See
-  `MishkaCmsCore.Runtime.PageBuilder.Section.save_fields/3`, which is what builds them.
+  `MishkaCmsCore.Runtime.Authoring.Section.save_fields/3`, which is what builds them.
 
   Pass `typed: true` when the markup was typed by hand rather than generated from the tree — the
   recovery screen's box. The write is then code, as from any form, which a deployment that turned

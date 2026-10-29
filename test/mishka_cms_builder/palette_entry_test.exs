@@ -15,9 +15,9 @@ defmodule MishkaCmsBuilder.PaletteEntryTest do
 
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsBuilder.PaletteEntry
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
+  alias MishkaCmsCore.Runtime.Authoring.Fields
   alias MishkaCmsBuilder.Presets
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Wizard
   alias MishkaCmsBuilder.Test.Plugins.BuilderComponentsPlugin
   alias MishkaInstaller.Event.{Event, EventHandler}

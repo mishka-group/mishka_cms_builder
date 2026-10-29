@@ -12,7 +12,7 @@ defmodule MishkaCmsBuilder.States.EditorHistoryStateTest do
   """
   use ExUnit.Case, async: false
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Tree.Patch
   alias MishkaCmsBuilder.States.EditorHistoryState
 

@@ -35,7 +35,7 @@ defmodule MishkaCmsBuilder.Conditions do
   By matching the expression against what this module writes, never by matching text. Anything else
   — a condition somebody wrote by hand, one piped into something — reads as `:custom` and the panel
   shows it rather than offering to replace something it does not understand. Same contract
-  `MishkaCmsCore.Runtime.PageBuilder.Interactions` keeps for a click.
+  `MishkaCmsCore.Runtime.Authoring.Interactions` keeps for a click.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext

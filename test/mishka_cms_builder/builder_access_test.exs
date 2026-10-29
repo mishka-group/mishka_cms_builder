@@ -22,12 +22,12 @@ defmodule MishkaCmsBuilder.BuilderAccessTest do
   alias MishkaCmsCore.Runtime.Stylesheet
   alias MishkaCmsBuilder.BuilderAccess
   alias MishkaCmsBuilder.Classes
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsBuilder.EditorSession
   alias MishkaCmsBuilder.History
   alias MishkaCmsBuilder.Snippets
   alias MishkaCmsBuilder.Tokens
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.HistoryEvent
 
   require Ash.Query

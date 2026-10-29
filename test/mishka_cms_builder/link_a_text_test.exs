@@ -15,8 +15,8 @@ defmodule MishkaCmsBuilder.LinkATextTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
 
   defp open(template) do
     {:ok, session} = EditorSession.open(%{section: "page", template: template})

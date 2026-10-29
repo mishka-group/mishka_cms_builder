@@ -7,7 +7,7 @@ defmodule MishkaCmsBuilderWeb.Paths do
   The visual editor's addresses, spelled in one place.
 
   The editor owns how its own routes are written; the rest of the admin asks for them through
-  `runtime:document:editor_url` (`MishkaCmsCore.Runtime.PageBuilder.Section.editor_url/3`), which
+  `runtime:document:editor_url` (`MishkaCmsCore.Runtime.Authoring.Section.editor_url/3`), which
   `MishkaCmsBuilder.Plugins.EditorUrl` answers from `builder_path/3`. Inside the
   editor — the error page's status strip, a component's own editor opened from a page, the share
   link, a mention's notification — the same function writes every address, and `back_path/2`
@@ -15,7 +15,7 @@ defmodule MishkaCmsBuilderWeb.Paths do
   """
 
   alias MishkaCmsCore.Runtime.ErrorStatus
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
 
   @builder "/admin/dashboard/runtime/builder/"
 

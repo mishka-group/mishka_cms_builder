@@ -33,11 +33,11 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   emitting a call to anything else — defence in depth, since templates are admin-authored anyway.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Fields
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
   alias MishkaCmsBuilder.Starter
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   use GuardedStruct
 
   guardedstruct do
@@ -622,7 +622,7 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   #
   # Only where the component requires it: `for` on a `<label>` is an element id, and a map there is
   # simply a different crash. Required is the component saying the value is its own to hand on.
-  # Which components own a form is `MishkaCmsCore.Runtime.PageBuilder.Fields`' question, and it has
+  # Which components own a form is `MishkaCmsCore.Runtime.Authoring.Fields`' question, and it has
   # one answer for the whole editor: a declared role, a template that parses to a form node, a
   # `for` the component declares required, or a template whose one outer element is a component
   # that owns one, read from `components`. `chelekom-simple-form` is the third of those — it hands

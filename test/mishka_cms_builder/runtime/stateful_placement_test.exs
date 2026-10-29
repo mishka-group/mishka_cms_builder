@@ -74,7 +74,7 @@ defmodule MishkaCmsBuilder.Runtime.StatefulPlacementTest do
     # complete rather than two buttons opening one dialog.
     test "a duplicate arrives with an id of its own, so the rule is never met" do
       alias MishkaCmsBuilder.Ids
-      alias MishkaCmsCore.Runtime.PageBuilder.Tree
+      alias MishkaCmsCore.Runtime.Authoring.Tree
 
       {:ok, tree} = Tree.parse(twice("live-widget", "phx-F8kQ2n1aRxY", "phx-F8kQ2n1aRxY"))
 

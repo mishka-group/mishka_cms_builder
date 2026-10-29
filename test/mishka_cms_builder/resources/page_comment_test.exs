@@ -699,7 +699,7 @@ defmodule MishkaCmsBuilder.Resources.PageCommentTest do
   end
 
   describe "finding the element a note is about" do
-    alias MishkaCmsCore.Runtime.PageBuilder.Tree
+    alias MishkaCmsCore.Runtime.Authoring.Tree
 
     test "answers with the node when it is still there" do
       {:ok, tree} = Tree.parse(~s(<section><h1>Hi</h1></section>))

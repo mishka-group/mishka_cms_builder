@@ -25,8 +25,8 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.Runtime.States.SiteState
 
   require Ash.Query
@@ -157,7 +157,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
   defp node_with_tag(view, tag), do: Enum.find(nodes(view), &(&1.tag == tag))
 
   defp source(view),
-    do: view |> tree() |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize()
+    do: view |> tree() |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize()
 
   defp form_node?(%Node{tag: tag}), do: tag in ~w(form .form)
   defp form_node?(_node), do: false

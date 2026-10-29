@@ -37,8 +37,8 @@ defmodule MishkaCmsBuilder.EditorSession do
   is what they were missing.
 
   Two more answer for the page's forms, and both are consulted from the funnel rather than owned by
-  it: `MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement` puts a form around a field that
-  lands without one, and `MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming` renumbers a form name
+  it: `MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement` puts a form around a field that
+  lands without one, and `MishkaCmsCore.Runtime.Authoring.PageForms.Naming` renumbers a form name
   that a copy, a paste or a pasted document has just made ambiguous.
 
   ## History semantics (from the v2 prototype)
@@ -78,30 +78,30 @@ defmodule MishkaCmsBuilder.EditorSession do
   use GuardedStruct
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
   alias MishkaCmsCore.Builder.Events
-  alias MishkaCmsCore.Runtime.PageBuilder.Containment
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
-  alias MishkaCmsCore.Runtime.PageBuilder.Elements
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.PageBuilder.Op
+  alias MishkaCmsCore.Runtime.Authoring.Containment
+  alias MishkaCmsCore.Runtime.Authoring.ElementScopes
+  alias MishkaCmsCore.Runtime.Authoring.Elements
+  alias MishkaCmsCore.Runtime.Authoring.Fields
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Op
   alias MishkaCmsBuilder.Sequence
   alias MishkaCmsBuilder.Starter
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
   alias MishkaCmsBuilder.Ids
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
   alias MishkaCmsBuilder.Presets
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.EditorSession.Journal
   alias MishkaCmsBuilder.Placement
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.Tree.Patch
-  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Visibility
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsBuilder.States.EditorHistoryState
   alias MishkaCmsBuilder.States.EditorSessionState
 
@@ -1666,7 +1666,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   EVERY ELEMENT CLASS IN IT IS MINTED AGAIN, alongside every other placement. All three were written
   in ANOTHER document — the page a snippet was cut from, the component an example documents — so the
   `pb-xxxxxxxx` classes they carry are keys into that document's CSS row, which this one neither
-  owns nor prunes (`MishkaCmsCore.Runtime.PageBuilder.ElementScopes`). The rules do NOT travel: a
+  owns nor prunes (`MishkaCmsCore.Runtime.Authoring.ElementScopes`). The rules do NOT travel: a
   snippet stores markup and nothing else, and what the element looked like in the other document was
   that document's rule showing through the one site stylesheet. Fresh classes are what make the
   element styleable from here. Copy, paste and Duplicate are the ones that keep theirs: they stay
@@ -1797,7 +1797,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   Hands the canvas the compiled per-element CSS, so the frame paints it immediately.
 
   The rules themselves live in a stylesheet row — see
-  `MishkaCmsCore.Runtime.PageBuilder.ElementCss` — and reach the published page through the
+  `MishkaCmsCore.Runtime.Authoring.ElementCss` — and reach the published page through the
   compiler. This is the editor's copy, and nothing reads it but the canvas.
   """
   @spec set_element_css(String.t(), String.t()) :: {:ok, t()} | {:error, term()}
@@ -1836,7 +1836,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   """
   @spec write_bucket(t()) :: atom()
   def write_bucket(%{pseudo: pseudo, breakpoint: breakpoint}),
-    do: MishkaCmsCore.Runtime.PageBuilder.Tree.Styles.bucket(breakpoint, pseudo)
+    do: MishkaCmsCore.Runtime.Authoring.Tree.Styles.bucket(breakpoint, pseudo)
 
   @doc "Locks or unlocks a node. A locked node refuses selection-driven edits and moves."
   @spec toggle_lock(String.t(), String.t()) :: {:ok, t()} | {:error, term()}
@@ -1851,7 +1851,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   saving never silently drops an element an author only meant to stop looking at.
 
   The set holds the ids whose eye differs from the default for their kind — see
-  `MishkaCmsCore.Runtime.PageBuilder.Tree.Node.hidden?/2`. Membership therefore reads as "folded" for
+  `MishkaCmsCore.Runtime.Authoring.Tree.Node.hidden?/2`. Membership therefore reads as "folded" for
   an element and "drawn" for a comment, which is why nothing outside that predicate should reach into
   the set directly.
   """
@@ -1860,7 +1860,7 @@ defmodule MishkaCmsBuilder.EditorSession do
     do: commit(token, &{:store, %{&1 | hidden: toggle(&1.hidden, node_id)}, {:hidden, node_id}})
 
   @doc """
-  Hides a node from visitors, or shows it again — see `MishkaCmsCore.Runtime.PageBuilder.Visibility`.
+  Hides a node from visitors, or shows it again — see `MishkaCmsCore.Runtime.Authoring.Visibility`.
 
   Not the eye above: this is document state, one attribute in the markup, so it goes through
   `apply_op/3` like any other edit — undo, the history, the lock and the plugin hooks come with it.
@@ -1898,7 +1898,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   @spec locked?(t(), String.t()) :: boolean()
   def locked?(%{locked: locked}, node_id), do: MapSet.member?(locked, node_id)
 
-  @doc "Whether a node is folded away on the canvas, as `MishkaCmsCore.Runtime.PageBuilder.Tree.Node.hidden?/2` says."
+  @doc "Whether a node is folded away on the canvas, as `MishkaCmsCore.Runtime.Authoring.Tree.Node.hidden?/2` says."
   @spec hidden?(t(), Node.t()) :: boolean()
   def hidden?(%{hidden: hidden}, %Node{} = node), do: Node.hidden?(node, hidden)
 
@@ -2546,7 +2546,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   # THE TEMPLATE IS AN ARGUMENT, not a field to reach for. Three draft resources keep a `template`;
   # `ErrorPageDraft` keeps `error_pages` and has no such key, so this clause matched nothing at all
   # for the one section it mattered to — opening an error page's draft raised rather than opening it.
-  # `MishkaCmsCore.Runtime.PageBuilder.Section.template/3` is what knows, and the caller asks it.
+  # `MishkaCmsCore.Runtime.Authoring.Section.template/3` is what knows, and the caller asks it.
   @spec edit_draft(String.t(), map(), String.t()) :: {:ok, t()} | {:error, term()}
   def edit_draft(token, %{id: id, label: label}, template) do
     with {:ok, tree} <- Tree.parse(template) do

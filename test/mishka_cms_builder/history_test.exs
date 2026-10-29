@@ -15,10 +15,10 @@ defmodule MishkaCmsBuilder.HistoryTest do
 
   import MishkaCmsCore.Test.Factory
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsBuilder.EditorSession
   alias MishkaCmsBuilder.History
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.{HistoryEvent, HistorySnapshot}
 
   require Ash.Query
@@ -63,7 +63,7 @@ defmodule MishkaCmsBuilder.HistoryTest do
     do: Enum.find(Tree.walk(session.tree), &(&1.tag in ["h1", "p"]))
 
   defp html(session),
-    do: MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize(session.tree)
+    do: MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize(session.tree)
 
   # The editor has ONE mutation funnel, so the tests go through it rather than around it: a helper
   # that wrote rows directly would pass while the real path was broken.

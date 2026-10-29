@@ -5,7 +5,7 @@
 defmodule MishkaCmsBuilder.BuilderAccess do
   @moduledoc """
   A policy check: the actor may open the builder the row's own section names — its runtime area or
-  `admin:dashboard:code` (`MishkaCmsCore.Runtime.PageBuilder.Section.permissions/1`).
+  `admin:dashboard:code` (`MishkaCmsCore.Runtime.Authoring.Section.permissions/1`).
 
   Snippets, review notes and builder history each carry the section they were written in, so the
   names they need are read off the row:
@@ -28,7 +28,7 @@ defmodule MishkaCmsBuilder.BuilderAccess do
   use Ash.Policy.FilterCheck
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
 
   @impl true
   def describe(opts), do: "actor may open the builder its #{opts[:field]} names"

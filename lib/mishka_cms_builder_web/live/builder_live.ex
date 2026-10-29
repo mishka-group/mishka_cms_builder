@@ -35,9 +35,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsBuilder.PaletteEntry
   alias MishkaCmsCore.Localized
   alias MishkaCmsBuilder.CardPreview
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Strict
 
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
   alias MishkaCmsCore.Layouts
   require Logger
   require Ash.Query
@@ -50,49 +50,49 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup
   alias MishkaCmsBuilder.AiBackend
   alias MishkaCmsBuilder.Classes
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
-  alias MishkaCmsCore.Runtime.PageBuilder.Hooks
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.CodeCheck
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.ElementScopes
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Styles
+  alias MishkaCmsCore.Runtime.Authoring.Hooks
   alias MishkaCmsBuilder.Conditions
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
-  alias MishkaCmsCore.Runtime.PageBuilder.Interface
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Interface
   alias MishkaCmsBuilder.LayoutSlot
-  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsBuilder.History
   alias MishkaCmsBuilder.Examples
   alias MishkaCmsBuilder.EditorSession
   alias MishkaCmsBuilder.Review
   alias MishkaGervaz.Table.Web.UrlSync
   alias MishkaCmsBuilder.States.EditorSessionState
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsBuilder.Marketplace
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
   alias MishkaCmsBuilder.Mentions
   alias MishkaCmsBuilder.PageComment
   alias MishkaCmsCore.Settings
   alias MishkaCmsBuilder.DesignToken
   alias MishkaCmsBuilder.Presence
   alias MishkaCmsBuilder.Presets
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsBuilderWeb.Paths
   alias MishkaCmsBuilder.SeoSettings
-  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.Authoring.Visibility
   alias MishkaCmsBuilder.Wizard
   alias MishkaCmsBuilder.Tokens
   alias MishkaCmsBuilder.Snippets
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.Tree.Shadow
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsBuilderWeb.Live.Panels
 
@@ -949,7 +949,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:element_library, fn ->
       Events.collect_appended(
         :elements,
-        MishkaCmsCore.Runtime.PageBuilder.Elements.for_section(section(socket))
+        MishkaCmsCore.Runtime.Authoring.Elements.for_section(section(socket))
       )
     end)
     |> assign_new(:element_css_error, fn -> nil end)
@@ -1802,7 +1802,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     MishkaCmsCore.Runtime.Component
     |> Ash.Query.for_read(:for_tenant_with_globals, args, actor: actor, tenant: tenant)
     # `helpers` is selected because the property panel's option lists live in its `discriminators`,
-    # not in the attributes — see `MishkaCmsCore.Runtime.PageBuilder.Inspector.features/1`. The old
+    # not in the attributes — see `MishkaCmsCore.Runtime.Authoring.Inspector.features/1`. The old
     # palette payload omitted it, which is why a variant dropdown was never possible.
     |> Ash.Query.select([
       :id,
@@ -1912,7 +1912,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp site_arg(_site_id), do: %{}
 
   # `form:` carries which attribute a binding goes on, when the kit says so.
-  # `MishkaCmsCore.Builder.FormRole` reads it and `MishkaCmsCore.Runtime.PageBuilder.Fields` infers
+  # `MishkaCmsCore.Builder.FormRole` reads it and `MishkaCmsCore.Runtime.Authoring.Fields` infers
   # when it is absent, which is every kit exported before the key existed.
   defp palette_entry(component, extensions) do
     {group, extension?} = palette_group(component, extensions)
@@ -4328,7 +4328,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   # A VALIDATION RULE IS AN ORDINARY ATTRIBUTE EDIT, so it goes down the same funnel every other
   # Inspector write does: one undo step, one broadcast, one history entry, and the same containment
-  # and plugin hooks. `MishkaCmsCore.Runtime.PageBuilder.Inspector.rule_op/3` decides whether that is
+  # and plugin hooks. `MishkaCmsCore.Runtime.Authoring.Inspector.rule_op/3` decides whether that is
   # a write or a delete — a rule turned off must not survive as `required=""`, which is still
   # required to a browser while reading back as no rule on the server.
   #
@@ -4656,7 +4656,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   def handle_event("delete", _params, socket), do: selection_op(socket, "delete")
 
   # HIDDEN FROM VISITORS, OR SHOWN AGAIN. The Inspector's Show names its node; the keyboard and the
-  # command palette act on the selection. See `MishkaCmsCore.Runtime.PageBuilder.Visibility`.
+  # command palette act on the selection. See `MishkaCmsCore.Runtime.Authoring.Visibility`.
   def handle_event("toggle_visibility", %{"id" => id}, socket) when is_binary(id),
     do: {:noreply, run_context_action(socket, "visibility", id)}
 
@@ -4935,7 +4935,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # name, so the click that goes nowhere fails at the moment somebody makes it; in production it
   # stays the swallow it always was, because a broken button is not worth taking an author's page
   # down over. Same rule as everywhere else in the editor — see
-  # `MishkaCmsCore.Runtime.PageBuilder.Strict`.
+  # `MishkaCmsCore.Runtime.Authoring.Strict`.
   def handle_event(event, _params, socket) do
     Strict.violation!("builder_live", "no handler for the #{inspect(event)} event")
     {:noreply, socket}
@@ -6280,7 +6280,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp released({:error, reason}, _socket), do: {:error, reason}
 
   # WHAT A PUBLISH LEFT OUT, said once, at the moment it was left out — so an element hidden weeks
-  # ago and forgotten is not a mystery on the live page. See `PageBuilder.Visibility`.
+  # ago and forgotten is not a mystery on the live page. See `Authoring.Visibility`.
   defp hidden_note(saved, :published, tree) do
     case length(Visibility.hidden_roots(tree)) do
       0 ->

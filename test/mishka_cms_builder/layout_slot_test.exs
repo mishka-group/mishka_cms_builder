@@ -19,7 +19,7 @@ defmodule MishkaCmsBuilder.LayoutSlotTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.LayoutSlot
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
 
   defp renders?(source), do: source |> Tree.parse!() |> LayoutSlot.renders_inner_content?()
 

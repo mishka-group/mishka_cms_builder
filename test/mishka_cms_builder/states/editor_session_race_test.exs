@@ -20,9 +20,9 @@ defmodule MishkaCmsBuilder.States.EditorSessionRaceTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.States.EditorHistoryState
   alias MishkaCmsBuilder.States.EditorSessionState
   alias MishkaCmsBuilder.Test.LandingCalendar

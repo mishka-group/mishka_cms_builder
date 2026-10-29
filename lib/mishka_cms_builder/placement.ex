@@ -6,7 +6,7 @@ defmodule MishkaCmsBuilder.Placement do
   @moduledoc """
   Where a thing lands — the answer shared by a click, a drag, and a template that arrives on its own.
 
-  This sits beside `MishkaCmsCore.Runtime.PageBuilder.Containment`, which answers a different
+  This sits beside `MishkaCmsCore.Runtime.Authoring.Containment`, which answers a different
   question: containment says whether a child MAY go in a parent, and placement decides which parent
   and which index a gesture actually meant. Every route into the document goes through one function
   here, which is what stops three doors disagreeing about the same drop.
@@ -46,11 +46,11 @@ defmodule MishkaCmsBuilder.Placement do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Containment
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Containment
+  alias MishkaCmsCore.Runtime.Authoring.Fields
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @bands ~w(section main)
   @band_hosts ~w(body main)

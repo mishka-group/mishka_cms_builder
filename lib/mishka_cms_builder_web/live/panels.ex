@@ -33,41 +33,41 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   alias MishkaCmsBuilder.AiBackend
   alias MishkaCmsBuilder.Blocks
   alias MishkaCmsBuilder.CodeFlags
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
   alias MishkaCmsBuilder.Highlight
-  alias MishkaCmsCore.Runtime.PageBuilder.Elements
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
-  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.Elements
+  alias MishkaCmsCore.Runtime.Authoring.Fields
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsCore.Runtime.Media
   alias MishkaCmsCore.Runtime.MediaCategory
   alias MishkaCmsBuilder.Conditions
-  alias MishkaCmsCore.Runtime.PageBuilder.Containment
+  alias MishkaCmsCore.Runtime.Authoring.Containment
   alias MishkaCmsBuilder.Review
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsBuilderWeb.Paths
-  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.Authoring.Visibility
   alias MishkaCmsBuilder.SeoSettings
   alias MishkaCmsBuilder.PageComment
   alias MishkaCmsBuilder.Marketplace
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
-  alias MishkaCmsCore.Runtime.PageBuilder.Icons
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.PageBuilder.Interface
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.Icons
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Interface
   alias MishkaCmsBuilder.LayoutSlot
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Tree.Shadow
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.Demo
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsBuilder.Presence
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsBuilder.Tokens
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Styles
   alias MishkaCmsBuilder.Wizard
 
   # The prototype's icon set, geometry and all. Ported rather than approximated: an icon drawn "close
@@ -726,7 +726,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             >
               <span class="truncate">
                 {(@editor.draft_label &&
-                    MishkaCmsCore.Runtime.PageBuilder.Drafts.display_label(@editor.draft_label)) ||
+                    MishkaCmsCore.Runtime.Authoring.Drafts.display_label(@editor.draft_label)) ||
                   live_label(@section)}
               </span>
               <span :if={@editor.saved_at} class="flex-none font-medium text-[#8580d8]">
@@ -1120,7 +1120,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 </span>
                 <span class="mt-0.5 block text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
                   {gettext("The shareable link for “%{label}”",
-                    label: MishkaCmsCore.Runtime.PageBuilder.Drafts.display_label(@draft.label)
+                    label: MishkaCmsCore.Runtime.Authoring.Drafts.display_label(@draft.label)
                   )}
                 </span>
               </span>
@@ -2658,7 +2658,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:hider, :any, required: true)
 
   # HIDDEN FROM VISITORS, said where the element is being edited, with the way back: Show for the one
-  # that was hidden, the element that hides it for one inside it. See `PageBuilder.Visibility`.
+  # that was hidden, the element that hides it for one inside it. See `Authoring.Visibility`.
   defp hidden_note(assigns) do
     ~H"""
     <div
@@ -3754,7 +3754,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   Behind a disclosure, next to Advanced, for the same reason: it is a real need and a rare one, and
   the panel above it answers the common case. `&` means this element — plain CSS nesting rather
   than Elementor's `selector` keyword or Bricks' `%root%`, so what is typed is real CSS and can be
-  checked by reading it. See `MishkaCmsCore.Runtime.PageBuilder.ElementCss`.
+  checked by reading it. See `MishkaCmsCore.Runtime.Authoring.ElementCss`.
 
   A COMPONENT IS ONE NODE AND MANY ELEMENTS. The rule is keyed on a class written into the node's
   `class` attribute, which reaches the DOM only if the component declares `class` and puts it
@@ -3768,7 +3768,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   written. The `&` and `&:hover` shown above the box keep theirs: those ARE template source, and
   read as literal text either way.
 
-  THE ADVICE IS SHOWN WHERE THE CSS WAS TYPED. `MishkaCmsCore.Runtime.PageBuilder.ElementCss.advice/1`
+  THE ADVICE IS SHOWN WHERE THE CSS WAS TYPED. `MishkaCmsCore.Runtime.Authoring.ElementCss.advice/1`
   catches the one mistake the validator cannot refuse — `main { … }` is valid CSS that quietly aims
   at a `main` INSIDE this element rather than at the element — and the reply only ever reached the
   code drawer. An author working in this box wrote a rule, watched the page not change, and was
@@ -4161,7 +4161,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:icon_variant, :string, default: "")
   attr(:icon_library, :string, default: nil)
 
-  # One property control, chosen by `MishkaCmsCore.Runtime.PageBuilder.Inspector.widget/2`.
+  # One property control, chosen by `MishkaCmsCore.Runtime.Authoring.Inspector.widget/2`.
   #
   # An attribute the author has not set renders the component's own default and serializes nothing —
   # the explicit-versus-default distinction the demo marks with an override dot. Clearing a control
@@ -4527,7 +4527,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # rather than an error. The catalogue is read from the same directory the plugin reads.
   #
   # The chip shows what is set; the popover searches 1,288 classes across the four weights the set
-  # ships. `MishkaCmsCore.Runtime.PageBuilder.Icons.available?/0` is false when the host has no
+  # ships. `MishkaCmsCore.Runtime.Authoring.Icons.available?/0` is false when the host has no
   # heroicons, and the control falls back to the text box below.
   defp widget_control(%{widget: :icon} = assigns) do
     assigns =
@@ -7065,7 +7065,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   slot(:inner_block, doc: "drawn under the controls, and folded with them")
 
   # One of the two sections a form adds, drawn from the controls
-  # `MishkaCmsCore.Runtime.PageBuilder.Inspector.form_sections/0` declares rather than from markup of
+  # `MishkaCmsCore.Runtime.Authoring.Inspector.form_sections/0` declares rather than from markup of
   # its own — a control added there appears here without this function changing.
   #
   # OPEN BY DEFAULT, where Behavior and Attributes start closed. Both sections are conditional — Form
@@ -7148,7 +7148,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   end
 
   # THE SEED IS NOT A ONE-ATTRIBUTE WRITE. It renames all five of the names a form derives, so it
-  # goes to `rename_form` and its batch; `MishkaCmsCore.Runtime.PageBuilder.Inspector.rule_op/3` has
+  # goes to `rename_form` and its batch; `MishkaCmsCore.Runtime.Authoring.Inspector.rule_op/3` has
   # no clause for it and raises rather than quietly writing one of the five.
   defp rule_event(%{key: "seed"}), do: "rename_form"
   defp rule_event(%{key: "how"}), do: "form_how"
@@ -11433,7 +11433,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   Sits under Custom CSS because the two are one idea: toggle `is-open` here, write `&.is-open { … }`
   there, and that is an accordion with no code in it. See
-  `MishkaCmsCore.Runtime.PageBuilder.Interactions` for why a `<script>` is the wrong shape under
+  `MishkaCmsCore.Runtime.Authoring.Interactions` for why a `<script>` is the wrong shape under
   LiveView.
   """
   def interactions(assigns) do
@@ -11705,7 +11705,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   A picker, not a code box. Writing a hook stays on Runtime → JS hooks, which is the right amount of
   friction for shipping executable JavaScript; this only selects from what is already compiled into
   the site's bundle, and saves someone hand-typing `phx-hook` into Advanced and getting the
-  capitalisation wrong. See `MishkaCmsCore.Runtime.PageBuilder.Hooks`.
+  capitalisation wrong. See `MishkaCmsCore.Runtime.Authoring.Hooks`.
   """
   def hook_picker(assigns) do
     assigns = assign(assigns, :targetable?, targetable?(assigns.node, assigns.entry))
@@ -14663,7 +14663,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       # here; this is what another session resolves the note with.
       node_path:
         assigns[:selected_node] &&
-          MishkaCmsCore.Runtime.PageBuilder.Tree.address(
+          MishkaCmsCore.Runtime.Authoring.Tree.address(
             assigns.editor.tree,
             assigns.selected_node.id
           ),
@@ -15154,7 +15154,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # a file, which is what a template is.
   # WHAT A CLASS CAN LAND ON. Only an element, a component or a slot carries attributes; a run of
   # text, an expression chip and both comment kinds are re-emitted verbatim by
-  # `MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer`, which has nowhere to put a class — so every
+  # `MishkaCmsCore.Runtime.Authoring.Tree.Serializer`, which has nowhere to put a class — so every
   # override recorded against one was dropped on the way out and nothing on the canvas ever moved.
   # The panel offered the whole surface anyway, on `{@inner_content}` most of all: the one node every
   # layout has, and the first thing an author clicks.

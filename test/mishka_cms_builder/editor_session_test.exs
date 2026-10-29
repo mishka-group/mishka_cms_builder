@@ -14,14 +14,14 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
-  alias MishkaCmsCore.Runtime.PageBuilder.Elements
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.Elements
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsCore.Test.Factory
 
   # The real Chelekom rows the two-form page below is built from. The bundle is 12 MB, read once.
@@ -1842,7 +1842,7 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
 
     # A SNIPPET, AN EXAMPLE AND A WIZARD'S COMPOSITION WERE ALL WRITTEN IN ANOTHER DOCUMENT, and a
     # `pb-` class is the key into THAT document's element CSS row — see
-    # `MishkaCmsCore.Runtime.PageBuilder.ElementScopes`. Kept, the element arrives styled by a row
+    # `MishkaCmsCore.Runtime.Authoring.ElementScopes`. Kept, the element arrives styled by a row
     # this document neither owns nor prunes, with an empty CSS box in front of the author. The class
     # is also the handle an interaction points at, so both have to move together.
     test "an unarmed template brings none of its old element classes with it" do

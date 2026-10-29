@@ -52,10 +52,10 @@ defmodule MishkaCmsBuilder.States.EditorHistoryState do
   use GenServer
 
   require Logger
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Strict
   alias MishkaCmsBuilder.Tree.Patch
   alias MishkaCmsBuilder.States.EditorSessionState
 

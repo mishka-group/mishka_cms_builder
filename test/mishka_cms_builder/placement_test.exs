@@ -22,9 +22,9 @@ defmodule MishkaCmsBuilder.PlacementTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
 
   @moduletag :unit
 
@@ -246,7 +246,7 @@ defmodule MishkaCmsBuilder.PlacementTest do
   # ONE GESTURE, TWO DOORS. A snippet card is the palette's hook and the palette's `data-template`,
   # so Insert reaches `place_template/3` while a drag of the same card reaches `apply_drop/2` with
   # the markup in the payload. The `pb-` classes it arrives wearing are keys into the element CSS
-  # row of the document it was cut from — see `MishkaCmsCore.Runtime.PageBuilder.ElementScopes` —
+  # row of the document it was cut from — see `MishkaCmsCore.Runtime.Authoring.ElementScopes` —
   # so a door that keeps them hands the author an element styled by a row this document neither owns
   # nor prunes, and an empty CSS box in front of it.
   describe "a template carrying another document's element classes" do
@@ -442,7 +442,7 @@ defmodule MishkaCmsBuilder.PlacementTest do
         assert {:relocated, placed, note} =
                  EditorSession.place_template(
                    session.token,
-                   MishkaCmsCore.Runtime.PageBuilder.Elements.get("el-form").template,
+                   MishkaCmsCore.Runtime.Authoring.Elements.get("el-form").template,
                    field.id
                  )
 
@@ -481,7 +481,7 @@ defmodule MishkaCmsBuilder.PlacementTest do
         assert {:relocated, _placed, note} =
                  EditorSession.place_template(
                    session.token,
-                   MishkaCmsCore.Runtime.PageBuilder.Elements.get("el-form").template,
+                   MishkaCmsCore.Runtime.Authoring.Elements.get("el-form").template,
                    field.id
                  )
 

@@ -515,7 +515,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       node = Tree.get(editor(view).tree, section.id)
 
       assert {:ok, "hide", %{}} =
-               MishkaCmsCore.Runtime.PageBuilder.Interactions.read(Node.attr(node, "phx-click"))
+               MishkaCmsCore.Runtime.Authoring.Interactions.read(Node.attr(node, "phx-click"))
     end
 
     # AIMING SURVIVES EDITING THE THING IT AIMS AT. The scope class is the entire link between a
@@ -1617,7 +1617,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
         view
         |> editor()
         |> Map.fetch!(:tree)
-        |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.to_heex()
+        |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.to_heex()
 
       assert render(view) =~ Phoenix.HTML.html_escape(expected) |> Phoenix.HTML.safe_to_string()
 
@@ -1633,7 +1633,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert view
              |> editor()
              |> Map.fetch!(:tree)
-             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize() =~ "from-source"
+             |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize() =~ "from-source"
 
       # …and it is one undo away, like any other edit.
       render_click(view, "undo", %{})
@@ -1641,7 +1641,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       refute view
              |> editor()
              |> Map.fetch!(:tree)
-             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize() =~ "from-source"
+             |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize() =~ "from-source"
     end
 
     test "unparseable source is refused without losing what was typed", %{conn: conn, page: page} do

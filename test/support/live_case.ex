@@ -26,12 +26,12 @@ defmodule MishkaCmsBuilder.LiveCase do
   import MishkaCmsCore.Test.Admin
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Styles
   alias MishkaCmsBuilder.Test.Plugins.BuilderBlockPlugin, as: BlockPlugin
   alias MishkaCmsBuilder.Test.Plugins.BuilderPageStarterPlugin, as: PageStarterPlugin
   alias MishkaCmsBuilder.Test.Plugins.BuilderFormCreatedProbe, as: FormCreatedProbe
@@ -65,26 +65,26 @@ defmodule MishkaCmsBuilder.LiveCase do
       alias MishkaCmsCore.Runtime.Compilers.Helpers
       alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
       alias MishkaCmsCore.Runtime.ErrorAddress
-      alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
-      alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
+      alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+      alias MishkaCmsCore.Runtime.Authoring.CodeCheck
       alias MishkaCmsBuilder.Conditions
-      alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+      alias MishkaCmsCore.Runtime.Authoring.Drafts
       alias MishkaCmsBuilder.EditorSession
-      alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
-      alias MishkaCmsCore.Runtime.PageBuilder.Elements
-      alias MishkaCmsCore.Runtime.PageBuilder.Interactions
-      alias MishkaCmsCore.Runtime.PageBuilder.Interface
-      alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-      alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
-      alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
+      alias MishkaCmsCore.Runtime.Authoring.ElementCss
+      alias MishkaCmsCore.Runtime.Authoring.Elements
+      alias MishkaCmsCore.Runtime.Authoring.Interactions
+      alias MishkaCmsCore.Runtime.Authoring.Interface
+      alias MishkaCmsCore.Runtime.Authoring.PageForms
+      alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
+      alias MishkaCmsCore.Runtime.Authoring.PageStarter
       alias MishkaCmsBuilder.SeoSettings
       alias MishkaCmsBuilder.Blocks
       alias MishkaCmsBuilder.Marketplace
-      alias MishkaCmsCore.Runtime.PageBuilder.Tree
-      alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
-      alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
-      alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
-      alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+      alias MishkaCmsCore.Runtime.Authoring.Tree
+      alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+      alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
+      alias MishkaCmsCore.Runtime.Authoring.Tree.Styles
+      alias MishkaCmsCore.Runtime.Authoring.Visibility
       alias MishkaCmsCore.Runtime.States.SiteState
       alias MishkaCmsBuilder.Test.Plugins.BuilderBlockPlugin, as: BlockPlugin
       alias MishkaCmsBuilder.Test.Plugins.BuilderJsHookPlugin
@@ -549,7 +549,7 @@ defmodule MishkaCmsBuilder.LiveCase do
     view
     |> editor()
     |> Map.fetch!(:tree)
-    |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize()
+    |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize()
   end
 
   @doc false

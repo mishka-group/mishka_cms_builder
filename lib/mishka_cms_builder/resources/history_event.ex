@@ -105,7 +105,7 @@ defmodule MishkaCmsBuilder.HistoryEvent do
       # their drafts in tables of their own — `layout_drafts`, `error_page_drafts` — so a foreign key
       # to `page_drafts` alone refused every row a layout or an error page ever produced on a draft
       # branch, and the flush logged a warning and dropped it. `draft_id` is a plain id now, and
-      # `MishkaCmsCore.Runtime.PageBuilder.Drafts.destroy/2` releases it when the draft goes, which is
+      # `MishkaCmsCore.Runtime.Authoring.Drafts.destroy/2` releases it when the draft goes, which is
       # what `on_delete: :nilify` used to do for the one table it could name.
     end
 
@@ -445,7 +445,7 @@ defmodule MishkaCmsBuilder.HistoryEvent do
 
   policies do
     # HISTORY IS THE BUILDER'S, per type: writing and reading a document's history needs a name that
-    # opens the builder on its `source_type` (`MishkaCmsCore.Runtime.PageBuilder.Section`).
+    # opens the builder on its `source_type` (`MishkaCmsCore.Runtime.Authoring.Section`).
     policy action_type([:create, :read, :update, :destroy]) do
       authorize_if {MishkaCmsBuilder.BuilderAccess, field: :source_type}
     end

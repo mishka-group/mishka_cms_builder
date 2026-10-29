@@ -24,7 +24,7 @@ defmodule MishkaCmsBuilder.DropAnchorTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
 
   @moduletag :unit
 

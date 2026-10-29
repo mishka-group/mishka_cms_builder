@@ -19,7 +19,7 @@ defmodule MishkaCmsBuilder.Resources.CodeAccessTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
 
   @moduletag :integration
   @moduletag :capture_log

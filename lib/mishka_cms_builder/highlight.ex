@@ -29,7 +29,7 @@ defmodule MishkaCmsBuilder.Highlight do
   the caller's business.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.LiveView.HtmlTokenizer
+  alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
 
   @plain "#c9c7d1"
   @comment "#8b8995"

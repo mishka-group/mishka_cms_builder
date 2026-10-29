@@ -34,7 +34,7 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsBuilder.PaletteEntry
-  alias MishkaCmsCore.Runtime.PageBuilder.Containment
+  alias MishkaCmsCore.Runtime.Authoring.Containment
   alias MishkaCmsCore.Runtime.States.SiteState
 
   require Ash.Query

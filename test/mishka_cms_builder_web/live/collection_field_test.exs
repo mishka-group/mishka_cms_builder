@@ -22,7 +22,7 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.States.SiteState
 
   @moduletag :integration
@@ -155,7 +155,7 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
     end
 
     defp media(view),
-      do: view |> placed() |> MishkaCmsCore.Runtime.PageBuilder.Tree.Node.attr("media")
+      do: view |> placed() |> MishkaCmsCore.Runtime.Authoring.Tree.Node.attr("media")
 
     defp items(view) do
       {:expr, source} = media(view)

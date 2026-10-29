@@ -12,7 +12,7 @@ defmodule MishkaCmsBuilder.WizardTest do
   """
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.Wizard
 
   defp attr(name, type \\ "string", opts \\ %{}),
@@ -194,7 +194,7 @@ defmodule MishkaCmsBuilder.WizardTest do
 
       assert {:ok, tree} = Tree.parse(source)
       assert [node] = Tree.walk(tree) |> Enum.filter(&(&1.kind == :component))
-      assert MishkaCmsCore.Runtime.PageBuilder.Tree.Node.attr_text(node, "variant") == "outline"
+      assert MishkaCmsCore.Runtime.Authoring.Tree.Node.attr_text(node, "variant") == "outline"
     end
 
     # `kind="danger"` matches none of the component's clauses — they are written against the ATOM

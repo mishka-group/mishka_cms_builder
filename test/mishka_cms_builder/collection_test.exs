@@ -19,7 +19,7 @@ defmodule MishkaCmsBuilder.CollectionTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.Collection
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
 
   @moduletag :unit
 
@@ -164,7 +164,7 @@ defmodule MishkaCmsBuilder.CollectionTest do
   describe "which attributes this is for" do
     @bundle MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
-    alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+    alias MishkaCmsCore.Runtime.Authoring.Inspector
 
     test "every list, map and keyword list the kit declares" do
       components =

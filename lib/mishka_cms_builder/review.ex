@@ -27,8 +27,8 @@ defmodule MishkaCmsBuilder.Review do
   instead of selecting nil and every caller behaves the same way.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.PageComment
 
   require Ash.Query
