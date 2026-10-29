@@ -1825,7 +1825,16 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
         </div>
 
-        <div class="relative">
+        <%!-- A FORM, SO THE SERVER HEARS EVERY CHANGE, not only a key coming up. `phx-keyup` missed
+              text that arrived without a key — pasted from the menu, dropped, filled in — so the
+              list stayed unfiltered under a box that said otherwise, and the X then pushed the
+              empty query the server already had: nothing changed, so nothing cleared the box. --%>
+        <form
+          id="pb-palette-search-form"
+          phx-change="palette_query"
+          phx-submit="palette_query"
+          class="relative"
+        >
           <.icon
             name={:search}
             size={14}
@@ -1835,14 +1844,14 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-palette-search"
             type="text"
             value={@palette_query}
-            phx-keyup="palette_query"
             phx-debounce="120"
             name="value"
+            autocomplete="off"
             placeholder={gettext("Search components…")}
             class="peer h-[38px] w-full rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] pl-[34px] pr-[30px] text-[12px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white focus:shadow-[0_0_0_3px_rgba(91,87,214,.1)]"
           />
           <.clear_field field="pb-palette-search" event="palette_query" params={%{"value" => ""}} />
-        </div>
+        </form>
 
         <%!-- Drag-to-scroll, and no scrollbar: the row is a strip of chips, and a scrollbar under it
               both eats a row of pixels and reads as a defect. `PbDragScroll` gives it the grab
@@ -10646,20 +10655,25 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       >
         <div class="flex items-center gap-2.5 border-b border-[#f0efea] px-4 py-3">
           <.icon name={:search} size={17} class="text-[#a8a5a0]" />
-          <div class="relative flex-1">
+          <%!-- A form for the same reason as the palette's search: see `palette/1`. --%>
+          <form
+            id="pb-command-form"
+            phx-change="command_query"
+            phx-submit="command_query"
+            class="relative flex-1"
+          >
             <input
               id="pb-command-input"
               type="text"
               name="value"
               value={@command_query}
-              phx-keyup="command_query"
               phx-debounce="80"
               placeholder={gettext("Jump to a page, or run a command…")}
               autocomplete="off"
               class="peer w-full pr-[26px] text-[13.5px] font-medium text-[#17161a] outline-none"
             />
             <.clear_field field="pb-command-input" event="command_query" params={%{"value" => ""}} />
-          </div>
+          </form>
           <span class="rounded-[5px] bg-[#f2f1ec] px-1.5 py-0.5 font-['Space_Grotesk'] text-[9.5px] font-bold text-[#6d6a63]">
             ESC
           </span>
@@ -13426,7 +13440,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     ~H"""
     <div class="pt-3">
       <.sample_catalogue_note :if={sample_catalogue?()} />
-      <div class="relative">
+      <%!-- A form for the same reason as the palette's search: see `palette/1`. --%>
+      <form
+        id="pb-registry-search-form"
+        phx-change="studio_query"
+        phx-submit="studio_query"
+        class="relative"
+      >
         <.icon
           name={:search}
           size={14}
@@ -13437,14 +13457,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           id="pb-registry-search"
           name="value"
           value={@studio_query}
-          phx-keyup="studio_query"
           phx-debounce="120"
           placeholder={gettext("Search the component registry…")}
           autocomplete="off"
           class="peer h-10 w-full rounded-[11px] border border-[#ecebe6] bg-[#faf9f6] pl-[35px] pr-[30px] text-[12px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white focus:shadow-[0_0_0_3px_rgba(91,87,214,.1)]"
         />
         <.clear_field field="pb-registry-search" event="studio_query" params={%{"value" => ""}} />
-      </div>
+      </form>
 
       <div class="mt-2.5 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button

@@ -4,7 +4,7 @@
 
 defmodule MishkaCmsBuilderWeb.Live.BuilderLive.KeyboardTest do
   @moduledoc """
-  The keys that act on the selected element.
+  The keys that act on the selected element, and the search boxes that filter by what is typed.
 
   The browser half — which element the key names, and when a double click means the author is about
   to type — is `assets/test/pb_typing_keys.test.js`.
@@ -130,6 +130,55 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.KeyboardTest do
 
       render_click(view, "select", %{"id" => h1.id})
       assert has_element?(view, ~s(#pb-root[data-selection="#{h1.id}"]))
+    end
+  end
+
+  # A SEARCH THAT ONLY HEARD A KEY COMING UP. Text that arrives without one — pasted from the menu,
+  # dropped, filled in by the browser — never reached the server, so the list stayed unfiltered under
+  # a box that said otherwise, and the X then pushed the empty query the server already had: nothing
+  # changed, so nothing cleared the box.
+  describe "a search box" do
+    test "the palette's follows a change, however the text arrived, and its X clears it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> form("#pb-palette-search-form", %{"value" => "zzzznothing"}) |> render_change()
+      assert live_assigns(view).palette_query == "zzzznothing"
+      assert view |> element("#pb-palette-search") |> render() =~ ~s(value="zzzznothing")
+
+      view |> element(~s([data-for="pb-palette-search"])) |> render_click()
+      assert live_assigns(view).palette_query == ""
+      assert view |> element("#pb-palette-search") |> render() =~ ~s(value="")
+    end
+
+    test "and so does the command palette's", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_command", %{})
+
+      view |> form("#pb-command-form", %{"value" => "undo"}) |> render_change()
+      assert live_assigns(view).command_query == "undo"
+
+      view |> element(~s([data-for="pb-command-input"])) |> render_click()
+      assert live_assigns(view).command_query == ""
+    end
+
+    test "and the component registry's", %{conn: conn, page: page} do
+      Application.put_env(:mishka_cms_builder, :marketplace, MishkaCmsBuilder.Marketplace.Mock)
+      on_exit(fn -> Application.delete_env(:mishka_cms_builder, :marketplace) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      view |> element("#pb-studio-registry") |> render_click()
+
+      view |> form("#pb-registry-search-form", %{"value" => "charts"}) |> render_change()
+      refute has_element?(view, "#pb-pkg-chelekom-datatable")
+      assert has_element?(view, "#pb-pkg-chelekom-charts")
+
+      view |> element(~s([data-for="pb-registry-search"])) |> render_click()
+      assert has_element?(view, "#pb-pkg-chelekom-datatable")
     end
   end
 end
