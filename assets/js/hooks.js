@@ -3156,6 +3156,21 @@ const PbLayers = {
       event.dataTransfer.dropEffect = isMove(event) ? "move" : "copy";
     };
 
+    // THE ROW THE POINTER IS ON, or the row whose details it is on. Between a component's row and its
+    // slots the rail draws the component's `.properties`, `.slots` and `.markup` groups, and on a
+    // navbar that is most of what sits between it and the next row: a drop there was no drop at all,
+    // so dragging a section to just under the navbar did nothing and said nothing. Those groups
+    // belong to the component, so they answer as its row — and the pointer is below that row's own
+    // box, which `zoneOf` already reads as "after": the node lands after the component, the way the
+    // marker on the component's row says.
+    const rowUnder = (target) => {
+      const row = target.closest(ROW);
+      if (row) return row;
+
+      const owner = target.closest("[data-layer-id]");
+      return (owner && this.el.contains(owner) && owner.querySelector(`:scope > ${ROW}`)) || null;
+    };
+
     this.onDragOver = (event) => {
       if (!ours(event)) return rest();
 
@@ -3177,16 +3192,16 @@ const PbLayers = {
         return;
       }
 
-      const over = event.target.closest(ROW);
+      const over = rowUnder(event.target);
 
       // A HIGHLIGHT THAT OUTLIVES THE TARGET IS A LIE, and this one was told constantly. Between a
       // component's row and its children the rail draws its properties group, its parsed markup and
-      // its slot ghosts — for a `chelekom-modal`, about thirty-four rows that are not drop targets
-      // and never were. Drifting a few pixels down onto one of them left this handler through the
-      // early return WITHOUT clearing, so the row above kept its blue "inside" border while the
-      // browser had gone back to refusing the drop. The author let go over what looked like an
-      // accepting target and nothing happened at all — no `drop` event is fired when the last
-      // `dragover` was not cancelled, so there was not even a refusal to report.
+      // its slot ghosts — for a `chelekom-modal`, about thirty-four rows. Drifting a few pixels down
+      // onto one of them left this handler through the early return WITHOUT clearing, so the row
+      // above kept its blue "inside" border while the browser had gone back to refusing the drop.
+      // Those rows answer as their component's now (`rowUnder`), with the marker moved to "after";
+      // what is left with no row at all still clears, because no `drop` event is fired when the
+      // last `dragover` was not cancelled and there would be nothing to report.
       if (!over || over.dataset.layerRow === draggingId()) return rest();
 
       // Whatever the pointer is resting on, including a row it is only aiming BESIDE: `<ul>` refuses
@@ -3229,7 +3244,7 @@ const PbLayers = {
       if (!node && !template) return finish();
 
       const end = event.target.closest(ROOT_DROP);
-      const over = end ? null : event.target.closest(ROW);
+      const over = end ? null : rowUnder(event.target);
       if (!end && (!over || over.dataset.layerRow === node)) return finish();
 
       const { row, zone } = end ? {} : resolve(over, event);
