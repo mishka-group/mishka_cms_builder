@@ -2495,12 +2495,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # it is the difference between the payloads being gone and still being there, and the only way
   # anyone learns that this stopped working is that it says so. It was silent for exactly that long.
   def handle_async(:history_collect, {:ok, {:error, reason}}, socket) do
-    Logger.warning("[PageBuilder] the publish cleanup was refused: #{inspect(reason)}")
+    Logger.warning("[MishkaCmsBuilder] the publish cleanup was refused: #{inspect(reason)}")
     {:noreply, socket}
   end
 
   def handle_async(:history_collect, {:exit, reason}, socket) do
-    Logger.warning("[PageBuilder] the publish cleanup did not finish: #{inspect(reason)}")
+    Logger.warning("[MishkaCmsBuilder] the publish cleanup did not finish: #{inspect(reason)}")
     {:noreply, socket}
   end
 
