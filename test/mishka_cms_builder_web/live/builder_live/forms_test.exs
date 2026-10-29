@@ -8,6 +8,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormsTest do
   """
   use MishkaCmsBuilder.LiveCase
 
+  # The query event of the suite's repo. Ecto names it after the repo module, so it is
+  # `MishkaCmsBuilder.Repo`'s here, not the core's.
+  @repo_query [:mishka_cms_builder, :repo, :query]
+
   # THE ENGINE WAS FINISHED AND NOTHING DREW IT. Every function under here had unit tests and no
   # caller: clicking a bound field showed State, Layout, Appearance and Behavior, and the two
   # sections that make a form a working form were not in the panel at all.
@@ -774,7 +778,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormsTest do
 
       :telemetry.attach(
         handler,
-        [:mishka_cms_core, :repo, :query],
+        @repo_query,
         &__MODULE__.restore_after_miss/4,
         %{handler: handler, page_id: page.id, editor: view.pid}
       )
@@ -784,7 +788,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormsTest do
       render_click(view, "select", %{"id" => node_with_tag(view, "h2").id})
       render(view)
 
-      assert :telemetry.list_handlers([:mishka_cms_core, :repo, :query])
+      assert :telemetry.list_handlers(@repo_query)
              |> Enum.all?(&(&1.id != handler)),
              "the editor read the row again, and missed it"
 
