@@ -917,9 +917,18 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # FROM SCRATCH IS STILL A STARTING POINT. It used to place whatever was armed in the palette — and
   # nothing at all when nothing was, which is the state a reader who has not picked anything is in.
-  # It lays down one `<main>` with a height worth aiming at, and the page is buildable.
+  # It lays down one bare box (`PageStarter.scratch/0`), which the canvas draws as a well to aim at,
+  # and the page is buildable.
+  #
+  # THE BOX IS SELECTED, so the next card clicked in the palette lands inside it. Left unselected,
+  # that card went to the end of the document, and the box the author started from was left empty
+  # above everything they built.
   def handle_event("starter_scratch", _params, socket) do
-    place_starter(socket, %{template: PageStarter.scratch()})
+    with {:ok, session} <- place_starter(socket, %{template: PageStarter.scratch()}),
+         [box | _rest] <- session.tree.roots do
+      EditorSession.select(socket.assigns.token, box, :canvas)
+    end
+
     {:noreply, socket}
   end
 

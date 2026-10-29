@@ -153,6 +153,38 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert Serializer.serialize(tree) =~ "grid-cols-[2fr_1fr]"
     end
 
+    # START FROM SCRATCH, AS A USER MET IT. The first click swapped the page's blank container for an
+    # empty `<main>` that the chooser still counted as a page nobody had started, so the chooser
+    # stayed up and the click looked dead; the Navbar placed next went to the end of the document,
+    # and the `<main>` stayed above it on the published page as a 200px blank band.
+    test "starting from scratch takes the chooser away at the first click", %{
+      conn: conn,
+      site: site
+    } do
+      empty = create_page!(site_id: site.id, template: PageStarter.blank())
+      {:ok, view, _html} = open_builder(conn, empty)
+
+      {:ok, canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert html =~ ~s(id="pb-page-starter")
+
+      canvas |> element("#pb-starter-scratch") |> render_click()
+
+      refute has_element?(canvas, "#pb-page-starter")
+
+      assert [box] = editor(view).tree.roots
+      assert Serializer.serialize(editor(view).tree) =~ ~r/\A\s*<div><\/div>\s*\z/
+      assert editor(view).selection == box, "the box is where the next card goes"
+
+      render_click(view, "pick_block", %{"block" => "el-section"})
+
+      assert [^box] = editor(view).tree.roots, "nothing is left empty above what comes next"
+
+      assert [%{tag: "section"}] =
+               editor(view).tree |> Tree.children(box) |> Enum.reject(&(&1.kind == :text))
+    end
+
     test "an unknown structure is a no-op, not a crash", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 
