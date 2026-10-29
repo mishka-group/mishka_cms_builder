@@ -757,6 +757,67 @@ const PB_EDITABLE = (target) =>
   (target.isContentEditable ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
+// ⌘A or Ctrl+A, by the physical key like every other shortcut here, and with nothing else held.
+const selectsAll = (event) => {
+  const { letter, key } = PB_KEYS(event);
+
+  return (
+    (event.metaKey || event.ctrlKey) &&
+    !event.shiftKey &&
+    !event.altKey &&
+    (letter ? letter === "a" : key === "a")
+  );
+};
+
+function selectContents(node) {
+  const doc = node.ownerDocument;
+  const range = doc.createRange();
+  range.selectNodeContents(node);
+
+  const selection = doc.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+// WHERE THE CARET GOES WHEN WORDS OPEN FOR EDITING. `focus()` on an editing host puts it at the
+// start, so the first thing typed went in front of the old words — "Mishka Studio" typed over
+// "Northwind" came out "Mishka StudioNorthwind". A word the double click already selected inside
+// the node is kept, as every text field does; otherwise the caret goes where the pointer was, and
+// to the end when the browser cannot say where that is.
+function caretAt(node, event) {
+  const doc = node.ownerDocument;
+  const selection = doc.getSelection();
+  if (!selection) return;
+
+  const current = selection.rangeCount ? selection.getRangeAt(0) : null;
+  if (current && !current.collapsed && node.contains(current.commonAncestorContainer)) return;
+
+  const range = pointRange(doc, event) || doc.createRange();
+  if (!node.contains(range.startContainer)) {
+    range.selectNodeContents(node);
+    range.collapse(false);
+  }
+
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function pointRange(doc, event) {
+  if (!event || typeof event.clientX !== "number") return null;
+
+  if (doc.caretPositionFromPoint) {
+    const position = doc.caretPositionFromPoint(event.clientX, event.clientY);
+    if (!position) return null;
+
+    const range = doc.createRange();
+    range.setStart(position.offsetNode, position.offset);
+    range.collapse(true);
+    return range;
+  }
+
+  return doc.caretRangeFromPoint ? doc.caretRangeFromPoint(event.clientX, event.clientY) : null;
+}
+
 const PbShortcuts = {
   mounted() {
     // Reload the CANVAS, not the editor: the frame's own location, so the panels, the drawer and the
@@ -956,32 +1017,85 @@ const PbCanvas = {
       // `onSelectClick`.
       const target = this.pressed || event.target;
 
-      const node = target.closest('[data-kind="text"]');
-      if (!node) return this.onDblSelect(event, target);
+      const hit = target.closest('[data-kind="text"]');
+      if (!hit) return this.onDblSelect(event, target);
+
+      // THE PRESS MAY BE A NODE THE PATCH HAS SINCE REDRAWN. The first click's own `select` re-renders
+      // the frame, and a redraw can replace the element that was pressed: editing that one made a
+      // detached copy editable, the caret went nowhere, and the keys meant for the words reached the
+      // shortcuts instead. The id is what the gesture meant, so the live element is found by it.
+      const node = hit.isConnected ? hit : textNodeById(hit.dataset.nodeId);
+
+      // A double click inside the words already open is the browser's: it selects a word there.
+      if (node && node !== this.editing) this.editText(node, event);
+    };
+
+    const textNodeById = (id) =>
+      id
+        ? this.el.ownerDocument.querySelector(`[data-kind="text"][data-node-id="${CSS.escape(id)}"]`)
+        : null;
+
+    this.editText = (node, event) => {
+      // The id the author opened, read once: everything below must answer for this node, whatever a
+      // patch writes onto the element while the words are open.
+      const id = node.dataset.nodeId;
 
       node.setAttribute("contenteditable", "plaintext-only");
+
+      // LIVEVIEW MUST NOT REDRAW WORDS SOMEBODY IS TYPING. Any patch that re-renders this node —
+      // the `set_text` of the words edited a moment before, an autosave, a co-editor — morphs the
+      // element back to the server's HTML: `contenteditable` is not in it, so it was removed, the
+      // browser blurred the words mid-sentence, `finish` sent whatever had been typed so far, and
+      // the next key went to the page. The e2e run's history shows it: "Home" written back 24 ms
+      // after the brand next to it, "Heading" 67 ms after the paragraph beside it, each followed by
+      // a Backspace that deleted the element. `phx-update="ignore"` is LiveView's own word for
+      // "this element's content is the browser's": it keeps the attributes it did not render and
+      // leaves the children alone, and only `data-*` is merged. Removed again in `finish`.
+      node.setAttribute("phx-update", "ignore");
       node.focus();
-
-      const finish = () => {
-        node.removeAttribute("contenteditable");
-        this.pushEvent("set_text", { id: node.dataset.nodeId, text: node.textContent });
-        node.removeEventListener("blur", finish);
-      };
-
-      node.addEventListener("blur", finish, { once: true });
+      caretAt(node, event);
+      this.editing = node;
 
       // COMMITTING IS A KEYSTROKE, not only a click somewhere else. Escape leaves, ⌘/Ctrl+Enter
       // saves, and plain Enter saves too — a heading or a button label is one line, and typing into
       // one and pressing Enter means "done", not "give me a second line". Shift+Enter is the way to
       // ask for the newline, which is the convention every editor with a one-line field uses.
-      node.addEventListener("keydown", (ev) => {
-        if (ev.key === "Escape") return node.blur();
+      //
+      // Escape leaves the WORDS, not the selection: it stops here, so the editor's own Escape does
+      // not also drop the element the author was just editing.
+      //
+      // ⌘A/Ctrl+A SELECTS THESE WORDS AND NOTHING ELSE. Left to the browser it reaches past them
+      // whenever the caret is not where the browser thinks the editing host is — the e2e run's
+      // "Mishka StudioNorthwind" was select-all failing and the new title typed in front of the old
+      // one — so it is answered here, from the node itself.
+      const onKey = (ev) => {
+        if (selectsAll(ev)) {
+          ev.preventDefault();
+          return selectContents(node);
+        }
+
+        if (ev.key === "Escape") {
+          ev.stopPropagation();
+          return node.blur();
+        }
+
         if (ev.key !== "Enter") return;
         if (ev.shiftKey && !(ev.metaKey || ev.ctrlKey)) return;
 
         ev.preventDefault();
         node.blur();
-      });
+      };
+
+      const finish = () => {
+        node.removeEventListener("keydown", onKey);
+        node.removeAttribute("phx-update");
+        node.removeAttribute("contenteditable");
+        if (this.editing === node) this.editing = null;
+        this.pushEvent("set_text", { id, text: node.textContent });
+      };
+
+      node.addEventListener("blur", finish, { once: true });
+      node.addEventListener("keydown", onKey);
     };
 
     // THE NODE ITSELF, WHEN THAT IS WHAT WAS MEANT. A single click resolves upwards, because the
