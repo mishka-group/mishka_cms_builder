@@ -953,11 +953,15 @@ const PbTheme = {
 // asks before losing work.
 //
 // Two exits, two mechanisms. Closing the tab, reloading and typing a URL are `beforeunload`, where
-// the browser owns the wording and all we can do is object. An in-app `<.link navigate>` never
-// unloads anything — it is a pushState — so nothing native fires and the click is caught here, on
-// the way down, and handed to the server, which can offer to keep the work as a draft rather than
-// only asking twice. `patch` links are left alone: they change the URL of the editor you are
-// already in.
+// the browser owns the wording and all we can do is object. A click on a link to another page of
+// this app is caught here, on the way down, and handed to the server, which can offer to keep the
+// work as a draft rather than only asking twice. That is both kinds of link the editor draws: a
+// live `<.link navigate>` to another of the editor's own pages, and a plain `href` to the rest of
+// the admin, which is a page load because the editor is a live_session of its own and LiveView
+// refuses a live navigation out of it. `leavingTo` says which clicks leave.
+//
+// When the server lets the author go it redirects or navigates, and LiveView destroys this hook
+// before the page unloads, so the browser does not ask a second time.
 const PbLeaveGuard = {
   mounted() {
     this.armed = () => this.el.dataset.armed === "true";
@@ -972,13 +976,13 @@ const PbLeaveGuard = {
       if (!this.armed() || event.defaultPrevented || event.button > 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-      const link =
-        event.target.closest && event.target.closest('a[data-phx-link="redirect"]');
-      if (!link || link.target === "_blank") return;
+      const link = event.target.closest && event.target.closest("a[href]");
+      const to = link && leavingTo(link);
+      if (!to) return;
 
       event.preventDefault();
       event.stopPropagation();
-      this.pushEvent("leaving", { to: link.getAttribute("href") });
+      this.pushEvent("leaving", { to });
     };
 
     window.addEventListener("beforeunload", this.warn);
@@ -989,6 +993,33 @@ const PbLeaveGuard = {
     document.removeEventListener("click", this.intercept, true);
   },
 };
+
+// WHERE A CLICK ON `link` LEAVES THIS PAGE FOR, as a path of this app, or null when it does not
+// leave it. Left alone: a `patch` link, which changes the URL of the editor you are already in; a
+// jump to a `#fragment` of this same page; a link that opens elsewhere — a new tab or window, a
+// download; and one to another origin, `mailto:` or `javascript:`, which the server would refuse
+// as a destination anyway (`beforeunload` still objects if it does unload the page).
+function leavingTo(link) {
+  if (link.getAttribute("data-phx-link") === "patch") return null;
+  if (link.hasAttribute("download")) return null;
+
+  const target = (link.getAttribute("target") || "").toLowerCase();
+  if (target && !["_self", "_top", "_parent"].includes(target)) return null;
+
+  let url;
+  try {
+    url = new URL(link.getAttribute("href"), window.location.href);
+  } catch (_invalid) {
+    return null;
+  }
+
+  if (url.origin !== window.location.origin) return null;
+
+  const [page, fragment] = url.href.split("#");
+  if (fragment !== undefined && page === window.location.href.split("#")[0]) return null;
+
+  return url.pathname + url.search + url.hash;
+}
 
 // WHEN THE FRAME HAS ACTUALLY REPAINTED THE NEW DOCUMENT. Opening a draft replaces the tree in the
 // session and the frames re-render from a broadcast — no navigation, so `FrameLoader`'s `load` never
