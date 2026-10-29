@@ -1,4 +1,4 @@
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_builder_web/live/builder_live.ex:6614,6D6B051
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_builder_web/live/builder_live.ex:6641,666DCD2
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_builder_web/live/canvas_live.ex:2896,FCC10C
 XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:1671,481D098
 XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:1695,1A31AC8
