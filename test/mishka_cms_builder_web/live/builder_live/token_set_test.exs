@@ -84,6 +84,60 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.TokenSetTest do
     refute_received {:tailwind, _site}, "the Studio built the site's CSS and threw it away"
   end
 
+  # THE EXPORT IS A FILE PEOPLE PASTE. The table read the edited token again, but the Generated
+  # output, the Copy button that carries it and the toolbar badge kept the list the Studio read when
+  # it opened: the row said CUSTOM while the export still held the old colour and Copy copied it,
+  # until the Studio was closed and opened again.
+  test "the Generated output and its Copy follow the edit while the Studio stays open", %{
+    view: view,
+    site: site
+  } do
+    assert export(view) =~ "#5b57d6"
+    assert copied(view) =~ "#5b57d6"
+    refute has_element?(view, "#pb-studio [data-role=pb-studiobadge]")
+
+    render_click(view, "set_token", %{"key" => @key, "value" => "#b91c1c"})
+
+    assert export(view) =~ "'#{@key}': '#b91c1c'"
+    refute export(view) =~ "#5b57d6"
+    assert copied(view) =~ "'#{@key}': '#b91c1c'"
+    refute copied(view) =~ "#5b57d6"
+
+    custom = site.id |> Tokens.list() |> Enum.count(& &1.custom?)
+    assert custom > 0, "the edit is this site's own override"
+
+    assert view |> element("#pb-studio [data-role=pb-studiobadge]") |> render() =~
+             to_string(custom)
+  end
+
+  # The Inspector's site colours are the same list, read at mount, so a swatch went on painting the
+  # colour the token no longer has.
+  test "the Inspector's site colours follow the edit", %{view: view} do
+    render_click(view, "set_token", %{"key" => @key, "value" => "#b91c1c"})
+    _settled = render_async(view)
+
+    assert {@key, "#b91c1c", _label} =
+             Enum.find(live_assigns(view).style_tokens, &(elem(&1, 0) == @key))
+  end
+
+  # Read as the browser reads them — the text of the block and the attribute the PbCopy hook copies —
+  # so the quotes of the generated file compare as quotes, not as escaped HTML.
+  defp export(view),
+    do: view |> element("#pb-token-export-body pre") |> render() |> fragment() |> LazyHTML.text()
+
+  defp copied(view) do
+    [copy] =
+      view
+      |> element("#pb-token-copy")
+      |> render()
+      |> fragment()
+      |> LazyHTML.attribute("data-copy")
+
+    copy
+  end
+
+  defp fragment(html), do: LazyHTML.from_fragment(html)
+
   describe "with a design-system plugin" do
     setup do: register_plugin(BuilderTokenGate, "builder:token:before_set")
 

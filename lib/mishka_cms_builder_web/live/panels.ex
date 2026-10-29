@@ -996,6 +996,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           )}</span>
           <span
             :if={@studio_badge > 0}
+            data-role="pb-studiobadge"
             title={gettext("Design tokens your team added")}
             class="ml-0.5 mr-0.5 flex h-6 min-w-5 items-center justify-center gap-1 rounded-[7px] bg-[#2e2c33] px-1.5 font-['Space_Grotesk'] text-[10px] font-bold text-[#8ee0b8]"
           >

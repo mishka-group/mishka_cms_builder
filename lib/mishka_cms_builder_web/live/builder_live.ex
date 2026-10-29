@@ -1427,15 +1427,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     })
   end
 
-  defp assign_token_categories(socket) do
-    categories =
-      %{path_params: %{site_id: socket.assigns.editor.site_id}}
-      |> DesignToken.rows()
-      |> Panels.token_categories()
-
-    assign(socket, :token_categories, categories)
-  end
-
   # The snippet list is a Gervaz table, so only `path_params` travels — the scope chips are the
   # table's own filter and its depth is whatever the reader built. The keys are PREFIXED because
   # Gervaz turns a path param named after an attribute into an equality filter, and `site_id == X`
@@ -1493,12 +1484,32 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_snippets_url_state()
   end
 
+  # EVERYTHING THE STUDIO DRAWS FROM THE TOKEN LIST, not just the table. The revision makes the
+  # table read again, but the Generated output, the Copy button that carries it and the toolbar
+  # badge are drawn from the list the sheet read when it opened — so after an edit they went on
+  # showing the old value, and Copy copied it, until the Studio was closed and opened again. One
+  # read of the site's tokens answers the chips, the export and the badge; the Inspector's site
+  # colours, read once at mount, kept their old swatch the same way and are read again off the click.
   defp refresh_tokens(socket) do
+    tokens = Panels.studio_token_list(socket.assigns.editor.site_id)
+
     socket
     |> update(:tokens_revision, &(&1 + 1))
-    |> assign_token_categories()
+    |> assign(:token_categories, Panels.token_categories(tokens))
+    |> assign_studio_tokens(tokens)
+    |> load_tokens_async(socket.assigns.editor)
     |> assign_tokens_url_state()
   end
+
+  # Only once the sheet's own read has answered: before that nothing is drawn from it, and the read
+  # still in flight brings a list of its own.
+  defp assign_studio_tokens(%{assigns: %{studio_data: %{} = data}} = socket, tokens) do
+    socket
+    |> assign(:studio_data, %{data | tokens: tokens})
+    |> assign(:studio_badge, Enum.count(tokens, & &1.custom?))
+  end
+
+  defp assign_studio_tokens(socket, _tokens), do: socket
 
   # Nothing pushes rows into the table; the table reads again when the state it was handed changes.
   defp refresh_drafts(socket) do
@@ -1541,7 +1552,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp show_sheet(socket, sheet), do: socket |> assign(:sheet, sheet) |> load_sheet(sheet)
 
   # THE SHEET OPENS, AND THEN ITS CONTENTS ARRIVE. Everything the Studio shows was read on the way
-  # in: `assign_token_categories/1` parses every stylesheet the site has, and the render itself
+  # in: counting the token chips parses every stylesheet the site has, and the render itself
   # called `Marketplace.packages/1`, which parses the kit bundles — 10.8 MB of JSON for Chelekom
   # alone. Both ran before anything could paint, so pressing Studio did nothing at all for as long
   # as they took and then the finished sheet appeared.
