@@ -23,6 +23,8 @@ defmodule MishkaCmsBuilderWeb.Live.EditorTenancyTest do
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [token: 1]
+
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -163,8 +165,6 @@ defmodule MishkaCmsBuilderWeb.Live.EditorTenancyTest do
 
   defp open(conn, section, record),
     do: live(conn, "/admin/dashboard/runtime/builder/#{path(section)}/#{record.id}")
-
-  defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
 
   for section <- @sections do
     describe "#{section}: a tenant's own site" do
