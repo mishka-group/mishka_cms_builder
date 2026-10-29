@@ -11,8 +11,8 @@
   {"lib/mishka_cms_builder/editor_session.ex", :call_with_opaque, 2057},
   {"lib/mishka_cms_builder/history.ex", :call_without_opaque, 427},
   {"lib/mishka_cms_builder/marketplace/kits.ex", :call_without_opaque, 61},
-  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4215},
-  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4260},
+  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4224},
+  {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4269},
 
   # `Strict.violation!/2` and `Strict.check!/3` are the core's macros that compile to an
   # unconditional `raise` outside :prod (`builder_strict` in config/config.exs) and to nothing in
@@ -30,23 +30,23 @@
   {"lib/mishka_cms_builder/editor_session.ex", :unused_fun, 1735},
   {"lib/mishka_cms_builder/editor_session.ex", :unused_fun, 1737},
   {"lib/mishka_cms_builder/editor_session.ex", :unused_fun, 1739},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 1121},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 5946},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 7312},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 1125},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 5954},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 7374},
 
   # A last clause that matches anything, after clauses the current callers already cover. Kept on
   # purpose: it is the answer to a shape a plugin, a stored row or a later caller may send.
   {"lib/mishka_cms_builder/editor_session/journal.ex", :pattern_match_cov, 415},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 5856},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6123},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6268},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6344},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6376},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6407},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6419},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6431},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6443},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 7145},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 5864},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6185},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6330},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6406},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6438},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6469},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6481},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6493},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6505},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 7207},
 
   # `:elixir_tokenizer.tokenize/3` and the project's HEEx tokenizer are called through a clause for
   # each shape either has returned across Elixir releases; dialyzer sees the one of this release.
