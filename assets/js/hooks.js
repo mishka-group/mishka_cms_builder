@@ -854,13 +854,21 @@ const PbShortcuts = {
       if (PB_EDITABLE(event.target) && shortcut !== "undo" && shortcut !== "redo") return;
 
       event.preventDefault();
-      this.pushEvent("shortcut", { key: shortcut });
+      // The selection this chrome last drew — the highlighted layers row, the Inspector — is the one
+      // the author is looking at when the key is pressed out here. See the canvas's `onKey`.
+      this.pushEvent("shortcut", { key: shortcut, node_id: this.el.dataset.selection || null });
     };
 
     // The canvas cannot push to this LiveView, so it posts here instead.
     this.onMessage = (event) => {
       if (event.source === window || !event.data || event.data.pb !== true) return;
-      if (event.data.kind === "shortcut") this.pushEvent("shortcut", { key: event.data.key });
+      if (event.data.kind === "shortcut") {
+        this.pushEvent("shortcut", {
+          key: event.data.key,
+          node_id: event.data.node_id || null,
+          typing: event.data.typing === true,
+        });
+      }
       if (event.data.kind === "error") this.pushEvent("flash_error", { message: event.data.message });
       if (event.data.kind === "info") this.pushEvent("flash_info", { message: event.data.message });
       if (event.data.kind === "rail") this.pushEvent("open_rail", { action: event.data.action });
@@ -1010,8 +1018,23 @@ const PbCanvas = {
     // take seconds: the click's diff queued behind hundreds of hover diffs, and LiveView's progress
     // bar flashed on each one.
 
+    // A DOUBLE CLICK SAYS "I AM ABOUT TO TYPE", whatever it lands on. When it opens words for
+    // editing, the keys that follow go into them. When it does not — it landed on a section's
+    // padding, or the words it opened were taken away under the caret — the author still believes
+    // they are typing, and Backspace is the first key they press. That key used to delete the
+    // selected element: an e2e run double-clicked where a deleted heading had been, pressed
+    // Backspace to clear the words it expected, and took out the section that had moved up into its
+    // place, then the next one, then the next.
+    //
+    // `this.typing` remembers the belief until the author makes a new choice: a single click, a
+    // selection made anywhere else, or Enter/Escape out of the words. While it holds and no text has
+    // the caret, Delete and Cut are answered with what happened instead of acting (see `onKey`).
+    this.typing = false;
+
     this.onDblClick = (event) => {
       if (previewing()) return;
+
+      this.typing = true;
 
       // Where the gesture began, not what the first click drew under the pointer since — see
       // `onSelectClick`.
@@ -1076,6 +1099,7 @@ const PbCanvas = {
 
         if (ev.key === "Escape") {
           ev.stopPropagation();
+          this.typing = false;
           return node.blur();
         }
 
@@ -1083,6 +1107,7 @@ const PbCanvas = {
         if (ev.shiftKey && !(ev.metaKey || ev.ctrlKey)) return;
 
         ev.preventDefault();
+        this.typing = false;
         node.blur();
       };
 
@@ -1132,7 +1157,22 @@ const PbCanvas = {
       if (PB_EDITABLE(event.target) && shortcut !== "undo" && shortcut !== "redo") return;
 
       event.preventDefault();
-      window.parent.postMessage({ pb: true, kind: "shortcut", key: shortcut }, window.origin);
+
+      // WHAT THE AUTHOR CAN SEE, sent with the key. The ring is drawn here the moment a node is
+      // clicked; the server's selection arrives a round trip later, and under load that is seconds.
+      // A Delete pressed in between removed whatever the server still held — the e2e run lost its
+      // hero, its call-to-action and its footer that way — so the chrome is told which element the
+      // key was pressed on, and acts only when the two agree. `typing` is the belief above.
+      window.parent.postMessage(
+        {
+          pb: true,
+          kind: "shortcut",
+          key: shortcut,
+          node_id: this.selectedId || null,
+          typing: this.typing === true,
+        },
+        window.origin,
+      );
     };
 
     this.handleEvent("pb:drop-rejected", ({ message }) =>
@@ -1161,7 +1201,11 @@ const PbCanvas = {
       // open panel over to it both hides the element just clicked and offers rows that describe
       // something else.
       const previous = this.selectedId;
-      if ((id || null) !== previous) this.layoutOpen = false;
+      // A ring that moved is a new choice, and ends the "about to type" of a double click before it.
+      if ((id || null) !== previous) {
+        this.layoutOpen = false;
+        this.typing = false;
+      }
       this.selectedId = id || null;
       doc
         .querySelectorAll('[data-node-id][data-selected="true"]')
@@ -1249,6 +1293,8 @@ const PbCanvas = {
       // first press, which is why this runs before the preview check.
       if (event.detail <= 1) {
         this.pressed = event.target.closest("#pb-el-toolbar") ? null : event.target;
+        // A single click is a new choice, unless it only moved the caret inside the open words.
+        if (!this.editing?.contains(event.target)) this.typing = false;
       } else if (this.pressed && !previewing()) {
         event.preventDefault();
         return event.stopImmediatePropagation();

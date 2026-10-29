@@ -114,6 +114,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # real, because `tab_atom/2` falls back to the head of this list for anything it does not know.
   @source_tabs [:template, :interface, :state, :events, :infos, :helpers, :styles]
 
+  # The shortcuts that act on the selected element, and so have to say which one the author saw —
+  # see `selection_shortcut/3`.
+  @selection_shortcuts ~w(delete cut copy duplicate visibility)
+
   # How many panel forms keep what was typed into them (`typed:<form id>`). The ones on screen at
   # once are a handful.
   @typed_forms 24
@@ -4956,6 +4960,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
+  def handle_event("shortcut", %{"key" => key} = params, socket)
+      when key in @selection_shortcuts,
+      do: selection_shortcut(key, params, socket)
+
   def handle_event("shortcut", %{"key" => key}, socket), do: shortcut(key, socket)
 
   # The canvas has no flash of its own, so a refusal it could not show — an illegal drop, say —
@@ -5981,6 +5989,60 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp shortcut(_key, socket), do: {:noreply, socket}
+
+  # A KEY ACTS ON THE ELEMENT THE AUTHOR CAN SEE, OR ON NOTHING.
+  #
+  # The canvas draws the selection ring the moment a node is clicked; this LiveView hears about the
+  # new selection a round trip later, and under load that took seconds. These shortcuts read the
+  # selection, so a Delete pressed in that gap removed whatever was selected BEFORE — an e2e run
+  # double-clicked a heading, pressed Backspace, and lost its hero, its call-to-action and its
+  # footer, none of which was ringed when the key went down. Each key now carries the id the author
+  # was looking at (the canvas's ring, or the chrome's own last render), and it runs only when the
+  # session's selection is that same element: read from the session itself, because this
+  # LiveView's copy is the one that lags.
+  #
+  # And a key pressed while the author believes they are typing — a double click that opened no
+  # words, or words taken away under the caret — removes nothing: see `typing` in the canvas hook.
+  defp selection_shortcut(key, %{"typing" => true}, socket) when key in ~w(delete cut) do
+    {:noreply,
+     put_flash(
+       socket,
+       :info,
+       gettext(
+         "Nothing was removed: no text is being edited. Double-click right on the words to edit them, or click the element once and press the key again to remove it."
+       )
+     )}
+  end
+
+  defp selection_shortcut(key, params, socket) do
+    case seen_selection(socket.assigns.token, params["node_id"]) do
+      {:ok, id} ->
+        shortcut(key, assign(socket, :selection, id))
+
+      :behind ->
+        {:noreply,
+         put_flash(
+           socket,
+           :info,
+           gettext(
+             "Nothing was changed: the editor had not caught up with that selection yet. Press the key again."
+           )
+         )}
+
+      :none ->
+        {:noreply, needs_selection(socket)}
+    end
+  end
+
+  defp seen_selection(token, seen) when is_binary(seen) and seen != "" do
+    case EditorSession.fetch(token) do
+      {:ok, %{selection: ^seen}} -> {:ok, seen}
+      {:ok, %{tree: tree}} -> (Tree.get(tree, seen) && :behind) || :none
+      :error -> :none
+    end
+  end
+
+  defp seen_selection(_token, _nothing_seen), do: :none
 
   # NOTHING SELECTED IS NOT A REJECTED EDIT. Every command here is reachable with an empty selection
   # — the palette draws each one as a plain button and the shortcut table sends Backspace and ⌘D
@@ -7469,9 +7531,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
           and icon in the chrome read as scenery — nothing said "you can click this". A disabled one
           says so instead. Anything that wants a different cursor (the drag grips, the palette's
           grab strip) sets its own further down the tree and wins. --%>
+    <%!-- `data-selection` is what the chrome last drew as selected: a key pressed out here names it,
+          so it acts on what the author was looking at (`selection_shortcut/3`). --%>
     <div
       id="pb-root"
       phx-hook="PbShortcuts"
+      {%{"data-selection" => @selection}}
       class="flex h-screen flex-col overflow-hidden bg-[#f6f5f2] font-[Manrope,ui-sans-serif,system-ui,sans-serif] text-[#1b1a18] antialiased [&_button]:cursor-pointer [&_button:disabled]:cursor-not-allowed [[data-theme=dark]_&]:[filter:invert(0.92)_hue-rotate(180deg)] [[data-theme=dark]_&]:[transition:filter_.3s_ease]"
     >
       <Panels.top_bar

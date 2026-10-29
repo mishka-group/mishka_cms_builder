@@ -1531,7 +1531,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       assert %{label: "Hidden from visitors"} = hd(editor(view).past)
 
       render_click(view, "select", %{"id" => p.id})
-      render_click(view, "shortcut", %{"key" => "visibility"})
+      render_click(view, "shortcut", %{"key" => "visibility", "node_id" => p.id})
       refute Visibility.hidden?(node_with_tag(view, "p"))
       assert %{label: "Shown to visitors"} = hd(editor(view).past)
 
