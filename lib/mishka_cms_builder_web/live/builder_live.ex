@@ -466,8 +466,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign(:section, section)
     # BACK TO WHERE THE AUTHOR CAME FROM. A component opened from a page's Inspector carries that
     # page's builder in `return_to`, so editing what the page uses is a trip rather than a detour
-    # through the component list. See `Paths.back_path/2` for why it is matched, not trusted.
-    |> assign(:back_path, Paths.back_path(section, params["return_to"]))
+    # through the component list. See `Paths.back_path/2` for why it is matched, not trusted. The
+    # list is outside the editor's live_session and gets a plain link; that builder keeps a live one.
+    |> assign(:back_link, link_attrs(socket, Paths.back_path(section, params["return_to"])))
     |> assign(:record, record)
     # ASKED OF THE URL, not of the record. The two agree by the time this runs — `mount_document/3`
     # turns an id that resolves to nothing away — and the URL is the one that says what was MEANT: an
@@ -2097,7 +2098,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:form_cancelled, _resource},
         %{assigns: %{new_document?: true, record: nil, section: section}} = socket
       ) do
-    {:noreply, push_navigate(socket, to: Section.list_path(section))}
+    {:noreply, redirect(socket, to: Section.list_path(section))}
   end
 
   # THE SETTINGS MODAL SAVED, and the editor takes the new name and path.
@@ -2802,13 +2803,39 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     do: put_flash(socket, :info, gettext("Draft mode: every change is kept as you make it."))
 
   defp leaving(socket, "//" <> _elsewhere), do: socket
-  defp leaving(socket, "/" <> _path = to), do: ask_or_go(socket, to)
+
+  defp leaving(socket, "/" <> _path = to) do
+    if String.contains?(to, "\\"), do: socket, else: ask_or_go(socket, to)
+  end
+
   defp leaving(socket, _elsewhere), do: socket
 
   defp ask_or_go(%{assigns: %{stage: :published, dirty?: true}} = socket, to),
     do: assign(socket, :leave_to, to)
 
-  defp ask_or_go(socket, to), do: push_navigate(socket, to: to)
+  defp ask_or_go(socket, to), do: go(socket, to)
+
+  # OUT OF THE EDITOR IS A PAGE LOAD. The editor's routes are a live_session of their own, and
+  # LiveView refuses a live navigation across that boundary: a `push_navigate` to the page list
+  # was refused by the server, logged as "unauthorized live_redirect" by the browser and only then
+  # retried as a page load. The router says which a destination is, so the rest of the admin gets
+  # a redirect and another of the editor's own pages keeps the live navigation — remounted, never
+  # patched, because another document is another editing session.
+  defp go(socket, to) do
+    case navigation_type(socket, to) do
+      :href -> redirect(socket, to: to)
+      _live -> push_navigate(socket, to: to)
+    end
+  end
+
+  # The same answer for a link drawn before anyone clicks it. On the dead render every link is
+  # `href`, which is right for that page; the connected one asks again.
+  defp link_attrs(socket, path) do
+    case navigation_type(socket, path) do
+      :href -> %{href: path}
+      _live -> %{navigate: path}
+    end
+  end
 
   @impl true
   def terminate(_reason, socket) do
@@ -3920,12 +3947,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   def handle_event("leave_anyway", _params, %{assigns: %{leave_to: to}} = socket)
       when is_binary(to),
-      do: {:noreply, push_navigate(socket, to: to)}
+      do: {:noreply, go(socket, to)}
 
   def handle_event("leave_anyway", _params, socket),
     do: {:noreply, assign(socket, :leave_to, nil)}
 
-  # THIS SAVE CANNOT BE ASYNCHRONOUS. `push_navigate` takes the LiveView down and a `start_async`
+  # THIS SAVE CANNOT BE ASYNCHRONOUS. Leaving takes the LiveView down, and a `start_async`
   # task dies with it, so the draft the author just asked for would be a race they lose about half
   # the time. One inline round trip, on the way out, and the flash names what it was kept as.
   #
@@ -3960,7 +3987,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       {:noreply,
        socket
        |> put_flash(:info, gettext("Kept as “%{label}”.", label: draft.label))
-       |> push_navigate(to: to)}
+       |> go(to)}
     else
       _unsaved ->
         {:noreply,
@@ -3986,7 +4013,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     published = save(socket, :published)
 
     case published.assigns.record != before do
-      true -> {:noreply, push_navigate(published, to: to)}
+      true -> {:noreply, go(published, to)}
       false -> {:noreply, assign(published, :leave_to, nil)}
     end
   end
@@ -7543,7 +7570,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         editor={@editor}
         record={@record}
         section={@section}
-        back_path={@back_path}
+        back_link={@back_link}
         current_user={@current_user}
         editors={@editors}
         invite_url={invite_url(assigns)}

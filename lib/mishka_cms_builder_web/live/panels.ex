@@ -617,7 +617,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:editor, :any, required: true)
   attr(:record, :any, default: nil)
   attr(:section, :string, required: true)
-  attr(:back_path, :string, required: true)
+  attr(:back_link, :map, required: true)
   attr(:current_user, :any, default: nil)
   attr(:editors, :list, default: [])
 
@@ -668,7 +668,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       <div data-role="pb-identity" class="flex min-w-0 flex-1 items-center gap-2.5">
         <.link
           id="pb-back"
-          navigate={@back_path}
+          {@back_link}
           class="grid size-[30px] flex-none place-items-center rounded-[9px] bg-[#f2f1ec] text-[#5c5a54] hover:text-[#4f4bcc]"
           title={gettext("Back")}
         >
@@ -3510,7 +3510,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           <.link
             :if={raw_block?(@selected_node)}
             id="pb-raw-block-home"
-            navigate={raw_block_home(@selected_node)}
+            href={raw_block_home(@selected_node)}
             class="inline-flex h-[26px] items-center gap-1.5 self-start rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
           >
             <.icon name={:code} size={12} /> {raw_block_home_label(@selected_node)}
@@ -8032,7 +8032,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               {gettext("Open with this markup")}
             </button>
             <.link
-              navigate={"/admin/dashboard/runtime/#{@section}s"}
+              href={"/admin/dashboard/runtime/#{@section}s"}
               class="rounded-[10px] border border-[#ecebe6] bg-white px-4 py-2.5 text-[12.5px] font-bold text-[#5c5a54] hover:border-[#dcdbf5]"
             >
               {gettext("Back to the list")}
@@ -8295,7 +8295,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         </span>
         <.link
           :if={failure.link}
-          navigate={failure.link}
+          href={failure.link}
           class="flex h-7 flex-none items-center rounded-[8px] border border-[#f0d9d9] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#a33a3a] hover:bg-[#fef7f7]"
         >
           {gettext("See the error")}
@@ -10805,7 +10805,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             </h3>
             <.link
               :for={target <- matching_targets(@goto, @command_query)}
-              navigate={target.path}
+              href={target.path}
               id={"pb-goto-#{target.key}"}
               class="flex w-full items-center gap-[11px] rounded-[10px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2]"
             >
@@ -13788,7 +13788,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
           <span class="flex-1"></span>
           <.link
-            navigate="/admin/dashboard/settings"
+            href="/admin/dashboard/settings"
             class="inline-flex h-[31px] flex-none items-center rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-3.5 text-[11px] font-bold text-white"
           >
             {(@license_token == "" && gettext("Connect")) || gettext("Change")}
@@ -13931,7 +13931,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </div>
         </div>
         <.link
-          navigate="/admin/dashboard/runtime/stylesheets"
+          href="/admin/dashboard/runtime/stylesheets"
           class="inline-flex h-7 flex-none items-center gap-[5px] rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-[11px] text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
         >
           <.icon name={:plus} size={12} /> {gettext("New token")}
@@ -14196,7 +14196,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             </p>
           </div>
           <.link
-            navigate={Section.list_path(@section)}
+            href={Section.list_path(@section)}
             title={gettext("Back to the list")}
             class="grid size-7 flex-none place-items-center rounded-[9px] text-[#a8a5a0] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
           >

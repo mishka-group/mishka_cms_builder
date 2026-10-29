@@ -71,7 +71,8 @@ defmodule MishkaCmsBuilder.MixProject do
       {:ash, "~> 3.37"},
       {:ash_postgres, "~> 2.15"},
       {:ash_phoenix, "~> 2.3"},
-      {:phoenix_live_view, "~> 1.2"},
+      # 1.2.10 brought `navigation_type/2`, which the editor asks before it leaves.
+      {:phoenix_live_view, "~> 1.2 and >= 1.2.10"},
       mishka_dep(:mishka_installer, "~> 0.1.14"),
       {:guarded_struct, "~> 0.1.4"},
       # 0.0.3 is the first core release with the seams this package plugs into
