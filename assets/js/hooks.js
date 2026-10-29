@@ -65,6 +65,8 @@ function spreadHints(accepts, field = false) {
     frame.contentWindow.__pbDropHints = accepts;
     frame.contentWindow.__pbFieldDrag = !!field;
     markFieldDrag(frame.contentDocument, field);
+    // A frame the pointer is already over redraws its line from the verdict (`PbCanvas`).
+    if (accepts) frame.contentWindow.dispatchEvent(new Event("pb:hints"));
   });
 }
 
@@ -1566,6 +1568,11 @@ const PbCanvas = {
     // AUTO-SCROLL AT THE EDGES. `edgeVelocity` decides how fast; one rAF loop applies it for the
     // whole drag and is cancelled the moment the gesture ends. Every scrolled pixel invalidates the
     // cached boxes, so the line keeps pointing where the pointer really is.
+    //
+    // AND THE LINE IS REDRAWN AS THE PAGE MOVES. A pointer resting near an edge sends no `dragover`
+    // of its own — the browser repeats one every few hundred milliseconds, at up to 18px a frame of
+    // scrolling in between — so the line stayed on the box the pointer had been over while another
+    // slid under it, and the drop, which was resolved again, landed somewhere the line never showed.
     let scrollBy = 0;
     let scrolling = null;
 
@@ -1575,6 +1582,7 @@ const PbCanvas = {
       if (scroller) {
         scroller.scrollTop += scrollBy;
         rects.clear();
+        this.reaimDrop?.();
       }
       scrolling = requestAnimationFrame(runScroll);
     };
@@ -1673,6 +1681,30 @@ const PbCanvas = {
         event.target.closest("[data-node-id]"),
         lookup,
       );
+
+    // WHAT THE LINE SAYS IS WHAT THE DROP DOES. `aimed` is the target the line was last drawn for and
+    // `pointer` where the pointer was, both for this frame's part of the gesture. The drop used to be
+    // resolved a second time, against a page that had moved since the line was drawn — scrolled at
+    // an edge, or a verdict arrived — so the two could disagree, and the one the author saw lost.
+    let aimed = null;
+    let pointer = null;
+
+    const forgetAim = () => {
+      aimed = null;
+      pointer = null;
+    };
+
+    // Drawn again for the same pointer, when what is under it or what it may hold has changed.
+    this.reaimDrop = () => {
+      if (!pointer) return;
+
+      const doc = this.el.ownerDocument;
+      const under = doc.elementFromPoint && doc.elementFromPoint(pointer.x, pointer.y);
+      const node = under && under.closest ? under.closest("[data-node-id]") : null;
+
+      aimed = resolveDropAt(pointer, node, lookup);
+      paint(aimed);
+    };
 
     // How far an "inside" outline reaches past the container's own bounds. A box drawn AROUND the
     // container reads as the thing opening up to take the drop; a faint tint over the same box was
@@ -1830,7 +1862,9 @@ const PbCanvas = {
 
       allow(event);
       edgeScroll(event);
-      paint(resolveDrop(event));
+      pointer = { x: event.clientX, y: event.clientY };
+      aimed = resolveDrop(event);
+      paint(aimed);
     };
 
     // `dragleave` bubbles, so crossing from one nested element to the next fires it on the canvas
@@ -1840,16 +1874,23 @@ const PbCanvas = {
       if (event.relatedTarget && this.el.contains(event.relatedTarget)) return;
       stopScroll();
       hideIndicator();
+      forgetAim();
     };
 
     this.onDrop = (event) => {
       event.preventDefault();
+
+      // The spot the line shows, or — for a drop with no `dragover` before it — resolved now, while
+      // the page still has the shape the browser aimed it at: closing the empty containers below
+      // collapses every one of them.
+      const target = aimed || resolveDrop(event);
+
       stopScroll();
       closeEmpties();
       drop();
       hideIndicator();
+      forgetAim();
 
-      const target = resolveDrop(event);
       const payload = { parent_id: target.parent_id, index: target.index };
 
       // The tree, not the screen, decides where this goes — see `resolveDrop`.
@@ -1881,6 +1922,7 @@ const PbCanvas = {
       closeEmpties();
       drop();
       hideIndicator();
+      forgetAim();
       fieldDrag(false);
       this.forgetRects();
     };
@@ -1909,12 +1951,20 @@ const PbCanvas = {
     // until it arrives they fall back to an optimistic yes, which is what the whole gesture used to
     // run on.
     // A reply that lands after this frame's drag ended is dropped, and not handed upwards either.
+    //
+    // The line is drawn again the moment the verdict lands, here or handed in by the chrome
+    // (`pb:hints`, from `spreadHints`): drawn before it, it was the optimistic guess, and a pointer
+    // held still would have kept showing that guess until it moved.
     this.handleEvent("pb:drop-hints", ({ accepts, field }) => {
       if (!this.dragging) return;
       window.__pbDropHints = accepts;
       fieldDrag(field);
+      this.reaimDrop();
       toParent({ kind: "hints", accepts, field: !!field });
     });
+
+    this.onHints = () => this.reaimDrop();
+    window.addEventListener("pb:hints", this.onHints);
 
     this.handleEvent("pb:drop-moved", ({ message }) =>
       window.parent.postMessage({ pb: true, kind: "info", message }, window.origin),
@@ -2118,6 +2168,7 @@ const PbCanvas = {
     this.el.ownerDocument.removeEventListener("scroll", this.forgetRects, true);
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("pb:dragend", this.onDragAway);
+    window.removeEventListener("pb:hints", this.onHints);
     this.indicator?.remove();
   },
 };
