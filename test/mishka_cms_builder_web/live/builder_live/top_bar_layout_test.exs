@@ -108,7 +108,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.TopBarLayoutTest do
 
       # What the words said is still one hover away at any width.
       html = render(view)
-      assert html =~ ~s(title="recorded, not saved to the page")
+      assert html =~ ~s(title="not live until you press Publish")
     end
 
     test "the name is the page's own, however long, and truncates", %{conn: conn, page: page} do

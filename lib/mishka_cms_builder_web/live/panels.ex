@@ -1219,8 +1219,34 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-stage-ways"
             phx-window-keydown={menu_close("#pb-stage-ways")}
             phx-key="escape"
-            class="absolute right-0 top-[38px] z-[70] hidden w-56 rounded-xl border border-[#ecebe6] bg-white p-[5px] shadow-[0_16px_44px_rgba(20,18,26,.2)]"
+            class="absolute right-0 top-[38px] z-[70] hidden w-60 rounded-xl border border-[#ecebe6] bg-white p-[5px] shadow-[0_16px_44px_rgba(20,18,26,.2)]"
           >
+            <%!-- THE ACT ITSELF, ONE CLICK FROM THE MENU. Picking the Publish mode below only
+                  selects; an author who opened this menu to publish chose "Published", got a
+                  banner about recording and saving, and found the button that publishes only
+                  afterwards. This is that button, as the first thing the menu offers, and it does
+                  what the bar's Publish does. Absent while the screen is already the live page,
+                  where it would publish nothing new. --%>
+            <button
+              :if={@applied_stage != :published}
+              type="button"
+              id="pb-stage-publish-now"
+              phx-click={menu_close("#pb-stage-ways") |> JS.push("publish_now")}
+              class="flex w-full items-start gap-[9px] rounded-[9px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2]"
+            >
+              <span class="grid size-[26px] flex-none place-items-center rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] text-white">
+                <.icon name={:rocket} size={13} />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block font-['Space_Grotesk'] text-[12px] font-bold text-[#1b1a18]">
+                  {gettext("Publish now")}
+                </span>
+                <span class="mt-0.5 block text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
+                  {gettext("Puts what you see on the live page, for every visitor.")}
+                </span>
+              </span>
+            </button>
+            <span :if={@applied_stage != :published} class="my-[3px] block h-px bg-[#f0efea]"></span>
             <button
               :if={@drafts_enabled?}
               type="button"
@@ -1241,6 +1267,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               </span>
             </button>
             <span :if={@drafts_enabled?} class="my-[3px] block h-px bg-[#f0efea]"></span>
+            <span class="block px-2.5 pb-0.5 pt-1.5 text-[9.5px] font-bold uppercase tracking-[0.07em] text-[#a8a5a0]">
+              {gettext("While you work")}
+            </span>
             <button
               :for={{key, label, hint} <- stages()}
               type="button"
@@ -8161,7 +8190,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         </span>
         <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
           {gettext(
-            "Publish mode — these changes are not being saved. Publish to make them live, or keep them as a draft."
+            "Publish mode: these changes are not on the live page or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
           )}
         </span>
         <button
@@ -8199,6 +8228,15 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 "whitespace-nowrap",
                 (crumb.id == @selection && "font-bold text-[#1b1a18]") ||
                   "text-[#6d6a63] hover:text-[#4f4bcc]"
+        <%!-- The bar names Publish, so it carries it: the same press as the top bar's button. --%>
+        <button
+          type="button"
+          id="pb-publish-bar-publish"
+          phx-click="apply_stage"
+          class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:opacity-95"
+        >
+          {gettext("Publish")}
+        </button>
               ]}
             >
               {FormPlacement.form_name(crumb) || node_label(crumb)}
@@ -15064,11 +15102,16 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp frame_width(:mobile), do: "390px"
   defp frame_width(_device), do: "100%"
 
-  # Published first: the menu is a choice about visibility, and the consequential option leads.
+  # WHAT EACH MODE DOES TO THE WORK, said before it is chosen. "Published" over "Visitors can see
+  # this page" read as the act, and choosing it did not publish: it stopped the draft and waited for
+  # a press. So the two are named as the modes they are, each with what happens next; publishing is
+  # "Publish now", above them.
   defp stages do
     [
-      {:published, gettext("Published"), gettext("Visitors can see this page.")},
-      {:draft, gettext("Draft"), gettext("Only your team can see it. Nothing goes live.")}
+      {:published, gettext("Publish mode"),
+       gettext("Stops saving a draft as you work. Nothing goes live until you press Publish.")},
+      {:draft, gettext("Draft mode"),
+       gettext("Saves a draft as you work. Visitors see nothing until you publish.")}
     ]
   end
 
@@ -15374,10 +15417,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   defp section_extension(_section), do: "heex"
 
-  # PUBLISHED STAGE IS NOT SILENT. Nothing is written to the page there, deliberately — but the work
-  # IS recorded, and showing nothing at all is what made that stage read as "the editor stopped
-  # caring". Same slot as draft's "saved", one different word, so the two stages read as siblings.
-  defp status_label(%{stage: :published}), do: gettext("recorded, not saved to the page")
+  # PUBLISHED STAGE IS NOT SILENT. Nothing is written to the page there, deliberately, and showing
+  # nothing at all is what made that stage read as "the editor stopped caring". Same slot as draft's
+  # "saved", and it says what will put the work on the page rather than what has not.
+  defp status_label(%{stage: :published}), do: gettext("not live until you press Publish")
   defp status_label(%{dirty?: true}), do: gettext("unsaved changes")
   defp status_label(%{saved_at: nil}), do: gettext("not saved yet")
   defp status_label(_assigns), do: gettext("saved")

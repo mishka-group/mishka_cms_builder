@@ -2790,7 +2790,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         socket,
         :info,
         gettext(
-          "Publish mode: changes are recorded but not saved to the page. It goes live when you press Publish."
+          "Publish mode: nothing is saved as you work now. Press Publish to put your changes on the live page; until then they are only recorded in the page’s history."
         )
       )
 
@@ -3251,6 +3251,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   def handle_event("apply_stage", _params, socket),
     do: {:noreply, socket |> save_draft_now() |> flash_drafted()}
+
+  # THE STAGE MENU'S "Publish now": the same write as the button, whichever mode is selected. The
+  # mode is the author's to keep; publishing does not need them to change it first.
+  def handle_event("publish_now", _params, socket), do: {:noreply, save(socket, :published)}
 
   # THE WAY OUT OF PUBLISH MODE WITHOUT LOSING THE WORK. Publish mode writes nothing until Publish is
   # pressed, which is the point of it — but an author who got there by accident needs somewhere for

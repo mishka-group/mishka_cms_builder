@@ -1300,8 +1300,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       # Publish mode saves nothing to the page, but it is no longer true that nothing is kept: the
       # change still reaches the record of who did what, which is the whole point of having one.
       published = render_click(view, "set_stage", %{"stage" => "published"})
-      assert published =~ "recorded but not saved to the page"
-      assert published =~ "when you press Publish"
+      assert published =~ "nothing is saved as you work now"
+      assert published =~ "Press Publish to put your changes on the live page"
+      assert published =~ "only recorded in the page’s history"
 
       drafted = render_click(view, "set_stage", %{"stage" => "draft"})
       assert drafted =~ "every change is kept as you make it"
