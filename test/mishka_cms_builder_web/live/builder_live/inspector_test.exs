@@ -1058,6 +1058,75 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert live_assigns(view).example_tab == :wizard
     end
 
+    # AND THERE IS NO EMPTY EXAMPLES TAB BESIDE IT. Every component of the blog kit is this shape,
+    # and the tab next to the Wizard led to an empty list, a frame saying "This example is no longer
+    # available." and "0 variants" — the rule `Wizard.offers?/1` keeps for the other tab.
+    test "a component with only options offers no Examples tab", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "wizardonly",
+        template: "<div class={@variant}>x</div>",
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "default", "values" => ["default", "outline"]}
+          }
+        ],
+        extra: %{}
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "wizardonly")
+
+      assert has_element?(view, "#pb-wizard-preview-desktop")
+      refute has_element?(view, "#pb-example-tab-examples")
+      refute has_element?(view, "#pb-example-tab-wizard"), "a switch with one side is no switch"
+      refute has_element?(view, ~s(iframe[src*="/example/wizardonly/"]))
+    end
+
+    test "a component with options and examples offers both tabs", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "bothways",
+        template: "<div class={@variant}>x</div>",
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "default", "values" => ["default", "outline"]}
+          }
+        ],
+        extra: %{
+          "examples" => [
+            %{
+              "source" =>
+                ~s(<.component component_name="bothways" site="#{site.name}" variant="outline">Outlined</.component>)
+            }
+          ]
+        }
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "bothways")
+
+      assert has_element?(view, "#pb-example-tab-examples")
+      assert has_element?(view, "#pb-example-tab-wizard")
+
+      view |> element("#pb-example-tab-examples") |> render_click()
+
+      assert has_element?(view, "#pb-example-0")
+      assert has_element?(view, ~s(iframe[src$="/example/bothways/0"]))
+    end
+
     test "a component with examples still opens on Examples", %{
       conn: conn,
       page: page,

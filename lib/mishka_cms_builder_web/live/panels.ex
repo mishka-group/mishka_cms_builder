@@ -12202,6 +12202,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       |> assign(:example, Enum.at(assigns.entry.examples, assigns.example_index))
       |> assign(:docs_url, docs_url(assigns.entry))
       |> assign(:wizard?, Wizard.offers?(assigns.entry))
+      |> assign(:examples?, examples?(assigns.entry))
       |> assign_new(:preset?, fn -> false end)
       |> assign_new(:components, fn -> [] end)
 
@@ -12241,7 +12242,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             </div>
 
             <div
-              :if={@docs_url || @wizard?}
+              :if={@docs_url || (@wizard? and @examples?)}
               data-role="modal-head-actions"
               class="flex flex-wrap items-center gap-2"
             >
@@ -12258,8 +12259,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               </a>
 
               <%!-- Two ways to get the same component onto the page: one the kit already wrote, or one
-                    built from its own options. They share the preview, the code pane and Insert. --%>
-              <div :if={@wizard?} class="flex flex-none rounded-[9px] bg-[#f2f1ec] p-0.5">
+                    built from its own options. They share the preview, the code pane and Insert.
+                    Offered only when there are both: a component with options and no examples
+                    gets the Wizard alone, as one with examples and no options gets Examples. --%>
+              <div
+                :if={@wizard? and @examples?}
+                class="flex flex-none rounded-[9px] bg-[#f2f1ec] p-0.5"
+              >
                 <button
                   type="button"
                   id="pb-example-tab-wizard"
@@ -12549,6 +12555,15 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     </div>
     """
   end
+
+  # NO EXAMPLES TAB WITHOUT EXAMPLES, the rule `Wizard.offers?/1` already keeps for the Wizard tab. A
+  # component with option lists and no example markup — every component of the blog kit — opens on
+  # the Wizard, and the Examples tab beside it led to an empty list, a preview badge reading
+  # "Example 1", a frame saying "This example is no longer available." and "0 variants". The palette's
+  # flag answers before the curated list has loaded; the list answers once it has, which is how an
+  # example a plugin adds through `builder:examples` is counted.
+  defp examples?(entry),
+    do: entry.examples != [] or PaletteEntry.optional(entry, :has_examples?) == true
 
   # The examples pane keeps its stable id. The wizard's carries a hash of the choices, because
   # LiveView reuses an iframe with an unchanged id and the whole point of a pick is that the preview
