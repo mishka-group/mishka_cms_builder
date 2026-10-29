@@ -21,6 +21,13 @@ config :mishka_cms_core,
   endpoint: MishkaCmsBuilder.TestEndpoint,
   host_app: :mishka_cms_builder
 
+# THE EDITOR'S STRICT CHECKS RAISE outside production, as they do in the core's own suite.
+# `MishkaCmsCore.Runtime.Authoring.Strict` compiles them in when `Mix.env()` is not `:prod` at the
+# time the core is compiled, and here the core is a dependency, which Mix compiles in `:prod`
+# whatever this project runs in. Without this line every `Strict.check!/3` and
+# `Strict.violation!/2` in this package compiled to nothing.
+config :mishka_cms_core, builder_strict: config_env() != :prod
+
 config :ash_json_api,
   show_public_calculations_when_loaded?: false,
   authorize_update_destroy_with_error?: true
