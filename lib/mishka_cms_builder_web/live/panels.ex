@@ -157,6 +157,21 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   def quiet_scroll(:dark), do: @quiet_scroll_dark
   def quiet_scroll(:light), do: @quiet_scroll_light
 
+  # A DOCUMENT IS NOT CHROME. The dark theme is a filter on `#pb-root`, `invert(0.92)
+  # hue-rotate(180deg)`, and a filter reaches everything drawn inside the element, an iframe's
+  # document included. So every frame that shows a page showed it inverted: a section set to
+  # `#f2f1ec` came out near-black, while the kit's components, which answer the frame's own
+  # `data-theme="dark"` with their dark variant, came out light again under the same filter. The
+  # page looked half right, and the wrong half was the author's own colour.
+  #
+  # So a frame takes the exact inverse of the root's filter: the hue turned back, then the inversion
+  # undone. `invert(1)` alone would leave every tone squeezed into 8% to 92%, and `contrast(1 / 0.84)`
+  # stretches it back. The root's own range is the one limit left: its filter never returns more than
+  # 92%, so pure white reaches the screen as `#ebebeb`.
+  @document_frame "[[data-theme=dark]_&]:[filter:hue-rotate(180deg)_invert(1)_contrast(1.1905)]"
+
+  defp document_frame, do: @document_frame
+
   @doc false
   def drawer_in, do: JS.transition(@drawer_in, time: 200)
 
@@ -1908,7 +1923,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             title={gettext("What this component looks like")}
             sandbox="allow-same-origin"
             scrolling="no"
-            class="pointer-events-none absolute left-0 top-0 origin-top-left border-0 opacity-0 transition-opacity duration-150"
+            class={[
+              "pointer-events-none absolute left-0 top-0 origin-top-left border-0 opacity-0 transition-opacity duration-150",
+              document_frame()
+            ]}
           ></iframe>
         </div>
         <div class="flex items-center gap-1.5 border-t border-[#f0efea] bg-[#fbfbf9] px-3 py-[7px] text-[9.5px] font-semibold text-[#a8a49b]">
@@ -8414,7 +8432,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         id={"pb-frame-#{@device}"}
         title={gettext("Canvas")}
         src={"/admin/dashboard/runtime/builder-canvas/#{@token}"}
-        class="relative block h-full w-full border-0"
+        class={["relative block h-full w-full border-0", document_frame()]}
       ></iframe>
       <.frame_loading :if={!@token} />
     </div>
@@ -8478,7 +8496,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id={"pb-frame-#{width}"}
             title={gettext("Canvas at %{width}px", width: width)}
             src={"/admin/dashboard/runtime/builder-canvas/#{@token}"}
-            class="relative block border-0"
+            class={["relative block border-0", document_frame()]}
             style={"width:#{width}px;height:#{frame_viewport(width)}px;zoom:var(--pb-frame-zoom)"}
           ></iframe>
           <div
@@ -12529,7 +12547,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 src={preview_src(@example_tab, @token, @entry, @example_index)}
                 class={[
                   "relative h-full max-w-full flex-none rounded-[12px] border-0 bg-white transition-[width] duration-200",
-                  example_stage_class(@example_device)
+                  example_stage_class(@example_device),
+                  document_frame()
                 ]}
               ></iframe>
             </div>
