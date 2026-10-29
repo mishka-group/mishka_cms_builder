@@ -14026,18 +14026,30 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     <div
       id="pb-new-document"
       class="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-[#17161a]/45 p-6 py-[8vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      phx-mounted={modal_in("#pb-new-document > section")}
+      phx-mounted={
+        modal_in("#pb-new-document > section")
+        |> JS.focus_first(to: "#pb-new-document form")
+      }
     >
-      <section class="w-[680px] max-w-[94vw] rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_30px_80px_rgba(20,18,26,.3)]">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pb-new-document-title"
+        aria-describedby="pb-new-document-note"
+        class="w-[680px] max-w-[94vw] rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_30px_80px_rgba(20,18,26,.3)]"
+      >
         <div class="flex items-start gap-3 border-b border-[#f0efea] px-5 py-[15px]">
           <span class="grid size-9 flex-none place-items-center rounded-[11px] bg-[#f2f1fc] text-[#4f4bcc]">
             <.icon name={@glyph} size={16} />
           </span>
           <div class="min-w-0 flex-1">
-            <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
+            <h2
+              id="pb-new-document-title"
+              class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]"
+            >
               {gettext("Name your %{label}", label: String.downcase(translate(@label)))}
             </h2>
-            <p class="mt-1 text-[11.5px] font-medium text-[#6d6a63]">
+            <p id="pb-new-document-note" class="mt-1 text-[11.5px] font-medium text-[#6d6a63]">
               {gettext("Just enough to save it. You pick the structure next.")}
             </p>
           </div>
@@ -14058,6 +14070,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             current_user={@current_user}
             hidden_fields={@hidden_fields}
             defaults={%{"active" => false}}
+    <%!-- A DIALOG, SAID AS ONE. The editor behind it is the whole page, and a screen reader was
+          handed every palette card and canvas tool alongside the three fields that are the only
+          thing to do here. `aria-modal` says the rest is out of reach, the heading names the box,
+          and the first field takes the focus, so typing starts where the work is. --%>
           />
         </div>
       </section>
