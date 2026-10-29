@@ -6232,89 +6232,100 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   #
   # `Styles.pictures/1` is the single vocabulary both panels read, so the toolbar and the Inspector
   # cannot offer different sets of the same property.
+  #
+  # GAP COMES SECOND, ABOVE EVERY ROW A CHOICE ADDS. Choosing Row brings Direction, Spread, Align and
+  # Wrap, and choosing Grid brings Columns. Drawn above Gap, they pushed it four rows down in the
+  # click that chose Row, so the next click aimed at a gap preset landed on Direction, which had moved
+  # into its place. Below Gap, what a choice adds appears under the controls already on screen and
+  # moves none of them.
   defp layout_pictures(assigns) do
     ~H"""
     <div class="flex flex-col gap-2.5">
-      <div
-        :for={{prop, label} <- picture_rows(@node, @bucket)}
-        id={"pb-style-pics-#{@bucket}-#{prop}"}
-      >
-        <div class="mb-1.5 flex items-center gap-1.5">
-          <span class="text-[10.5px] font-semibold text-[#6d6a63]">{translate(label)}</span>
-          <span
-            :if={override?(@node, @bucket, prop)}
-            title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
-            class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
-          />
-          <.overruled covered={@covered} prop={prop} />
-          <span class="flex-1"></span>
-          <button
-            :if={override?(@node, @bucket, prop)}
-            type="button"
-            id={"pb-style-clear-#{@bucket}-#{prop}"}
-            phx-click="op"
-            phx-value-kind="set_style"
-            phx-value-node_id={@node.id}
-            phx-value-bucket={@bucket}
-            phx-value-prop={prop}
-            value=""
-            title={gettext("Clear this %{bucket} override", bucket: source_word(@bucket))}
-            class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
-          >
-            {gettext("Reset")}
-          </button>
-          <span class="truncate text-[9.5px] font-bold text-[#a8a5a0]">
-            {picture_hint(@node, @bucket, prop)}
-          </span>
-        </div>
+      <.picture_row
+        node={@node}
+        bucket={@bucket}
+        covered={@covered}
+        prop="display"
+        label={gettext_noop("Layout")}
+      />
+
+      <%!-- Gap is free-form — any length is legal — but the row of names is what stops someone
+            typing `16px` to get the thing every design system already calls medium. The field below
+            still takes anything, and the two write the same override. --%>
+      <div id={"pb-style-gap-row-#{@bucket}"}>
+        <.row_heading
+          node={@node}
+          bucket={@bucket}
+          covered={@covered}
+          prop="gap"
+          label={gettext_noop("Gap")}
+          hint={effective_style(@node, @bucket, "gap") || gettext("unset")}
+        />
         <div class="flex flex-wrap gap-1">
-          <%!-- CLICKING THE CHOSEN ONE CLEARS IT. The value the button sends is `""` when it is
-                already the current one, so the same press that set an override takes it off again —
-                no separate reset dot for a control this small, and the server does no extra work to
-                decide it. --%>
           <button
-            :for={{value, title, tailwind, _css, bars} <- Styles.pictures(prop)}
+            :for={{value, label} <- Styles.gap_presets()}
             type="button"
-            id={"pb-style-pic-#{@bucket}-#{prop}-#{value}"}
+            id={"pb-style-gap-#{@bucket}-#{label}"}
             phx-click="op"
             phx-value-kind="set_style"
             phx-value-node_id={@node.id}
             phx-value-bucket={@bucket}
-            phx-value-prop={prop}
-            value={(own_style(@node, @bucket, prop) == value && "") || value}
-            title={translate(title)}
-            aria-label={translate(title)}
-            aria-pressed={to_string(own_style(@node, @bucket, prop) == value)}
+            phx-value-prop="gap"
+            value={(own_style(@node, @bucket, "gap") == value && "") || value}
+            title={gettext("Gap %{value}", value: value)}
+            aria-pressed={to_string(own_style(@node, @bucket, "gap") == value)}
             class={[
-              "flex h-[26px] w-[34px] flex-none rounded-[7px] border p-[4px]",
-              (own_style(@node, @bucket, prop) == value && "border-[#5b57d6] bg-[#f2f1fc]") ||
-                "border-[#ecebe6] bg-[#faf9f6] hover:border-[#c3c1f0]"
+              "h-[26px] flex-none rounded-[7px] border px-2 font-['Space_Grotesk'] text-[10px] font-bold",
+              (own_style(@node, @bucket, "gap") == value &&
+                 "border-[#5b57d6] bg-[#f2f1fc] text-[#4f4bcc]") ||
+                "border-[#ecebe6] bg-[#faf9f6] text-[#6d6a63] hover:border-[#c3c1f0]"
             ]}
           >
-            <span class={["size-full gap-[1.5px]", tailwind, swatch_extra(prop)]}>
-              <span
-                :for={index <- 1..bars//1}
-                class={["rounded-[1.5px]", bar_tone(prop, index), bar_shape(prop, index)]}
-              ></span>
-            </span>
+            {label}
           </button>
         </div>
+        <.field_form
+          id={"pb-style-form-#{@bucket}-gap"}
+          class="mt-1.5"
+          phx-value-kind="set_style"
+          phx-value-node_id={@node.id}
+          phx-value-bucket={@bucket}
+          phx-value-prop="gap"
+        >
+          <input
+            type="text"
+            id={"pb-style-#{@bucket}-gap"}
+            name="value"
+            value={own_style(@node, @bucket, "gap")}
+            placeholder={effective_style(@node, @bucket, "gap") || gettext("any length, e.g. 2rem")}
+            phx-debounce="350"
+            class={[
+              "h-8 w-full rounded-[9px] border px-2.5 font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#1b1a18] outline-none",
+              (own_style(@node, @bucket, "gap") && "border-[#c3c1f0] bg-white") ||
+                "border-[#ecebe6] bg-[#faf9f6]"
+            ]}
+          />
+        </.field_form>
       </div>
 
+      <.picture_row
+        :for={{prop, label} <- flex_rows(@node, @bucket)}
+        node={@node}
+        bucket={@bucket}
+        covered={@covered}
+        prop={prop}
+        label={label}
+      />
+
       <div :if={grid?(@node, @bucket)} id={"pb-style-cols-#{@bucket}"}>
-        <div class="mb-1.5 flex items-center gap-1.5">
-          <span class="text-[10.5px] font-semibold text-[#6d6a63]">{gettext("Columns")}</span>
-          <span
-            :if={override?(@node, @bucket, "grid-cols")}
-            title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
-            class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
-          />
-          <.overruled covered={@covered} prop="grid-cols" />
-          <span class="flex-1"></span>
-          <span class="flex-none text-[9.5px] font-semibold text-[#a8a5a0]">
-            {effective_style(@node, @bucket, "grid-cols") || gettext("unset")}
-          </span>
-        </div>
+        <.row_heading
+          node={@node}
+          bucket={@bucket}
+          covered={@covered}
+          prop="grid-cols"
+          label={gettext_noop("Columns")}
+          hint={effective_style(@node, @bucket, "grid-cols") || gettext("unset")}
+        />
 
         <div class="flex flex-wrap gap-[7px]">
           <button
@@ -6369,88 +6380,116 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           />
         </.field_form>
       </div>
+    </div>
+    """
+  end
 
-      <%!-- Gap is free-form — any length is legal — but the row of names is what stops someone
-            typing `16px` to get the thing every design system already calls medium. The field below
-            still takes anything, and the two write the same override. --%>
-      <div>
-        <div class="mb-1.5 flex items-center gap-1.5">
-          <span class="text-[10.5px] font-semibold text-[#6d6a63]">{gettext("Gap")}</span>
-          <span
-            :if={override?(@node, @bucket, "gap")}
-            title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
-            class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
-          />
-          <.overruled covered={@covered} prop="gap" />
-          <span class="flex-1"></span>
-          <button
-            :if={override?(@node, @bucket, "gap")}
-            type="button"
-            id={"pb-style-clear-#{@bucket}-gap"}
-            phx-click="op"
-            phx-value-kind="set_style"
-            phx-value-node_id={@node.id}
-            phx-value-bucket={@bucket}
-            phx-value-prop="gap"
-            value=""
-            title={gettext("Clear this %{bucket} override", bucket: source_word(@bucket))}
-            class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
-          >
-            {gettext("Reset")}
-          </button>
-          <span class="truncate text-[9.5px] font-bold text-[#a8a5a0]">
-            {effective_style(@node, @bucket, "gap") || gettext("unset")}
-          </span>
-        </div>
-        <div class="flex flex-wrap gap-1">
-          <button
-            :for={{value, label} <- Styles.gap_presets()}
-            type="button"
-            id={"pb-style-gap-#{@bucket}-#{label}"}
-            phx-click="op"
-            phx-value-kind="set_style"
-            phx-value-node_id={@node.id}
-            phx-value-bucket={@bucket}
-            phx-value-prop="gap"
-            value={(own_style(@node, @bucket, "gap") == value && "") || value}
-            title={gettext("Gap %{value}", value: value)}
-            aria-pressed={to_string(own_style(@node, @bucket, "gap") == value)}
-            class={[
-              "h-[26px] flex-none rounded-[7px] border px-2 font-['Space_Grotesk'] text-[10px] font-bold",
-              (own_style(@node, @bucket, "gap") == value &&
-                 "border-[#5b57d6] bg-[#f2f1fc] text-[#4f4bcc]") ||
-                "border-[#ecebe6] bg-[#faf9f6] text-[#6d6a63] hover:border-[#c3c1f0]"
-            ]}
-          >
-            {label}
-          </button>
-        </div>
-        <.field_form
-          id={"pb-style-form-#{@bucket}-gap"}
-          class="mt-1.5"
+  attr(:node, :any, required: true)
+  attr(:bucket, :atom, required: true)
+  attr(:covered, :map, required: true)
+  attr(:prop, :string, required: true)
+  attr(:label, :string, required: true, doc: "a msgid, translated here")
+
+  # One property drawn as pictures under its heading.
+  defp picture_row(assigns) do
+    ~H"""
+    <div id={"pb-style-pics-#{@bucket}-#{@prop}"}>
+      <.row_heading
+        node={@node}
+        bucket={@bucket}
+        covered={@covered}
+        prop={@prop}
+        label={@label}
+        hint={picture_hint(@node, @bucket, @prop)}
+      />
+      <div class="flex flex-wrap gap-1">
+        <%!-- CLICKING THE CHOSEN ONE CLEARS IT. The value the button sends is `""` when it is
+              already the current one, so the same press that set an override takes it off again,
+              and the server does no extra work to decide it. --%>
+        <button
+          :for={{value, title, tailwind, _css, bars} <- Styles.pictures(@prop)}
+          type="button"
+          id={"pb-style-pic-#{@bucket}-#{@prop}-#{value}"}
+          phx-click="op"
           phx-value-kind="set_style"
           phx-value-node_id={@node.id}
           phx-value-bucket={@bucket}
-          phx-value-prop="gap"
+          phx-value-prop={@prop}
+          value={(own_style(@node, @bucket, @prop) == value && "") || value}
+          title={translate(title)}
+          aria-label={translate(title)}
+          aria-pressed={to_string(own_style(@node, @bucket, @prop) == value)}
+          class={[
+            "flex h-[26px] w-[34px] flex-none rounded-[7px] border p-[4px]",
+            (own_style(@node, @bucket, @prop) == value && "border-[#5b57d6] bg-[#f2f1fc]") ||
+              "border-[#ecebe6] bg-[#faf9f6] hover:border-[#c3c1f0]"
+          ]}
         >
-          <input
-            type="text"
-            id={"pb-style-#{@bucket}-gap"}
-            name="value"
-            value={own_style(@node, @bucket, "gap")}
-            placeholder={effective_style(@node, @bucket, "gap") || gettext("any length, e.g. 2rem")}
-            phx-debounce="350"
-            class={[
-              "h-8 w-full rounded-[9px] border px-2.5 font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#1b1a18] outline-none",
-              (own_style(@node, @bucket, "gap") && "border-[#c3c1f0] bg-white") ||
-                "border-[#ecebe6] bg-[#faf9f6]"
-            ]}
-          />
-        </.field_form>
+          <span class={["size-full gap-[1.5px]", tailwind, swatch_extra(@prop)]}>
+            <span
+              :for={index <- 1..bars//1}
+              class={["rounded-[1.5px]", bar_tone(@prop, index), bar_shape(@prop, index)]}
+            ></span>
+          </span>
+        </button>
       </div>
     </div>
     """
   end
+
+  attr(:node, :any, required: true)
+  attr(:bucket, :atom, required: true)
+  attr(:covered, :map, required: true)
+  attr(:prop, :string, required: true)
+  attr(:label, :string, required: true, doc: "a msgid, translated here")
+  attr(:hint, :string, required: true, doc: "what the property reads as right now")
+
+  # A LAYOUT ROW'S HEADING: its name, its marks, its Reset and what it reads as now.
+  #
+  # RESET WHEREVER THIS BUCKET HOLDS THE VALUE, Desktop included. Pressing the chosen picture again
+  # clears it too, but nothing on screen says so, and an author who set Row on a section and wanted
+  # it back found no way to. The DOT stays an override's alone: at Desktop/Normal the value IS the
+  # element's value, and marking it made every styled element look edited.
+  #
+  # ITS HEIGHT IS FIXED. The button is 19px and the name beside it 15, so a heading that grew when one
+  # arrived moved every control under it in the click that set the value. And the hint gives way
+  # rather than the button: `truncate` does nothing to a flex item without `min-w-0`, which will not
+  # shrink below its own text and pushed the row past the panel's edge instead.
+  defp row_heading(assigns) do
+    ~H"""
+    <div class="mb-1.5 flex h-[19px] items-center gap-1.5">
+      <span class="flex-none text-[10.5px] font-semibold text-[#6d6a63]">{translate(@label)}</span>
+      <span
+        :if={override?(@node, @bucket, @prop)}
+        title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
+        class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
+      />
+      <.overruled covered={@covered} prop={@prop} />
+      <span class="flex-1"></span>
+      <button
+        :if={own_style(@node, @bucket, @prop)}
+        type="button"
+        id={"pb-style-clear-#{@bucket}-#{@prop}"}
+        phx-click="op"
+        phx-value-kind="set_style"
+        phx-value-node_id={@node.id}
+        phx-value-bucket={@bucket}
+        phx-value-prop={@prop}
+        value=""
+        title={clear_title(@bucket)}
+        class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
+      >
+        {gettext("Reset")}
+      </button>
+      <span class="min-w-0 truncate text-[9.5px] font-bold text-[#a8a5a0]">{@hint}</span>
+    </div>
+    """
+  end
+
+  defp clear_title(:base), do: gettext("Clear this value")
+
+  defp clear_title(bucket),
+    do: gettext("Clear this %{bucket} override", bucket: source_word(bucket))
 
   @flex_rows [
     {"direction", gettext_noop("Direction")},
@@ -6471,12 +6510,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # on screen: nothing showed it, and the only way to take it off again was to clear the whole
   # bucket. An override doing nothing to the page is a reason to show it, not to hide it — and an
   # authored `items-center` on a `block` element parses into exactly the same state.
-  defp picture_rows(node, bucket) do
-    [
-      {"display", gettext_noop("Layout")}
-      | Enum.filter(@flex_rows, &drawn_row?(node, bucket, elem(&1, 0)))
-    ]
-  end
+  defp flex_rows(node, bucket),
+    do: Enum.filter(@flex_rows, &drawn_row?(node, bucket, elem(&1, 0)))
 
   defp drawn_row?(node, bucket, prop),
     do: flex_row?(node, bucket) or effective_style(node, bucket, prop) != nil
@@ -8193,6 +8228,15 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             "Publish mode: these changes are not on the live page or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
           )}
         </span>
+        <%!-- The bar names Publish, so it carries it: the same press as the top bar's button. --%>
+        <button
+          type="button"
+          id="pb-publish-bar-publish"
+          phx-click="apply_stage"
+          class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:opacity-95"
+        >
+          {gettext("Publish")}
+        </button>
         <button
           type="button"
           id="pb-publish-keep"
@@ -8228,15 +8272,6 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 "whitespace-nowrap",
                 (crumb.id == @selection && "font-bold text-[#1b1a18]") ||
                   "text-[#6d6a63] hover:text-[#4f4bcc]"
-        <%!-- The bar names Publish, so it carries it: the same press as the top bar's button. --%>
-        <button
-          type="button"
-          id="pb-publish-bar-publish"
-          phx-click="apply_stage"
-          class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:opacity-95"
-        >
-          {gettext("Publish")}
-        </button>
               ]}
             >
               {FormPlacement.form_name(crumb) || node_label(crumb)}
@@ -14023,6 +14058,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       |> assign(:resource, Section.resource(assigns.section))
 
     ~H"""
+    <%!-- A DIALOG, SAID AS ONE. The editor behind it is the whole page, and a screen reader was
+          handed every palette card and canvas tool alongside the three fields that are the only
+          thing to do here. `aria-modal` says the rest is out of reach, the heading names the box,
+          and the first field takes the focus, so typing starts where the work is. --%>
     <div
       id="pb-new-document"
       class="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-[#17161a]/45 p-6 py-[8vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -14070,10 +14109,6 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             current_user={@current_user}
             hidden_fields={@hidden_fields}
             defaults={%{"active" => false}}
-    <%!-- A DIALOG, SAID AS ONE. The editor behind it is the whole page, and a screen reader was
-          handed every palette card and canvas tool alongside the three fields that are the only
-          thing to do here. `aria-modal` says the rest is out of reach, the heading names the box,
-          and the first field takes the focus, so typing starts where the work is. --%>
           />
         </div>
       </section>

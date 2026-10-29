@@ -2051,9 +2051,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
                %{base: %{"gap" => "18px"}}
 
-      # No override marker at base: at Desktop/Normal the value IS the element's value, and the
-      # prototype marks a field as overridden only against that baseline.
-      refute has_element?(view, "#pb-style-clear-base-gap")
+      # No override dot at base: at Desktop/Normal the value IS the element's value, and the
+      # prototype marks a field as overridden only against that baseline. It can still be cleared
+      # from its row.
+      refute has_element?(view, "#pb-style-gap-row-base [title='Set for base']")
+      assert has_element?(view, "#pb-style-clear-base-gap")
 
       view |> element("#pb-bp-tablet") |> render_click()
       view |> element("#pb-style-form-tablet-gap") |> render_change(%{"value" => "10px"})
