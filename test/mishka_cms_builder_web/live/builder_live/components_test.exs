@@ -528,6 +528,69 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       assert node_with_tag(view, "figure")
     end
 
+    # A LIVE BLOCK DRAGGED OUT OF A FILTERED PALETTE. An end-to-end run once dragged
+    # `blog-post-detail` onto the canvas just after typing into the palette's search and saw no node
+    # appear. This is that gesture without the browser's timing: the palette filtered, the card's own
+    # drag template read off the card, and the canvas handed it as its `drop` hands it. The stand-in
+    # declares the blog block's attributes; its markup is not what a drop carries.
+    test "a live block dragged from a filtered palette lands on the canvas", %{
+      conn: conn,
+      page: page
+    } do
+      text = fn name, default ->
+        %{"name" => name, "type" => "string", "opts" => %{"default" => default}}
+      end
+
+      create_component!(
+        name: "blog-post-detail",
+        type: "media",
+        stateful: true,
+        template: ~s(<article id={@id} {@rest}>{@idle_text}</article>),
+        attrs: [
+          %{"name" => "slug", "type" => "any", "opts" => %{"default" => nil}},
+          %{"name" => "params", "type" => "any", "opts" => %{"default" => %{}}},
+          %{"name" => "show_cover", "type" => "boolean", "opts" => %{"default" => true}},
+          text.("idle_text", "Pick a post to read it here."),
+          text.("language", ""),
+          %{"name" => "current_user", "type" => "any", "opts" => %{"default" => nil}},
+          %{"name" => "rest", "type" => "global", "opts" => %{}}
+        ],
+        extra: %{"ui_kit" => "mishka_blog"}
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_change(view, "palette_query", %{"value" => "post-detail"})
+
+      [template] =
+        view
+        |> element("#pb-comp-blog-post-detail")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.attribute("data-template")
+
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+      section = node_with_tag(view, "section")
+
+      placed = fn ->
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.filter(&(Node.component_name(&1) == "blog-post-detail"))
+      end
+
+      assert placed.() == []
+
+      render_click(canvas, "drop", %{
+        "template" => template,
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      assert [%Node{parent_id: parent_id}] = placed.()
+      assert parent_id == section.id
+    end
+
     test "the drop index is honoured", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
       section = node_with_tag(view, "section")
