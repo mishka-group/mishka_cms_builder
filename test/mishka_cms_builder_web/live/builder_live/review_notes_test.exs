@@ -161,6 +161,53 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ReviewNotesTest do
     end
   end
 
+  describe "a note's time" do
+    # The thread draws "now", "4m ago", "3h ago"; nothing but a change to the rows re-drew it, so
+    # the author read "now" for as long as nobody else wrote.
+    test "moves on while the thread stays open", %{conn: conn, page: page, site: site} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Fresh", "information")
+      [note] = notes(site, page)
+
+      assert note_time(view, note) == "now"
+
+      MishkaCmsBuilder.Repo.query!(
+        "UPDATE page_comments SET inserted_at = inserted_at - interval '5 minutes' WHERE id = $1",
+        [Ecto.UUID.dump!(note.id)]
+      )
+
+      send(view.pid, :review_clock)
+      render_async(view)
+
+      assert note_time(view, note) == "5m ago"
+    end
+
+    test "a minute with the sheet shut draws nothing", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      send(view.pid, :review_clock)
+      render(view)
+
+      assert live_assigns(view).review_clock == 0
+    end
+
+    defp note_time(view, note) do
+      [_avatar, _name, time | _rest] =
+        view
+        |> element("#pb-comment-#{note.id} > div:first-child")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("span")
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+      time
+    end
+  end
+
   describe "the @ list" do
     test "offers the people on this page first and never the writer", %{
       conn: conn,

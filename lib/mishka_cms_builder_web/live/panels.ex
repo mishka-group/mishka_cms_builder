@@ -14964,16 +14964,18 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     """
   end
 
-  # WHAT THE THREAD IS SCOPED BY, and the two things that make it draw again. A change to either
-  # re-reads the thread: `revision` when a note was written, and `editor_focus` — the note a mention's
-  # link opened the editor at, which the thread marks. Neither names a `PageComment` attribute, so
-  # Gervaz filters by neither; see `Review.thread_params/1`.
+  # WHAT THE THREAD IS SCOPED BY, and the three things that make it draw again. A change to any of
+  # them re-reads the thread: `revision` when a note was written, `clock` when a minute has passed and
+  # the "now" on a note has to become "1m ago", and `editor_focus` — the note a mention's link opened
+  # the editor at, which the thread marks. None of them names a `PageComment` attribute, so Gervaz
+  # filters by none of them; see `Review.thread_params/1`.
   defp thread_path_params(assigns) do
     assigns
     |> review_scope()
     |> Review.thread_params()
     |> Map.merge(%{
       revision: assigns[:review_revision],
+      clock: assigns[:review_clock],
       editor_focus: assigns[:focused_note]
     })
   end

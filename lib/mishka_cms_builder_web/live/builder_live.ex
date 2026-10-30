@@ -284,6 +284,16 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     Enum.each(@review_topics, &Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, &1))
   end
 
+  # A NOTE'S "now" HAS TO BECOME "1m ago" BY ITSELF. The thread draws a coarse relative time, and
+  # nothing re-draws it but a change to the rows — so the author who just posted read "now" for as
+  # long as nobody else wrote, while a colleague who reloaded read "4m ago" for the same note. Once a
+  # minute, the finest step `Comment.ago/2` draws, the thread is told the time moved
+  # (`handle_info(:review_clock, …)`); while the sheet is shut nothing is drawn and the tick costs a
+  # message.
+  @review_tick :timer.minutes(1)
+
+  defp tick_review_clock, do: Process.send_after(self(), :review_clock, @review_tick)
+
   # THE FOLDER RAIL HAS NO COMPONENT TO SUBSCRIBE FOR IT. The Assets sheet's gallery is a Gervaz
   # table, and `Table.Web.Live` subscribes to `media:*` on our behalf — a LiveComponent shares this
   # process, so its `Phoenix.PubSub.subscribe/2` registers US. Nothing does that for categories, so
@@ -425,6 +435,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       subscribe_review()
       subscribe_folders()
       subscribe_asset_builds(editor)
+      tick_review_clock()
     end
 
     socket = load_palette_async(socket, editor, actor)
@@ -962,7 +973,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     # left alone until one of them arrives.
     |> assign_new(:open_bugs, fn -> Review.open_bugs(Panels.review_scope(socket.assigns)) end)
     |> assign_new(:review_revision, fn -> 0 end)
-    # The note a mention's link opened the editor at (`open_note/3`), marked in the thread.
+    # The minutes the Review sheet has been open, counted by `:review_clock`; and the note a
+    # mention's link opened the editor at (`open_note/3`), marked in the thread.
+    |> assign_new(:review_clock, fn -> 0 end)
     |> assign_new(:focused_note, fn -> nil end)
     |> assign_new(:reply_to, fn -> nil end)
     |> assign_new(:find_open, fn -> false end)
@@ -2245,6 +2258,18 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # everybody else.
   def handle_info({:builder_session, _token, {:review, :changed}}, socket),
     do: {:noreply, reread_review(socket)}
+
+  # THE THREAD'S TIMES, a minute on. `@review_clock` rides in the thread's `path_params`, so moving it
+  # re-reads and re-draws the open thread, and every "now" there becomes what it is; see
+  # `tick_review_clock/0`.
+  def handle_info(:review_clock, socket) do
+    tick_review_clock()
+
+    case socket.assigns[:sheet] do
+      :review -> {:noreply, update(socket, :review_clock, &(&1 + 1))}
+      _shut -> {:noreply, socket}
+    end
+  end
 
   # THE THREAD FOLLOWS THE ROWS. `PageComment`'s own `pub_sub` reaches every editor with this
   # document open — including the two people who each opened it from the list and therefore share

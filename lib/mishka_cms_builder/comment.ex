@@ -90,11 +90,17 @@ defmodule MishkaCmsBuilder.Comment do
   "yesterday" (`MishkaCmsCore.Localized.ago/2`).
 
   Deliberately coarse: a review thread wants "roughly when", and a coarse label does not need the
-  page to re-render every second to stay honest.
+  page to re-render every second to stay honest. The thread is re-drawn once a minute, so nothing is
+  finer than a minute: anything younger — or a moment ahead, from a clock a little fast — is "now",
+  where "46s ago" would have sat on screen for most of the minute after.
   """
   @spec ago(t() | map(), DateTime.t()) :: String.t()
-  def ago(%{at: %DateTime{} = at}, now),
-    do: MishkaCmsCore.Localized.ago(at, relative_to: now, format: :narrow)
+  def ago(%{at: %DateTime{} = at}, now) do
+    case DateTime.diff(now, at) < 60 do
+      true -> MishkaCmsCore.Localized.ago(now, relative_to: now, format: :narrow)
+      false -> MishkaCmsCore.Localized.ago(at, relative_to: now, format: :narrow)
+    end
+  end
 
   def ago(_comment, _now), do: ""
 end

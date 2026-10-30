@@ -118,11 +118,21 @@ defmodule MishkaCmsBuilder.CommentTest do
       at = fn seconds -> %{at: DateTime.add(now, -seconds, :second)} end
 
       assert Comment.ago(at.(0), now) == "now"
-      assert Comment.ago(at.(5), now) == "5s ago"
       assert Comment.ago(at.(240), now) == "4m ago"
       assert Comment.ago(at.(3 * 3600), now) == "3h ago"
       assert Comment.ago(at.(86_400), now) == "yesterday"
       assert Comment.ago(at.(2 * 86_400), now) == "2d ago"
+    end
+
+    # THE THREAD IS RE-DRAWN ONCE A MINUTE (`BuilderLive`'s `:review_clock`), so a label finer than
+    # that would sit on "5s ago" for most of a minute. Under a minute is "now".
+    test "is never finer than the minute the thread is re-drawn on", %{now: now} do
+      at = fn seconds -> %{at: DateTime.add(now, -seconds, :second)} end
+
+      assert Comment.ago(at.(5), now) == "now"
+      assert Comment.ago(at.(59), now) == "now"
+      assert Comment.ago(at.(60), now) == "1m ago"
+      assert Comment.ago(at.(-30), now) == "now", "a clock a little ahead is not the future"
     end
 
     test "a note with no timestamp renders nothing rather than raising", %{now: now} do
