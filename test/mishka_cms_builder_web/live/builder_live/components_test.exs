@@ -766,6 +766,25 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       refute has_element?(view, ~s([data-layer-row="#{node_with_tag(view, "span").id}"]))
     end
 
+    # A TABLE PART ARRIVES IN A NEW TABLE, three rows above it, and the rail opens down to the
+    # selection. With the table selected, the cell the author had just dropped was behind a shut row.
+    test "a cell dropped where no table holds it is a row in the rail", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<main><p>Words</p></main>))
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "drop", %{
+        "kind" => "insert",
+        "parent_id" => node_with_tag(view, "main").id,
+        "index" => "1",
+        "template" => "<td>Cell</td>"
+      })
+
+      cell = node_with_tag(view, "td")
+
+      assert has_element?(view, ~s([data-layer-row="#{cell.id}"]))
+      assert editor(view).selection == cell.id
+    end
+
     test "a row with nothing under it says nothing, so no drag waits on it", %{
       conn: conn,
       site: site

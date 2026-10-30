@@ -2878,6 +2878,29 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
       assert length(kit_named(session, "chelekom-table")) == 1
     end
 
+    # THE PART THE AUTHOR HELD IS WHAT IS SELECTED, not the table put around it. The layers rail
+    # opens down to the selection and no further, so with the new table selected the cell sat behind
+    # a shut row, and the Inspector showed the table's properties instead of the cell's.
+    test "the part that arrived is the selection, not the table around it", %{kit: kit} do
+      session = open(~s(<main id="root"></main>), %{components: kit})
+      main = find(session, "main").id
+
+      assert {:relocated, session, _message} =
+               table_drop(session, kit("chelekom-td", "Cell"), main)
+
+      assert [cell] = kit_named(session, "chelekom-td")
+      assert session.selection == cell.id
+
+      assert {:relocated, session, _message} = table_drop(session, "<td>two</td>", main)
+      assert %Node{tag: "td"} = Tree.get(session.tree, session.selection)
+
+      assert {:relocated, session, _message} =
+               EditorSession.place_template(session.token, kit("chelekom-th", "Head"), main)
+
+      assert [head] = kit_named(session, "chelekom-th")
+      assert session.selection == head.id
+    end
+
     test "a raw cell gets plain tags, as far up as it needs" do
       session = open(~s(<div id="root"><table><tbody></tbody></table></div>))
 

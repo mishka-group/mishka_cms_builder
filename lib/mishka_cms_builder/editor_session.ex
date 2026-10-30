@@ -1217,7 +1217,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   # What the author is told once a placement landed, and `builder:form:after_create` for a form it
   # made.
   defp landed(session, outcome) do
-    session = announce_created(session, outcome)
+    session = session |> announce_created(outcome) |> select_part(outcome)
 
     case told(outcome) do
       "" -> {:ok, session}
@@ -1468,7 +1468,7 @@ defmodule MishkaCmsBuilder.EditorSession do
           other: gettext("the element you dropped it on")
         )
 
-      {:relocated, announce_created(session, outcome),
+      {:relocated, session |> announce_created(outcome) |> select_part(outcome),
        joined([placed_instead(side, sentence(reason), where), told(outcome)])}
     else
       _refused -> {:error, reason}
@@ -1875,7 +1875,23 @@ defmodule MishkaCmsBuilder.EditorSession do
   defp placed(session, nil, outcome), do: landed(session, outcome)
 
   defp placed(session, sentence, {_form, table} = outcome),
-    do: {:relocated, announce_created(session, outcome), joined([sentence, held(table)])}
+    do:
+      {:relocated, session |> announce_created(outcome) |> select_part(outcome),
+       joined([sentence, held(table)])}
+
+  # A TABLE PUT AROUND A PART IS NOT WHAT THE AUTHOR PICKED. The insert selects its head, the new
+  # table, and the layers rail opens down to the selection and no further: the cell just dropped sat
+  # behind a shut row, and the Inspector showed the table. The part is selected instead.
+  defp select_part(session, {_form, {:tabled, _depth} = table}) do
+    with %Node{id: id} <- TablePlacement.part(session.tree, session.selection, table),
+         {:ok, selected} <- select(session.token, id) do
+      selected
+    else
+      _kept -> session
+    end
+  end
+
+  defp select_part(session, _outcome), do: session
 
   # Elements are looked up first in `picked_template/1` and their ids are namespaced (`el-…`), so a
   # block id is the only thing that answers here.

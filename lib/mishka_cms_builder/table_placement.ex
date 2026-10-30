@@ -38,8 +38,11 @@ defmodule MishkaCmsBuilder.TablePlacement do
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
-  @typedoc "Whether a placement put a table around what arrived."
-  @type outcome :: :none | :tabled
+  @typedoc """
+  Whether a placement put a table around what arrived, and how many levels deep the part sits in it
+  (`{:tabled, 2}` for a cell in a new row and table).
+  """
+  @type outcome :: :none | {:tabled, pos_integer()}
 
   # What a part is wrapped in, innermost first, up to the table.
   @levels %{
@@ -58,7 +61,7 @@ defmodule MishkaCmsBuilder.TablePlacement do
 
   @doc "What the author is told after a placement, or `nil` when there is nothing to say."
   @spec told(outcome()) :: String.t() | nil
-  def told(:tabled),
+  def told({:tabled, _depth}),
     do: gettext("A table part shows only inside a table, so it arrived in a new one.")
 
   def told(_outcome), do: nil
@@ -75,7 +78,8 @@ defmodule MishkaCmsBuilder.TablePlacement do
 
   @doc """
   The template to insert at `parent` (a node id, `"root"` or `:root`), and whether a table was put
-  around it.
+  around it — with how many levels it put, so the part can be found again under the new head
+  (`part/3`).
 
   Untouched when its first element is not a table part, or when `parent` already holds it.
   Otherwise it is wrapped in the first of its possible wrappers that `parent` takes, or in the whole
@@ -89,7 +93,8 @@ defmodule MishkaCmsBuilder.TablePlacement do
          %Node{} = head <- head(tree),
          [_ | _] = chains <- chains(head, session, opts),
          {:error, _refused} <- fits(session, head, tree, parent, opts) do
-      {fitted(template, chains, site(head), session, parent, opts), :tabled}
+      {wrapper, depth} = fitted(template, chains, site(head), session, parent, opts)
+      {wrapper, {:tabled, depth}}
     else
       _at_home -> {template, :none}
     end
@@ -137,11 +142,28 @@ defmodule MishkaCmsBuilder.TablePlacement do
   defp parent_ref("root"), do: :root
   defp parent_ref(parent), do: parent
 
-  # The first wrapper `parent` takes, or the whole table.
-  defp fitted(template, chains, site, session, parent, opts) do
-    wrappers = Enum.map(chains, &wrapped(template, &1, site, session))
+  @doc """
+  The part a placement put a table around, found under the head that was inserted: `depth` levels
+  down, each wrapper holding only what it was put around. The head itself for `:none`, and `nil` when
+  the tree no longer has that shape.
+  """
+  @spec part(Tree.t(), String.t() | nil, outcome()) :: Node.t() | nil
+  def part(tree, head_id, {:tabled, depth}) do
+    Enum.reduce_while(1..depth//1, Tree.get(tree, head_id), fn _level, node ->
+      case node && Enum.map(node.children, &Tree.get(tree, &1)) do
+        [%Node{} = inner] -> {:cont, inner}
+        _not_a_wrapper -> {:halt, nil}
+      end
+    end)
+  end
 
-    Enum.find(wrappers, List.last(wrappers), fn wrapper ->
+  def part(tree, head_id, _outcome), do: Tree.get(tree, head_id)
+
+  # The first wrapper `parent` takes, or the whole table, with how many levels it has.
+  defp fitted(template, chains, site, session, parent, opts) do
+    wrappers = Enum.map(chains, &{wrapped(template, &1, site, session), length(&1)})
+
+    Enum.find(wrappers, List.last(wrappers), fn {wrapper, _depth} ->
       with {:ok, tree} <- Tree.parse(wrapper),
            %Node{} = head <- head(tree) do
         fits(session, head, tree, parent, opts) == :ok
