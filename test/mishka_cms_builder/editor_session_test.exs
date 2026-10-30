@@ -2772,6 +2772,145 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
 
   # Fields and Send buttons three levels down, card > grid > column, in a core `<.form>` and in a kit
   # wrapper that lends its form through `:let`, on one page.
+  # A PARSER IGNORES A `<td>` OUTSIDE A TABLE, so the core refuses one there. Dropped on a page, a
+  # Table cell card used to leave a layers row with nothing on the canvas and a raw `<td>` on the
+  # published page; now it arrives in the smallest table its landing place takes, the way a field
+  # arrives in a form.
+  describe "a table part dropped where no table holds it" do
+    setup do
+      %{kit: Factory.chelekom_rows(~w(chelekom-table chelekom-tr chelekom-td chelekom-th))}
+    end
+
+    defp kit(name, inner \\ ""),
+      do: ~s(<.component component_name="#{name}" site="Global">#{inner}</.component>)
+
+    defp kit_named(session, name),
+      do: Enum.filter(Tree.walk(session.tree), &(Node.component_name(&1) == name))
+
+    defp table_drop(session, template, parent_id),
+      do:
+        EditorSession.apply_drop(session.token, %{
+          "template" => template,
+          "parent_id" => parent_id,
+          "index" => "0"
+        })
+
+    defp parent_name(session, %Node{parent_id: parent}),
+      do: session.tree |> Tree.get(parent) |> then(&(&1 && (Node.component_name(&1) || &1.tag)))
+
+    test "a kit cell dropped on a page arrives in the kit's own row and table", %{kit: kit} do
+      session = open(~s(<main id="root"><p>hello</p></main>), %{components: kit})
+
+      assert {:relocated, session, message} =
+               table_drop(session, kit("chelekom-td", "Cell"), find(session, "main").id)
+
+      assert message =~ "arrived in a new one"
+      assert [cell] = kit_named(session, "chelekom-td")
+      assert parent_name(session, cell) == "chelekom-tr"
+      assert [row] = kit_named(session, "chelekom-tr")
+      assert parent_name(session, row) == "chelekom-table"
+      assert [table] = kit_named(session, "chelekom-table")
+      assert table.parent_id == find(session, "main").id
+    end
+
+    test "and at the top of the page too", %{kit: kit} do
+      session = open(~s(<main id="root"></main>), %{components: kit})
+
+      assert {:relocated, session, _message} =
+               table_drop(session, kit("chelekom-td", "Cell"), "root")
+
+      assert [table] = kit_named(session, "chelekom-table")
+      assert table.parent_id == nil
+    end
+
+    test "only as much as the landing place needs", %{kit: kit} do
+      session =
+        open(~s(<main id="root">#{kit("chelekom-table", kit("chelekom-tr"))}</main>), %{
+          components: kit
+        })
+
+      [row] = kit_named(session, "chelekom-tr")
+      [table] = kit_named(session, "chelekom-table")
+
+      assert {:ok, session} = table_drop(session, kit("chelekom-td", "Cell"), row.id)
+      assert [cell] = kit_named(session, "chelekom-td")
+      assert cell.parent_id == row.id
+
+      assert {:relocated, session, _message} =
+               table_drop(session, kit("chelekom-td", "Two"), table.id)
+
+      assert length(kit_named(session, "chelekom-tr")) == 2
+      assert length(kit_named(session, "chelekom-table")) == 1
+    end
+
+    test "a raw cell gets plain tags, as far up as it needs" do
+      session = open(~s(<div id="root"><table><tbody></tbody></table></div>))
+
+      assert {:relocated, session, _message} =
+               table_drop(session, "<td>one</td>", find(session, "tbody").id)
+
+      assert html(session) =~ "<tbody><tr><td>one</td></tr></tbody>"
+
+      assert {:relocated, session, _message} =
+               table_drop(session, "<td>two</td>", find(session, "div").id)
+
+      assert html(session) =~ "<table><tbody><tr><td>two</td></tr></tbody></table>"
+    end
+
+    test "a click with a box selected puts the table inside the box", %{kit: kit} do
+      session = open(~s(<main id="root"><section id="band"></section></main>), %{components: kit})
+      band = find(session, "section")
+
+      assert {:relocated, session, _message} =
+               EditorSession.place_template(session.token, kit("chelekom-td", "Cell"), band.id)
+
+      assert [table] = kit_named(session, "chelekom-table")
+      assert table.parent_id == band.id
+    end
+
+    test "the drag's hints take the table it will arrive in, and a move gets no table", %{
+      kit: kit
+    } do
+      session =
+        open(
+          ~s(<main id="root">#{kit("chelekom-table", kit("chelekom-tr", kit("chelekom-td", "x")))}</main>),
+          %{
+            components: kit
+          }
+        )
+
+      main = find(session, "main")
+      [row] = kit_named(session, "chelekom-tr")
+      [cell] = kit_named(session, "chelekom-td")
+
+      {:ok, hints} = EditorSession.drop_hints(session.token, %{"template" => kit("chelekom-td")})
+      assert hints[main.id]
+      assert hints[row.id]
+
+      {:ok, moving} = EditorSession.drop_hints(session.token, %{"node_id" => cell.id})
+      refute moving[main.id]
+      assert moving[row.id]
+
+      assert {:error, message} =
+               EditorSession.apply_drop(session.token, %{
+                 "node_id" => cell.id,
+                 "parent_id" => main.id,
+                 "index" => "0"
+               })
+
+      assert message =~ "goes only inside"
+    end
+
+    test "a component's own markup may open with a cell", %{kit: kit} do
+      {:ok, session} =
+        EditorSession.open(%{section: "component", template: "<td>one</td>", components: kit})
+
+      assert {:ok, session} = table_drop(session, "<td>two</td>", "root")
+      assert html(session) =~ "<td>two</td>"
+      refute html(session) =~ "<table>"
+    end
+  end
+
   describe "forms built deep inside a card" do
     @kit_field %{
       name: "kit-text-field",

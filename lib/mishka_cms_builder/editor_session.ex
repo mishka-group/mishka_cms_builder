@@ -99,6 +99,10 @@ defmodule MishkaCmsBuilder.EditorSession do
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.EditorSession.Journal
   alias MishkaCmsBuilder.Placement
+  alias MishkaCmsBuilder.TablePlacement
+
+  # What a placement did about forms and tables when it did nothing about either.
+  @nothing {:none, :none}
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.Tree.Patch
   alias MishkaCmsCore.Runtime.Authoring.Visibility
@@ -949,7 +953,14 @@ defmodule MishkaCmsBuilder.EditorSession do
         session.tree,
         dragged,
         parent,
-        Keyword.merge([components: session.components, dragged_tree: dragged_tree], extra)
+        Keyword.merge(
+          [
+            components: session.components,
+            dragged_tree: dragged_tree,
+            fragment?: TablePlacement.fragment?(session)
+          ],
+          extra
+        )
       )
 
     case Events.containment(core == :ok, %{
@@ -1014,19 +1025,41 @@ defmodule MishkaCmsBuilder.EditorSession do
   The map is a **hint, and can go stale**: a collaborator can move the tree under a drag in flight.
   `apply_drop/2` is what actually decides.
   """
+  #
+  # A TABLE PART ARRIVING FROM THE PALETTE IS ALSO THE TABLE IT WILL ARRIVE IN. Dropped where no
+  # table holds it, it is put in one (`TablePlacement`), so every place one of its wrappers may go
+  # is a place the line may go too. A part already on the page is moved, never wrapped.
   @spec drop_hints(String.t(), map()) :: {:ok, %{String.t() => boolean()}} | {:error, term()}
   def drop_hints(token, params) do
     with {:ok, session} <- fetch_session(token),
          {:ok, dragged, dragged_tree} <- subject(session, params) do
       {:ok,
-       Placement.hints(session.tree, dragged,
-         components: session.components,
-         dragged_tree: dragged_tree,
-         locked: session.locked,
-         dragged_id: params["node_id"]
+       session
+       |> arrivals(params)
+       |> Enum.map(fn {head, tree} -> hints_for(session, head, tree, params) end)
+       |> Enum.reduce(
+         hints_for(session, dragged, dragged_tree, params),
+         &Map.merge(&2, &1, fn _id, one, other -> one or other end)
        )}
     end
   end
+
+  defp hints_for(session, dragged, dragged_tree, params),
+    do:
+      Placement.hints(session.tree, dragged,
+        components: session.components,
+        dragged_tree: dragged_tree,
+        fragment?: TablePlacement.fragment?(session),
+        locked: session.locked,
+        dragged_id: params["node_id"]
+      )
+
+  defp arrivals(_session, %{"node_id" => id}) when is_binary(id), do: []
+
+  defp arrivals(session, %{"template" => template}) when is_binary(template),
+    do: TablePlacement.arrivals(template, session)
+
+  defp arrivals(_session, _params), do: []
 
   @doc """
   Whether the thing being dragged is a field on a Page — a template whose controls are one field, or
@@ -1169,7 +1202,7 @@ defmodule MishkaCmsBuilder.EditorSession do
         {:ok, session}
 
       {:error, reason} ->
-        beside(token, params, reason, fn _session, spot -> {Map.merge(params, spot), :none} end)
+        beside(token, params, reason, fn _session, spot -> {Map.merge(params, spot), @nothing} end)
     end
   end
 
@@ -1185,14 +1218,17 @@ defmodule MishkaCmsBuilder.EditorSession do
   defp landed(session, outcome) do
     session = announce_created(session, outcome)
 
-    case FormPlacement.told(outcome) do
-      nil -> {:ok, session}
+    case told(outcome) do
+      "" -> {:ok, session}
       note -> {:relocated, session, note}
     end
   end
 
-  defp announce_created(session, :started), do: form_created(session, :started)
-  defp announce_created(session, :wired), do: form_created(session, :wired)
+  # What a placement did about forms and about tables, and what the author is told of both.
+  defp told({form, table}), do: joined([FormPlacement.told(form), TablePlacement.told(table)])
+
+  defp announce_created(session, {:started, _table}), do: form_created(session, :started)
+  defp announce_created(session, {:wired, _table}), do: form_created(session, :wired)
   defp announce_created(session, _outcome), do: session
 
   # The form just made is the selection a placement leaves behind.
@@ -1296,12 +1332,22 @@ defmodule MishkaCmsBuilder.EditorSession do
 
   defp formed(session, %{"kind" => "insert", "template" => template} = params)
        when is_binary(template) do
-    {placed, params, outcome} = FormPlacement.place(template, session, params)
+    {placed, params, outcome} = arriving(template, session, params)
 
     {Map.put(params, "template", placed), outcome}
   end
 
-  defp formed(_session, params), do: {params, :none}
+  defp formed(_session, params), do: {params, @nothing}
+
+  # WHAT ARRIVES IS DECIDED WHERE IT LANDS: the form a field needs (`FormPlacement`), then the table a
+  # table part needs (`TablePlacement`), both for the spot the insert is about to use. Answers the
+  # template, the spot and `{form outcome, table outcome}`.
+  defp arriving(template, session, params) do
+    {template, spot, form} = FormPlacement.place(template, session, params)
+    {template, table} = TablePlacement.wrap(template, session, spot["parent_id"])
+
+    {template, spot, {form, table}}
+  end
 
   defp drop_kind(%{"node_id" => id}) when is_binary(id) and id != "", do: "move"
   defp drop_kind(_params), do: "insert"
@@ -1397,6 +1443,7 @@ defmodule MishkaCmsBuilder.EditorSession do
            Placement.beside(session.tree, dragged, parent_id,
              components: session.components,
              dragged_tree: dragged_tree,
+             fragment?: TablePlacement.fragment?(session),
              locked: session.locked,
              before?: params["fallback_before"] in [true, "true"]
            ),
@@ -1410,7 +1457,7 @@ defmodule MishkaCmsBuilder.EditorSession do
         )
 
       {:relocated, announce_created(session, outcome),
-       joined([placed_instead(side, sentence(reason), where), FormPlacement.told(outcome)])}
+       joined([placed_instead(side, sentence(reason), where), told(outcome)])}
     else
       _refused -> {:error, reason}
     end
@@ -1715,7 +1762,7 @@ defmodule MishkaCmsBuilder.EditorSession do
     with {:ok, session} <- fetch_session(token),
          {:ok, template} <- picked_template(session) do
       {template, spot, outcome} =
-        FormPlacement.place(template, session, %{"parent_id" => parent_id, "index" => index})
+        arriving(template, session, %{"parent_id" => parent_id, "index" => index})
 
       with {:ok, placed} <- insert_picked(token, template, spot["parent_id"], spot["index"]) do
         landed(placed, outcome)
@@ -1784,19 +1831,41 @@ defmodule MishkaCmsBuilder.EditorSession do
     with {:ok, session} <- fetch_session(token),
          subtree = Placement.subtree(template),
          head = Placement.head(subtree),
-         opts = [components: session.components, dragged_tree: subtree, band?: block?],
-         {parent_id, index} = Placement.target(session.tree, head, node_id, opts),
+         opts = [
+           components: session.components,
+           dragged_tree: subtree,
+           fragment?: TablePlacement.fragment?(session),
+           band?: block?
+         ],
+         {parent_id, index} = clicked_target(session, template, head, node_id, opts),
          {template, spot, outcome} =
-           FormPlacement.place(template, session, %{"parent_id" => parent_id, "index" => index}),
+           arriving(template, session, %{"parent_id" => parent_id, "index" => index}),
          {:ok, placed} <- insert_picked(token, template, spot["parent_id"], spot["index"]) do
       placed(placed, Placement.relocation(session.tree, head, node_id, parent_id, opts), outcome)
     end
   end
 
+  # A TABLE PART CLICKED INTO SOMETHING THAT WILL NOT HOLD IT goes where the table it arrives in
+  # would go: a cell clicked into a section lands in the section, in a new table, rather than
+  # climbing out of the page looking for a row.
+  defp clicked_target(session, template, head, node_id, opts) do
+    {parent_id, _index} = spot = Placement.target(session.tree, head, node_id, opts)
+
+    with %Node{} <- head,
+         {:error, _refused} <- can_drop(session, head, opts[:dragged_tree], parent_id),
+         {wrapper, tree} <- template |> TablePlacement.arrivals(session) |> List.last() do
+      Placement.target(session.tree, wrapper, node_id, Keyword.put(opts, :dragged_tree, tree))
+    else
+      _fits -> spot
+    end
+  end
+
   defp placed(session, nil, outcome), do: landed(session, outcome)
 
-  defp placed(session, sentence, outcome),
-    do: {:relocated, announce_created(session, outcome), sentence}
+  defp placed(session, sentence, {_form, table} = outcome),
+    do:
+      {:relocated, announce_created(session, outcome),
+       joined([sentence, TablePlacement.told(table)])}
 
   # Elements are looked up first in `picked_template/1` and their ids are namespaced (`el-…`), so a
   # block id is the only thing that answers here.
@@ -2042,7 +2111,7 @@ defmodule MishkaCmsBuilder.EditorSession do
       {template, spot, outcome} =
         clipboard
         |> Serializer.serialize()
-        |> FormPlacement.place(session, %{"parent_id" => parent, "index" => index})
+        |> arriving(session, %{"parent_id" => parent, "index" => index})
 
       with {:ok, pasted} <-
              apply_op(token, %{

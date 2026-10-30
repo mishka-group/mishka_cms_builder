@@ -52,6 +52,9 @@ defmodule MishkaCmsBuilder.Placement do
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
+  # What `Containment` is asked with, of everything a caller hands over.
+  @containment_opts [:components, :dragged_tree, :fragment?]
+
   @bands ~w(section main)
   @band_hosts ~w(body main)
 
@@ -90,7 +93,7 @@ defmodule MishkaCmsBuilder.Placement do
 
   defp allowed(tree, dragged, opts, locked) do
     tree
-    |> Containment.accepts_map(dragged, Keyword.take(opts, [:components, :dragged_tree]))
+    |> Containment.accepts_map(dragged, Keyword.take(opts, @containment_opts))
     |> Map.new(fn {id, allowed?} -> {id, allowed? and !MapSet.member?(locked, id)} end)
   end
 
@@ -193,7 +196,7 @@ defmodule MishkaCmsBuilder.Placement do
       tree,
       head,
       target_id,
-      Keyword.take(opts, [:components, :dragged_tree])
+      Keyword.take(opts, @containment_opts)
     ) == :ok
   end
 
@@ -352,7 +355,7 @@ defmodule MishkaCmsBuilder.Placement do
         tree,
         head,
         target_id,
-        Keyword.take(opts, [:components, :dragged_tree])
+        Keyword.take(opts, @containment_opts)
       )
 
   defp relocated?(tree, node_id, parent_id) do
