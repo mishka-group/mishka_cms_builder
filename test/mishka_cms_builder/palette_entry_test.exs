@@ -234,6 +234,111 @@ defmodule MishkaCmsBuilder.PaletteEntryTest do
       refute template =~ ~s(value="one" value=)
     end
 
+    # A COMPONENT PLACED WITH WHAT IT ARRIVES WITH HAS TO BE PUBLISHABLE. Five pages of the palette
+    # sweep were refused at Publish the moment their components were dropped:
+    # `chelekom-headless-highlight.highlight`, `chelekom-headless-mask-input.mask`, and the required
+    # `value` and `label` of a slot's entries. Each required value now arrives with a sample.
+    test "a required text attribute arrives with a sample on placement" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-highlight",
+          attrs: [
+            %{"name" => "text", "type" => "string", "opts" => %{"required" => true}},
+            %{"name" => "highlight", "type" => "any", "opts" => %{"required" => true}},
+            %{"name" => "mask", "type" => "string", "opts" => %{"required" => true}},
+            %{"name" => "label", "type" => "string", "opts" => %{"required" => true}}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(text="Example")
+      assert template =~ ~s(highlight="Example")
+      assert template =~ ~s(mask="999-999")
+      assert template =~ ~s(label="Example")
+    end
+
+    # What the template merely READS is not a promise the author has to keep, and a form field's
+    # `name` and `value` are exactly that: a written value would stop the drop binding them.
+    test "an attribute seeded only because the template reads it stays blank" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-input",
+          template: ~S(<input name={@name} value={@value} />),
+          attrs: [
+            %{"name" => "name", "type" => "string"},
+            %{"name" => "value", "type" => "string"}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(name="")
+      assert template =~ ~s(value="")
+    end
+
+    # An icon and a picture are chosen, not sampled: the canvas draws "needs src", the inspector
+    # marks the field and the save waits for the author. Neither is the words an `any` might hold.
+    test "a required icon, picture or non-word value stays blank" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "probe",
+          attrs: [
+            %{
+              "name" => "icon",
+              "type" => "string",
+              "opts" => %{"required" => true, "editor" => "icon"}
+            },
+            %{"name" => "src", "type" => "string", "opts" => %{"required" => true}},
+            %{"name" => "value", "type" => "any", "opts" => %{"required" => true}}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(icon="")
+      assert template =~ ~s(src="")
+      assert template =~ ~s(value="")
+    end
+
+    # A group whose every option had the same value could not tell them apart.
+    test "the required values of a slot's entries are counted down the list" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-checkbox-group",
+          slots: [
+            %{
+              "name" => "item",
+              "opts" => %{},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            },
+            %{
+              "name" => "target",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            },
+            %{
+              "name" => "menu",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "label", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            }
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(<:target value="one"></:target>)
+      assert template =~ ~s(<:menu label="Example"></:menu>)
+      assert [_first, _second] = Regex.scan(~r/<:item [^>]*value="(one|two)"/, template)
+      assert template =~ ~s(value="two")
+    end
+
     test "a component with nothing to seed stays self-closing" do
       entry = PaletteEntry.new!(%{name: "chelekom-card", attrs: [], slots: []})
 

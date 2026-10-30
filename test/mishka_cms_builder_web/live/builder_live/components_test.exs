@@ -3327,7 +3327,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       # alert's seventeen properties arrived as two.
       html = render(view)
       assert html =~ "Title"
-      assert html =~ "Required"
+      # Required is marked on the label; the placed component arrives with a sample in it.
+      assert html =~ ~s(Title<span class="text-[#d5544b]">*</span>)
       assert html =~ "Variant"
       assert html =~ "Color"
       assert html =~ "Disabled"
@@ -3453,11 +3454,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       view |> element("#pb-comp-needs-title") |> render_click()
       render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
 
-      html = publish!(view)
-      assert html =~ "Not saved"
-      assert html =~ "needs-title.title"
-
-      # Fill it and the save goes through.
       placed =
         view
         |> editor()
@@ -3465,6 +3461,22 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         |> Tree.walk()
         |> Enum.find(&(&1.kind == :component))
 
+      # It ARRIVES with a sample, so a component dropped with what it brings can be published.
+      assert attr_of(view, placed.id, "title") == {:string, "Example"}
+
+      # Emptied by the author, it is missing again.
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => placed.id,
+        "name" => "title",
+        "value" => ""
+      })
+
+      html = publish!(view)
+      assert html =~ "Not saved"
+      assert html =~ "needs-title.title"
+
+      # Fill it and the save goes through.
       render_click(view, "op", %{
         "kind" => "set_attr",
         "node_id" => placed.id,

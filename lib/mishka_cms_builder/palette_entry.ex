@@ -188,10 +188,15 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   the author then edits in the inspector, and every other attribute is left alone so the component's
   own defaults keep applying.
 
-  `style` is `:blank` for PLACEMENT and `:preview` for the wizard. Placement leaves a required value
-  empty on purpose — the inspector marks it "Required" and the save refuses until the author fills
-  it, which is the guard against publishing an incomplete page. A preview has no author to wait for,
-  so it uses a real placeholder: an empty `src` renders as "needs src" rather than as an image.
+  `style` is `:blank` for PLACEMENT and `:preview` for the wizard. A component placed with what it
+  arrives with has to be publishable, so placement gives a REQUIRED value a sample — `Example`, a
+  `#` link, `one`, `two`, `three` for the values of a slot's entries, `999-999` for a mask — and
+  leaves every attribute it seeds only because the template reads it blank, which is what keeps a
+  form field's `name` and `value` free for the binding the drop writes. Two required kinds stay
+  blank, because a sample is no answer for them: a picture (`src`, `image`, `poster`) and an icon.
+  The author has to choose those, so the canvas draws "needs src", the inspector marks the field and
+  the save refuses until they do. A preview has no author to wait for, so it uses a real placeholder
+  for those too.
 
   Public because the palette is not the only place that has to produce a RENDERABLE component:
   `MishkaCmsBuilder.Wizard` composes one too, and without the same seeding its
@@ -209,7 +214,9 @@ defmodule MishkaCmsBuilder.PaletteEntry do
 
     attrs
     |> Enum.filter(&(seed?(&1, entry, reads) and attr_name(&1) not in skip))
-    |> Enum.map_join(&~s( #{attr_name(&1)}=#{seed_value(&1, entry, style, components)}))
+    |> Enum.map_join(
+      &~s( #{attr_name(&1)}=#{seed_value(&1, entry, placed(&1, style), components)})
+    )
   end
 
   def seeded(_entry, _skip, _style, _components), do: ""
@@ -236,7 +243,7 @@ defmodule MishkaCmsBuilder.PaletteEntry do
     |> Enum.map_join(fn slot ->
       name = attr_name(slot)
 
-      ~s(<:#{name}#{seeded(%{attrs: field(slot, "attrs") || [], template: ""}, [], style)}></:#{name}>)
+      ~s(<:#{name}#{seeded(%{attrs: field(slot, "attrs") || [], template: "", ordinal: 0}, [], style)}></:#{name}>)
     end)
     |> Kernel.<>(furnished)
   end
@@ -256,7 +263,11 @@ defmodule MishkaCmsBuilder.PaletteEntry do
       written = Enum.map_join(attrs, fn {key, value} -> ~s( #{key}="#{value}") end)
 
       seeded =
-        seeded(%{attrs: field(declared, "attrs") || [], template: ""}, Map.keys(attrs), style)
+        seeded(
+          %{attrs: field(declared, "attrs") || [], template: "", ordinal: position - 1},
+          Map.keys(attrs),
+          style
+        )
 
       ~s(<:#{name}#{written}#{seeded}>#{body}</:#{name}>)
     end)
@@ -273,9 +284,8 @@ defmodule MishkaCmsBuilder.PaletteEntry do
     |> elem(0)
   end
 
-  # TWO SAMPLE ENTRIES ARE TWO THINGS. A required `value` seeds blank, which is right for ONE entry
-  # the author still has to fill — but a list's samples are siblings, and blank twice is the same
-  # value twice. `chelekom-headless-checkbox-group` builds each item's id out of its value
+  # TWO SAMPLE ENTRIES ARE TWO THINGS. A list's samples are siblings, and one seed for both is the
+  # same value twice. `chelekom-headless-checkbox-group` builds each item's id out of its value
   # (`id={"#{@id}-#{item.value}"}`), so its two sample items shared one id and the canvas logged
   # "Multiple IDs detected" the moment the group was dropped. Each sample gets its own word instead,
   # the ones an `<:option>` sample already carries; a value the sample brings itself wins.
@@ -671,14 +681,20 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   defp seed_value(attr, entry, style, components) do
     case attr_name(attr) == "for" and Fields.wrapper?(entry, components) do
       true -> "{%{}}"
-      false -> scalar_seed(attr, style)
+      false -> scalar_seed(attr, style, Map.get(entry, :ordinal, 0))
     end
   end
 
-  # ZERO IS THE ONE NUMBER THAT CAN RENDER AS NOTHING. Placement leaves a required STRING empty on
-  # purpose — the inspector marks it Required and the save refuses until it is filled. A number has
-  # no empty: `blank_attr?/2` reads the text "0" as filled, so a numeric seed is a value the author
-  # is never told to replace, and it had better be one the component can draw. `chelekom-pagination`
+  # A REQUIRED VALUE IS GIVEN A SAMPLE ON PLACEMENT (`:sample`); one seeded only because the template
+  # reads it stays blank (`:blank`). See `seeded/4`.
+  defp placed(attr, :blank),
+    do: (truthy?(field(attr_opts(attr), "required")) && :sample) || :blank
+
+  defp placed(_attr, style), do: style
+
+  # ZERO IS THE ONE NUMBER THAT CAN RENDER AS NOTHING. A number has no empty: `blank_attr?/2` reads
+  # the text "0" as filled, so a numeric seed is a value the author is never told to replace, and it
+  # had better be one the component can draw, the same as a sampled string. `chelekom-pagination`
   # builds `range(1, total)`, which for zero is the empty list, so a dropped pagination rendered two
   # disabled arrows and no page at all — reported as "the color of text is just white and wont show".
   #
@@ -687,16 +703,16 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   # with two hundred pages on it.
   @sample_number 3
 
-  defp scalar_seed(attr, style) do
+  defp scalar_seed(attr, style, ordinal) do
     case {attr_name(attr), attr_values(attr), attr_type(attr)} do
       {name, [], type} when type in @containers ->
         container_seed(name, type, style)
 
       {_name, [], "string"} = signature ->
-        icon_or_string(icon_attr?(attr), signature, style)
+        icon_or_string(icon_attr?(attr), signature, style, ordinal)
 
       {name, [], type} when type not in @scalars ->
-        ~s("#{string_seed(name, style)}")
+        ~s("#{loose_seed(name, style, ordinal)}")
 
       {_name, [first | _rest], "atom"} ->
         "{:#{first}}"
@@ -760,13 +776,17 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   #
   # `:preview` keeps the real icon, because a preview has nobody to wait for: the wizard and the
   # palette's hover card have to show the component, and "needs name" is not the component.
-  defp icon_or_string(true, _signature, :preview), do: ~s("#{@placeholder_icon}")
+  defp icon_or_string(true, _signature, :preview, _ordinal), do: ~s("#{@placeholder_icon}")
 
-  defp icon_or_string(true, {name, _values, _type}, style),
-    do: ~s("#{string_seed(name, style)}")
+  defp icon_or_string(true, {name, _values, _type}, style, _ordinal),
+    do: ~s("#{string_seed(name, unsampled(style))}")
 
-  defp icon_or_string(false, {name, _values, _type}, style),
-    do: ~s("#{string_seed(name, style)}")
+  defp icon_or_string(false, {name, _values, _type}, style, ordinal),
+    do: ~s("#{string_seed(name, style, ordinal)}")
+
+  # An icon is chosen, not sampled — see above.
+  defp unsampled(:sample), do: :blank
+  defp unsampled(style), do: style
 
   defp icon_attr?(attr), do: field(attr_opts(attr), "editor") == "icon"
 
@@ -776,20 +796,50 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   # showed in the wizard. Each of these gives the component something it can actually use.
   # An id is minted whatever the style: `""` is not a neutral placeholder but a broken component,
   # because components build their own handlers as `hide("##{@id}")` and `"#"` matches nothing.
-  defp string_seed("id", _style), do: Phoenix.LiveView.Utils.random_id()
+  @media_names ~w(src image poster)
+  @text_names ~w(alt title label text name)
 
-  defp string_seed(name, style) when is_binary(name) do
+  defp string_seed(name, style, ordinal \\ 0)
+
+  defp string_seed("id", _style, _ordinal), do: Phoenix.LiveView.Utils.random_id()
+
+  defp string_seed(name, style, ordinal) when is_binary(name) do
     cond do
       String.ends_with?(name, "_id") -> Phoenix.LiveView.Utils.random_id()
       style == :blank -> ""
-      name in ~w(src image poster) -> @placeholder_image
+      name in @media_names -> media_seed(style)
       name in ~w(href navigate patch link url) -> "#"
-      name in ~w(alt title label text name) -> "Example"
-      true -> "example"
+      true -> word_seed(name, style, ordinal)
     end
   end
 
-  defp string_seed(_name, _style), do: ""
+  defp string_seed(_name, _style, _ordinal), do: ""
+
+  # A picture placed on a page is chosen by its author; a preview shows a placeholder one.
+  defp media_seed(:sample), do: ""
+  defp media_seed(_preview), do: @placeholder_image
+
+  defp word_seed(name, :sample, ordinal), do: sample(name, ordinal)
+  defp word_seed(name, _preview, _ordinal) when name in @text_names, do: "Example"
+  defp word_seed(_name, _preview, _ordinal), do: "example"
+
+  # A REQUIRED VALUE PLACED ON A PAGE. Words where words go, an option's identity counted the way a
+  # list's samples are (`sample_value/2`), and the names whose value has a shape of its own.
+  defp sample("value", ordinal), do: Enum.at(@sample_values, ordinal, "item-#{ordinal + 1}")
+  defp sample("mask", _ordinal), do: "999-999"
+  defp sample("color", _ordinal), do: "#4f46e5"
+  defp sample(_name, _ordinal), do: "Example"
+
+  # AN ATTRIBUTE DECLARED `any` TAKES WHATEVER THE COMPONENT DOES WITH IT, and a sample word is only
+  # safe where the name says it is words: `chelekom-headless-highlight` highlights its `highlight`
+  # inside its `text`. Anything else stays blank on placement, and the inspector asks for it.
+  @loose_text_names ~w(alt title label text name highlight)
+
+  defp loose_seed(name, :sample, ordinal) when name in @loose_text_names,
+    do: string_seed(name, :sample, ordinal)
+
+  defp loose_seed(name, :sample, _ordinal), do: string_seed(name, :blank)
+  defp loose_seed(name, style, _ordinal), do: string_seed(name, style)
 
   defp attr_name(%{"name" => name}), do: name
   defp attr_name(%{name: name}), do: name
