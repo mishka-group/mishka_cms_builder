@@ -1272,44 +1272,55 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
          own prev and next buttons and both fell into a heap in the top-left corner — reported as
          "the next and prev button is not obvious how they are and where they are".
 
+         IN THE BASE LAYER, because that is where the rule keeping `[hidden]` shut lives: Tailwind's
+         preflight writes `[hidden] { display: none !important }` inside `@layer base`, and an
+         `!important` in a cascade layer outranks every unlayered one, whatever the selectors. So a
+         panel hidden by the attribute — `chelekom-dropdown-content`, a headless popover's popup —
+         stayed shut when selected and drew a box 0px high. Inside the same layer the selector below
+         is the more specific one. The scrim rule moves with the reveal so the two keep the order
+         they had between themselves; a stylesheet with no base layer gets one, which changes
+         nothing else.
+
          PREVIEW NEVER GETS THIS: the whole `<style>` is inside `:if={!@preview?}`, so a visitor sees
          the component close itself exactly as its author intended. */
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) :is(.hidden, .invisible, .opacity-0, .max-h-0, [hidden]) {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        max-height: none !important;
-        pointer-events: auto !important;
-      }
+      @layer base {
+        :is(
+          [data-pb-reveal="true"],
+          [data-pb-overlay][data-selected="true"],
+          [data-pb-overlay]:has([data-selected="true"])
+        ) :is(.hidden, .invisible, .opacity-0, .max-h-0, [hidden]) {
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+          max-height: none !important;
+          pointer-events: auto !important;
+        }
 
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) .fixed { position: static !important; transform: none !important; }
+        :is(
+          [data-pb-reveal="true"],
+          [data-pb-overlay][data-selected="true"],
+          [data-pb-overlay]:has([data-selected="true"])
+        ) .fixed { position: static !important; transform: none !important; }
 
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) [data-floating-content] { visibility: visible !important; opacity: 1 !important; }
+        :is(
+          [data-pb-reveal="true"],
+          [data-pb-overlay][data-selected="true"],
+          [data-pb-overlay]:has([data-selected="true"])
+        ) [data-floating-content] { visibility: visible !important; opacity: 1 !important; }
 
-      /* THE SCRIM GOES, THE PANEL STAYS. A modal's backdrop, a drawer's overlay and a scroll area's
-         two scrollbars are all `aria-hidden` and all decorative — none holds a node an author put
-         there — so hiding them while the overlay is open is right. A dropdown's and a popover's
-         CONTENT is `aria-hidden` too while shut, and it is the one thing the author came to fill:
-         this rule was hiding the panel the reveal above had just opened, which is why a dropdown
-         showed its trigger and nothing else and read as "we cannot add any content inside". */
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) [aria-hidden="true"]:not([data-floating-content]):not(:has([data-node-id])) {
-        display: none !important;
+        /* THE SCRIM GOES, THE PANEL STAYS. A modal's backdrop, a drawer's overlay and a scroll area's
+           two scrollbars are all `aria-hidden` and all decorative — none holds a node an author put
+           there — so hiding them while the overlay is open is right. A dropdown's and a popover's
+           CONTENT is `aria-hidden` too while shut, and it is the one thing the author came to fill:
+           this rule was hiding the panel the reveal above had just opened, which is why a dropdown
+           showed its trigger and nothing else and read as "we cannot add any content inside". */
+        :is(
+          [data-pb-reveal="true"],
+          [data-pb-overlay][data-selected="true"],
+          [data-pb-overlay]:has([data-selected="true"])
+        ) [aria-hidden="true"]:not([data-floating-content]):not(:has([data-node-id])) {
+          display: none !important;
+        }
       }
 
       :is(

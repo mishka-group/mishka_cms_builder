@@ -216,6 +216,25 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
              "the reveal names hiding CLASSES only, so a panel hidden by the attribute stays shut"
     end
 
+    # NAMING `[hidden]` WAS NOT ENOUGH. Tailwind's preflight keeps the attribute shut with
+    # `[hidden] { display: none !important }` inside `@layer base`, and an `!important` in a cascade
+    # layer beats every unlayered one, whatever its selector. The reveal was unlayered, so a selected
+    # `chelekom-dropdown-content` lost its chip and drew a box 0px high around fifteen children.
+    # Inside the same layer the reveal's selector is the more specific one, and it wins.
+    test "and the reveal sits in the base layer, where the rule keeping `[hidden]` shut is", %{
+      chrome: chrome
+    } do
+      assert [_before, layered] = String.split(chrome, "@layer base {", parts: 2),
+             "the reveal is unlayered, so Tailwind's layered `[hidden]` rule outranks it"
+
+      block = layer_block(layered)
+
+      assert block =~ "[hidden]) {"
+      assert block =~ "display: block !important"
+      assert block =~ ~S|[aria-hidden="true"]:not([data-floating-content])|
+      assert block =~ ".fixed { position: static !important"
+    end
+
     test "and the rule that hides a backdrop leaves the panel alone", %{chrome: chrome} do
       assert chrome =~ ~S|[aria-hidden="true"]:not([data-floating-content])|,
              "the scrim rule was hiding the panel the reveal had just opened"
@@ -361,5 +380,20 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
       assert html =~ ~s(phx-key="escape"),
              "only the two bindings that dismiss are dropped, not the attributes around them"
     end
+  end
+
+  # The body of the block a split at `@layer base {` starts, up to its own closing brace.
+  defp layer_block(rest) do
+    rest
+    |> String.graphemes()
+    |> Enum.reduce_while({1, []}, fn
+      "}", {1, acc} -> {:halt, {0, acc}}
+      "}", {depth, acc} -> {:cont, {depth - 1, ["}" | acc]}}
+      "{", {depth, acc} -> {:cont, {depth + 1, ["{" | acc]}}
+      char, {depth, acc} -> {:cont, {depth, [char | acc]}}
+    end)
+    |> elem(1)
+    |> Enum.reverse()
+    |> Enum.join()
   end
 end
