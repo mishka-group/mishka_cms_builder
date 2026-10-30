@@ -80,6 +80,18 @@ defmodule MishkaCmsBuilder.LinkATextTest do
                ~s(<div id="root"><ul><li><a href="#"><b>Go</b> <span>home</span></a></li></ul></div>)
     end
 
+    # HTML's `<a>` HOLDS WHAT ITS PARENT HOLDS, so a box of a heading and a paragraph linked as one
+    # is a link card, and valid wherever the box was.
+    test "a box of a heading and a paragraph becomes one link card" do
+      session = open(~s(<section id="root"><div><h3>Plans</h3><p>From $9</p></div></section>))
+
+      assert {:ok, linked} =
+               EditorSession.context_action(session.token, "link", find(session, "div").id)
+
+      assert html(linked) ==
+               ~s(<section id="root"><a href="#"><div><h3>Plans</h3><p>From $9</p></div></a></section>)
+    end
+
     test "the href is a real attribute, so the inspector has a field to offer" do
       session = open(~s(<div id="root"><p>hello</p></div>))
 

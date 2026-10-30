@@ -902,12 +902,12 @@ defmodule MishkaCmsBuilder.EditorSession do
   # Two questions, and they are not the same one. The wrapper takes the node's PLACE, so it faces
   # every rule a drop into that parent faces — cycles and form nesting included, because that
   # position is real. The node then goes INSIDE a tag that does not exist yet, which only the rules
-  # about the pair itself can be asked of.
+  # about the pair itself can be asked of — and the tree, because a link holds what its parent holds.
   defp check_wrap(session, ids, tag) when is_binary(tag) do
     with {:ok, nodes} <- present(session.tree, ids),
          parent = parent_of(hd(nodes)),
          :ok <- can_drop(session, Node.new(:tag, tag: tag), nil, parent) do
-      first_error(nodes, &Containment.can_hold?(&1, tag))
+      first_error(nodes, &Containment.can_hold?(&1, tag, tree: session.tree))
     end
   end
 
