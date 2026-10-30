@@ -235,6 +235,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       assert reread!(MishkaCmsCore.Runtime.Page, page.id).path == "/published-path"
 
+      # The form writes the page inside its submit, but the editor carries that write into the
+      # sitting's draft when it handles the form's `:form_saved` message, which arrives after the
+      # submit has answered. A render asks the LiveView, so it is answered once that message has
+      # been handled; reading the draft without it raced the follow and failed on a slow run.
+      _followed = render(view)
+
       # The sitting's own draft follows what its editor saved to the page, so publishing it later
       # does not put the older path back.
       assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).path == "/published-path"

@@ -1925,6 +1925,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
 
       render_click(view, "select", %{"id" => placed.id})
       view |> element("#pb-studio") |> render_click()
+      _settled = render_async(view)
       view |> element("#pb-studio-snippets") |> render_click()
 
       # The markup rides in on a hidden input that `Panels` associates with the form by id, so it
@@ -2002,6 +2003,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
     test "there is no This page choice until there is a page", %{conn: conn, page: page} do
       {:ok, new_view, _html} = live(conn, "/admin/dashboard/runtime/builder/page")
       new_view |> element("#pb-studio") |> render_click()
+      _settled = render_async(new_view)
       new_view |> element("#pb-studio-snippets") |> render_click()
 
       refute has_element?(new_view, "#pb-snippet-scope-page")
