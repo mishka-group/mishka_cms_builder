@@ -1268,9 +1268,9 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
          AND ONLY `.fixed`. `.absolute` was swept in with it and is not the same thing: pinning to
          the VIEWPORT is what covers the page, while absolute positioning is ordinary layout inside
-         the component's own box. A carousel is in this set, so selecting one un-positioned its own
-         prev and next buttons and both fell into a heap in the top-left corner — reported as "the
-         next and prev button is not obvious how they are and where they are".
+         the component's own box. A carousel was in this set then, so selecting one un-positioned its
+         own prev and next buttons and both fell into a heap in the top-left corner — reported as
+         "the next and prev button is not obvious how they are and where they are".
 
          PREVIEW NEVER GETS THIS: the whole `<style>` is inside `:if={!@preview?}`, so a visitor sees
          the component close itself exactly as its author intended. */

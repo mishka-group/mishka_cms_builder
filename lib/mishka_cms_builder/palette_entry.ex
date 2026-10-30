@@ -415,8 +415,8 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   # it. Everything the author drops inside one is invisible from the moment it lands: measured on a
   # real canvas, a dropped `chelekom-modal` has a full subtree and a height of zero.
   #
-  # Eight of the kit's components do it to content the author owns. This is what puts the third glyph
-  # on their layers row, beside the eye and the lock.
+  # Twelve of the styled kit's components and five of the headless kit's do it to content the author
+  # owns. This is what puts the third glyph on their layers row, beside the eye and the lock.
   #
   # Read off the template the same way `reads/1` is, and for the same reason: the palette carries the
   # ANSWER rather than the source, because the source is the heaviest thing a component owns.
@@ -588,27 +588,38 @@ defmodule MishkaCmsBuilder.PaletteEntry do
     "data-floating-content"
   ]
 
-  # TWO SHAPES, AND THE KIT USES BOTH. `chelekom-modal` writes the plain utility —
-  # `class={["relative z-50 hidden", @class]}` — while `chelekom-drawer`, `chelekom-dropdown` and
-  # `chelekom-speed-dial` hide a CHILD through an arbitrary variant:
-  # `[&.drawer-overlay]:opacity-0`, `[&>.dropdown-content]:invisible`. Reading only the first shape
-  # found the modal and missed the drawer, which is the other component this exists for.
+  # AN ELEMENT THAT HIDES ITSELF, BY ITS OWN ATTRIBUTES: a hiding utility in its own class list,
+  # the `hidden` attribute, or `display:none` in its style. `chelekom-modal` hides its root —
+  # `class={["relative z-50 hidden", @class]}` — and a headless popover the panel under its trigger
+  # (`<div role="dialog" hidden>`); both are how the component rests.
   #
-  # The second shape needs no corroboration: a component that toggles its own child's visibility by
-  # class is an overlay, and a hidden `<input>` behind a drawn checkbox never does it. The first does,
-  # because a bare `hidden` is also how a form control hides its real input.
+  # AN ARBITRARY VARIANT IS NEVER THAT. `[&_.ProseMirror-gapcursor]:hidden` hides a caret the
+  # headless editor's library draws inside it, `[&::-webkit-scrollbar]:hidden` a scroll area's bar,
+  # `[&:not(.active-tab-panel)]:hidden` the tabs' other panels, `group-hover:hidden` a state the
+  # component enters: none says the component is closed. Read as one, the headless editor came out
+  # as an overlay — a chip saying it opens from its trigger and nothing drawn in place — and so did
+  # a scroll area, a stepper, a rating, the tabs and the carousel. The drawer, the dropdown and the
+  # speed dial, which do hide a child through a variant, declare their openers (`opens/1`).
   defp conceals?(template) do
-    variant_hider?(template) or
-      (bare_hider?(template) and Enum.any?(@overlay_signals, &String.contains?(template, &1)))
+    case Tree.parse(template) do
+      {:ok, tree} ->
+        Enum.any?(Tree.walk(tree), &hides_itself?/1) and
+          Enum.any?(@overlay_signals, &String.contains?(template, &1))
+
+      {:error, _unparseable} ->
+        false
+    end
   end
 
-  defp variant_hider?(template),
-    do: Enum.any?(@concealers, &Regex.match?(~r/\]:#{Regex.escape(&1)}(?![-\w])/, template))
+  defp hides_itself?(%Node{kind: kind} = node) when kind in [:tag, :component] do
+    class = Node.attr_text(node, "class") || ""
+    style = Node.attr_text(node, "style") || ""
 
-  defp bare_hider?(template) do
-    String.contains?(template, "display:none") or String.contains?(template, "display: none") or
-      Enum.any?(@concealers, &class_token?(template, &1))
+    Node.attr(node, "hidden") != nil or Enum.any?(@concealers, &class_token?(class, &1)) or
+      String.contains?(style, ["display:none", "display: none"])
   end
+
+  defp hides_itself?(_node), do: false
 
   # A CLASS, NOT A SUBSTRING, and not a condition on one. `hidden` sits inside `aria-hidden` on
   # nearly every component with a decorative element and inside `overflow-hidden` on most of the

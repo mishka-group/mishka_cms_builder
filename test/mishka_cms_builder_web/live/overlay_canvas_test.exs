@@ -239,8 +239,8 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
   # PINNED TO THE VIEWPORT IS THE PROBLEM; POSITIONED IS NOT. The chrome un-pins a dialog while it is
   # being edited, because a dialog fixed to the viewport covers the page it belongs to. `.absolute`
   # was swept into that rule with `.fixed`, and it is ordinary layout inside a component's own box —
-  # a carousel is in the concealed set, so selecting one un-positioned its own prev and next buttons
-  # and both fell into a heap in the top-left corner.
+  # a carousel was in the concealed set then, so selecting one un-positioned its own prev and next
+  # buttons and both fell into a heap in the top-left corner.
   describe "what the chrome un-pins" do
     setup %{conn: conn, page: page} do
       view = open_builder(conn, page)

@@ -41,6 +41,7 @@ defmodule MishkaCmsBuilder.OpenCommandTest do
   alias MishkaCmsCore.Runtime.Authoring.Interactions
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Test.Factory
   alias MishkaCmsBuilderWeb.Live.Panels
 
   @moduletag :unit
@@ -118,6 +119,88 @@ defmodule MishkaCmsBuilder.OpenCommandTest do
 
     test "the inference is untouched for everything that declares nothing" do
       assert PaletteEntry.concealed?(%{"template" => @kit_modal})
+    end
+  end
+
+  # WHAT HIDES IS AN ELEMENT OF THE COMPONENT, BY ITS OWN ATTRIBUTES. The headless editor's surface
+  # carries `[&_.ProseMirror-gapcursor]:hidden`, which hides a caret ProseMirror draws inside it, and
+  # the scan read any `]:hidden` as a component that renders closed: the editor came out as an
+  # overlay, a chip saying it opens from its trigger, and nothing drawn in place. An arbitrary
+  # variant reaches into a descendant or names a state the component enters; neither is how the
+  # component rests.
+  describe "only an element's own hidden state counts" do
+    @headless_editor ~S"""
+    <div id={@id} data-part="root" class={["chelekom-editor", "group/editor", @class]} {@rest}>
+      <textarea :if={@name} id={"#{@id}-value"} name={@name} hidden class="chelekom-editor__value"><%= @value %></textarea>
+      <div id={"#{@id}-surface"} phx-hook={@hook} phx-update="ignore" role="textbox" class={[
+        "chelekom-editor__surface",
+        "[&_.ProseMirror-gapcursor]:hidden",
+        "group-data-empty/editor:[&_.ProseMirror]:before:h-0"
+      ]}></div>
+    </div>
+    """
+
+    test "the headless editor draws in place" do
+      refute PaletteEntry.concealed?(%{"template" => @headless_editor})
+    end
+
+    test "an arbitrary variant hides nothing of the component's own, whatever else it carries" do
+      for hider <- [
+            "[&_.slide]:opacity-0",
+            "[&::-webkit-scrollbar]:hidden",
+            "[&:not(.active-tab-panel)]:hidden",
+            "[&>.dropdown-content]:invisible",
+            "group-hover:hidden",
+            "group-data-[state=closed]/menu:hidden",
+            "md:hidden"
+          ] do
+        template = ~s(<div class="relative #{hider}"><div role="dialog">Body</div></div>)
+
+        refute PaletteEntry.concealed?(%{"template" => template}),
+               "#{hider} is not a resting state"
+      end
+    end
+
+    test "a word in the text is not a class" do
+      refute PaletteEntry.concealed?(%{
+               "template" => ~s(<div role="dialog"><p>Nothing here is hidden.</p></div>)
+             })
+    end
+
+    test "while a panel that hides itself still counts, on its root or below it" do
+      on_root = ~S|<div class={["relative z-50 hidden", @class]}><div role="dialog">x</div></div>|
+
+      below =
+        ~S|<div class="popover"><button>Open</button><div role="dialog" hidden>x</div></div>|
+
+      by_style =
+        ~S|<div phx-click-away={close(@id)}><div style={!@open && "display:none"}>x</div></div>|
+
+      for template <- [on_root, below, by_style] do
+        assert PaletteEntry.concealed?(%{"template" => template})
+      end
+    end
+
+    # The kit, read as it ships. The five that leave the set hide a descendant through a variant and
+    # have no closed state of their own; every component that opens from a trigger stays, by its
+    # declared opener or by a panel that hides itself.
+    test "the kit's overlays stay overlays and the rest draw in place" do
+      rows =
+        Factory.chelekom_rows(~w(
+          chelekom-modal chelekom-drawer chelekom-dropdown chelekom-dropdown-content chelekom-popover
+          chelekom-tooltip chelekom-collapse chelekom-accordion chelekom-mega-menu chelekom-speed-dial
+          chelekom-navbar chelekom-sidebar chelekom-scroll-area chelekom-tabs chelekom-stepper
+          chelekom-carousel chelekom-rating
+        ))
+
+      concealed = for row <- rows, PaletteEntry.concealed?(row), into: MapSet.new(), do: row.name
+
+      assert concealed ==
+               MapSet.new(~w(
+                 chelekom-modal chelekom-drawer chelekom-dropdown chelekom-dropdown-content
+                 chelekom-popover chelekom-tooltip chelekom-collapse chelekom-accordion
+                 chelekom-mega-menu chelekom-speed-dial chelekom-navbar chelekom-sidebar
+               ))
     end
   end
 
