@@ -412,6 +412,92 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert has_element?(view, "#pb-bp-mobile")
     end
 
+    # BUT NOT OUT FROM UNDER AN AUTHOR WHO IS USING THE PALETTE. A selection is also the palette's
+    # answer to "where", and an e2e run that clicked the navbar to aim its next card found the rail
+    # turned into the Inspector, so the next drag picked up Inspector text instead of a card.
+    test "a canvas click leaves the palette tab the author chose", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      token = view |> editor() |> Map.fetch!(:token)
+
+      view |> element("#pb-lefttab-components") |> render_click()
+      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+      refute palette_hidden?(view)
+
+      view |> element("#pb-lefttab-blocks") |> render_click()
+      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+      assert has_element?(view, "#pb-block-search")
+
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+      assert palette_hidden?(view)
+      assert has_element?(view, "#pb-bp-mobile")
+    end
+
+    # A search or a category narrowing the palette is the palette in the middle of being used; with
+    # neither, the tab is back to being the one the editor opened on.
+    test "a search or a category keeps the palette open", %{conn: conn, page: page} do
+      for {event, value} <- [
+            {"palette_query", %{"value" => "card"}},
+            {"palette_cat", %{"cat" => "general"}}
+          ] do
+        {:ok, view, _html} = open_builder(conn, page)
+        section = node_with_tag(view, "section")
+        token = view |> editor() |> Map.fetch!(:token)
+
+        render_hook(view, event, value)
+        {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+        refute palette_hidden?(view)
+      end
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      token = view |> editor() |> Map.fetch!(:token)
+
+      render_hook(view, "palette_query", %{"value" => "card"})
+      render_hook(view, "palette_query", %{"value" => ""})
+      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+      assert palette_hidden?(view)
+    end
+
+    # The click that follows placing a card is usually about that card: on the tab the editor
+    # opened on, it still opens the Inspector — and so does one after a layers row was dragged.
+    test "placing a card from the untouched palette still opens the Inspector on a click", %{
+      conn: conn,
+      page: page
+    } do
+      for drag <- [%{"template" => "<p>Words</p>"}, :layers_row] do
+        {:ok, view, _html} = open_builder(conn, page)
+        section = node_with_tag(view, "section")
+        token = view |> editor() |> Map.fetch!(:token)
+
+        params = if drag == :layers_row, do: %{"node_id" => section.id}, else: drag
+        render_hook(view, "drag_start", params)
+        {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+        assert palette_hidden?(view)
+      end
+    end
+
+    # The rail folded away is not in use, and a placeholder's "click to choose src" asks for the
+    # Inspector by name.
+    test "the Inspector still opens for a folded rail and for a missing value", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      token = view |> editor() |> Map.fetch!(:token)
+
+      view |> element("#pb-lefttab-components") |> render_click()
+      render_click(view, "toggle_left", %{})
+      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+      assert palette_hidden?(view)
+
+      view |> element("#pb-lefttab-components") |> render_click()
+      {:ok, _session} = EditorSession.select(token, section.id, {:canvas, "class"})
+      assert palette_hidden?(view)
+    end
+
     # The grip drags locally and reports once, so the bounds have to reach the browser: without
     # data-min/data-max the drag would run past the ceiling and then jump back when the server
     # clamped what it was finally told. Same numbers on both sides, from `Panels.resize_bounds/1`.
