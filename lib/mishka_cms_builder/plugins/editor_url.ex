@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_builder/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+defmodule MishkaCmsBuilder.Plugins.EditorUrl do
+  @moduledoc """
+  Answers `runtime:document:editor_url` with the visual editor's address for a document.
+
+  The core asks this event wherever it offers to open the editor — the "+ Add" button of the page,
+  layout, component and error-page lists, their "Fill in the form, then open the editor" way, and
+  the inspector's Visual Editor link (`MishkaCmsCore.Runtime.Authoring.Section.editor_url/3`). It
+  spells no address of the editor's itself, so with this plugin absent those buttons are simply
+  not drawn; the editor's own spelling is `MishkaCmsBuilderWeb.Paths`.
+
+  A section the editor does not open, or a payload another plugin already answered, passes through
+  untouched.
+  """
+  use MishkaInstaller.Event.Hook, event: "runtime:document:editor_url", initial: %{priority: 50}
+
+  alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsBuilderWeb.Paths
+
+  @impl true
+  def call(%{section: section, id: id, status: status, url: nil} = payload) do
+    case Section.known?(section) do
+      true -> {:reply, %{payload | url: Paths.builder_path(section, id, status)}}
+      false -> {:reply, payload}
+    end
+  end
+
+  def call(payload), do: {:reply, payload}
+end

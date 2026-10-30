@@ -1,0 +1,1406 @@
+{
+  "$schema": "mishka.ui_kit.bundle.v3",
+  "components": [
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "id",
+          "opts": {
+            "default": null,
+            "doc": "Optional unique id"
+          },
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "opts": {
+            "default": null,
+            "doc": "Form field name (shared across segments)"
+          },
+          "type": "string"
+        },
+        {
+          "name": "value",
+          "opts": {
+            "default": null,
+            "doc": "Selected value"
+          },
+          "type": "any"
+        },
+        {
+          "name": "options",
+          "opts": {
+            "doc": "List of values (strings), {label, value} or {label, value, disabled} tuples",
+            "required": true
+          },
+          "type": "list"
+        },
+        {
+          "name": "label",
+          "opts": {
+            "default": null,
+            "doc": "Accessible group label (aria-label)"
+          },
+          "type": "string"
+        },
+        {
+          "name": "disabled",
+          "opts": {
+            "default": false,
+            "doc": "Disable the whole control"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for the root"
+          },
+          "type": "any"
+        },
+        {
+          "name": "item_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each segment"
+          },
+          "type": "any"
+        },
+        {
+          "name": "input_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for the hidden radios (e.g. sr-only)"
+          },
+          "type": "any"
+        },
+        {
+          "name": "label_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "rest",
+          "opts": {},
+          "type": "global"
+        }
+      ],
+      "body": null,
+      "dependencies": [],
+      "examples": [
+        "<.component component_name=\"chelekom-headless-segmented-control\" site=\"Global\" id=\"period-switch\" name=\"period\" label=\"Period\" value=\"Week\" options={[\"Day\", \"Week\", \"Month\"]} class=\"inline-flex rounded-lg bg-current/10 p-1 text-sm\" item_class=\"cursor-pointer rounded-md px-3 py-1 opacity-70 transition has-checked:bg-current/15 has-checked:font-medium has-checked:opacity-100 has-disabled:cursor-not-allowed has-disabled:opacity-40\" input_class=\"sr-only\" />",
+        "<.component component_name=\"chelekom-headless-segmented-control\" site=\"Global\" id=\"view-switch\" name=\"view\" label=\"View\" value=\"list\" options={[{\"List\", \"list\"}, {\"Grid\", \"grid\"}, {\"Board\", \"board\", true}]} class=\"inline-flex rounded-lg bg-current/10 p-1 text-sm\" item_class=\"cursor-pointer rounded-md px-3 py-1 opacity-70 transition has-checked:bg-current/15 has-checked:font-medium has-checked:opacity-100 has-disabled:cursor-not-allowed has-disabled:opacity-40\" input_class=\"sr-only\" />"
+      ],
+      "extra": {
+        "clauses": null,
+        "component": "segmented_control",
+        "doc_examples": [],
+        "doc_url": "https://mishka.tools/chelekom/docs/headless/segmented-control",
+        "examples": [
+          {
+            "base": true,
+            "label": "Day, week or month switch",
+            "requires": {},
+            "section": null,
+            "source": "<.component component_name=\"chelekom-headless-segmented-control\" site=\"Global\" id=\"period-switch\" name=\"period\" label=\"Period\" value=\"Week\" options={[\"Day\", \"Week\", \"Month\"]} class=\"inline-flex rounded-lg bg-current/10 p-1 text-sm\" item_class=\"cursor-pointer rounded-md px-3 py-1 opacity-70 transition has-checked:bg-current/15 has-checked:font-medium has-checked:opacity-100 has-disabled:cursor-not-allowed has-disabled:opacity-40\" input_class=\"sr-only\" />"
+          },
+          {
+            "base": false,
+            "label": "View switch with one option turned off",
+            "requires": {},
+            "section": null,
+            "source": "<.component component_name=\"chelekom-headless-segmented-control\" site=\"Global\" id=\"view-switch\" name=\"view\" label=\"View\" value=\"list\" options={[{\"List\", \"list\"}, {\"Grid\", \"grid\"}, {\"Board\", \"board\", true}]} class=\"inline-flex rounded-lg bg-current/10 p-1 text-sm\" item_class=\"cursor-pointer rounded-md px-3 py-1 opacity-70 transition has-checked:bg-current/15 has-checked:font-medium has-checked:opacity-100 has-disabled:cursor-not-allowed has-disabled:opacity-40\" input_class=\"sr-only\" />"
+          }
+        ],
+        "function": "segmented_control",
+        "furnishing": {
+          "attrs": {
+            "class": "inline-flex rounded-lg bg-current/10 p-1 text-sm",
+            "input_class": "sr-only",
+            "item_class": "cursor-pointer rounded-md px-3 py-1 opacity-70 transition has-checked:bg-current/15 has-checked:font-medium has-checked:opacity-100 has-disabled:cursor-not-allowed has-disabled:opacity-40",
+            "label": "Period",
+            "name": "period",
+            "options": [
+              "Day",
+              "Week",
+              "Month"
+            ],
+            "value": "Week"
+          },
+          "body": "",
+          "slots": []
+        },
+        "module_attributes": [],
+        "prelude": null,
+        "ui_kit": "chelekom_headless",
+        "ui_kit_version": "0.0.10"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "{_label, value, _disabled}",
+          "attrs": [],
+          "code": "value",
+          "discriminators": [],
+          "name": "sc_value",
+          "slots": []
+        },
+        {
+          "args": "{_label, value}",
+          "attrs": [],
+          "code": "value",
+          "discriminators": [],
+          "name": "sc_value",
+          "slots": []
+        },
+        {
+          "args": "value",
+          "attrs": [],
+          "code": "value",
+          "discriminators": [],
+          "name": "sc_value",
+          "slots": []
+        },
+        {
+          "args": "{label, _value, _disabled}",
+          "attrs": [],
+          "code": "label",
+          "discriminators": [],
+          "name": "sc_label",
+          "slots": []
+        },
+        {
+          "args": "{label, _value}",
+          "attrs": [],
+          "code": "label",
+          "discriminators": [],
+          "name": "sc_label",
+          "slots": []
+        },
+        {
+          "args": "value",
+          "attrs": [],
+          "code": "value",
+          "discriminators": [],
+          "name": "sc_label",
+          "slots": []
+        },
+        {
+          "args": "{_label, _value, disabled}",
+          "attrs": [],
+          "code": "disabled",
+          "discriminators": [],
+          "name": "sc_disabled",
+          "slots": []
+        },
+        {
+          "args": "_",
+          "attrs": [],
+          "code": "false",
+          "discriminators": [],
+          "name": "sc_disabled",
+          "slots": []
+        }
+      ],
+      "name": "chelekom-headless-segmented-control",
+      "permissions": [],
+      "precompile": false,
+      "priority": 50,
+      "required": false,
+      "site_id": null,
+      "slots": [],
+      "stateful": false,
+      "template": "<div\n  id={@id}\n  data-part=\"root\"\n  role=\"radiogroup\"\n  aria-label={@label}\n  data-disabled={@disabled}\n  class={[\"chelekom-segmented-control\", @class]}\n  {@rest}\n>\n  <label\n    :for={opt <- @options}\n    data-part=\"item\"\n    data-disabled={@disabled || sc_disabled(opt)}\n    class={[\"chelekom-segmented-control__item\", @item_class]}\n  >\n    <input\n      type=\"radio\"\n      name={@name}\n      value={sc_value(opt)}\n      checked={to_string(sc_value(opt)) == to_string(@value)}\n      disabled={@disabled || sc_disabled(opt)}\n      data-part=\"input\"\n      class={[\"chelekom-segmented-control__input\", @input_class]}\n    />\n    <span data-part=\"label\" class={[\"chelekom-segmented-control__label\", @label_class]}>{sc_label(opt)}</span>\n  </label>\n</div>\n",
+      "type": "forms"
+    },
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "id",
+          "opts": {
+            "doc": "Unique id (the engine keys its server events on it)",
+            "required": true
+          },
+          "type": "string"
+        },
+        {
+          "name": "nodes",
+          "opts": {
+            "doc": "Nested list of node maps: label, value, children, has_children, icon, disabled, selectable",
+            "required": true
+          },
+          "type": "list"
+        },
+        {
+          "name": "level_offset",
+          "opts": {
+            "default": "1rem",
+            "doc": "Horizontal indentation of each subtree level; any CSS length (emitted as --level-offset)"
+          },
+          "type": "string"
+        },
+        {
+          "name": "expanded",
+          "opts": {
+            "default": [],
+            "doc": "Values expanded on first render, or `:all`"
+          },
+          "type": "any"
+        },
+        {
+          "name": "selected",
+          "opts": {
+            "default": [],
+            "doc": "Values selected on first render"
+          },
+          "type": "list"
+        },
+        {
+          "name": "checked",
+          "opts": {
+            "default": [],
+            "doc": "Values checked on first render"
+          },
+          "type": "list"
+        },
+        {
+          "name": "expand_on_click",
+          "opts": {
+            "default": true,
+            "doc": "Expand a node with children on click"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "expand_on_space",
+          "opts": {
+            "default": true,
+            "doc": "Expand a node on space key press"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "check_on_space",
+          "opts": {
+            "default": false,
+            "doc": "Check a node on space key press"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "select_on_click",
+          "opts": {
+            "default": false,
+            "doc": "Select a node on click"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "multiple",
+          "opts": {
+            "default": false,
+            "doc": "Allow more than one node to be selected"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "allow_range_selection",
+          "opts": {
+            "default": true,
+            "doc": "Select a range of nodes with Shift+click or Shift+arrow"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "clear_selection_on_outside_click",
+          "opts": {
+            "default": false,
+            "doc": "Clear the selection when clicking outside of the tree"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "with_checkboxes",
+          "opts": {
+            "default": false,
+            "doc": "Render a checkbox next to every node"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "name",
+          "opts": {
+            "default": null,
+            "doc": "Form field name for the checkboxes (e.g. `permissions[]`). With it the checked values post natively — no JS glue"
+          },
+          "type": "string"
+        },
+        {
+          "name": "check_strictly",
+          "opts": {
+            "default": false,
+            "doc": "Checking a node does not cascade to its parent or children"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "with_lines",
+          "opts": {
+            "default": false,
+            "doc": "Emit `data-with-lines` on the root; the consumer draws the parent/child lines"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "with_expand_icon",
+          "opts": {
+            "default": true,
+            "doc": "Render the expand-icon part (filled by `<:expand_icon>` for nodes with children)"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "keep_mounted",
+          "opts": {
+            "default": true,
+            "doc": "Render collapsed subtrees in the DOM (hidden). Set false to omit them — that needs `on_expand`/`on_collapse` so the server knows to render a subtree once it opens"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "draggable",
+          "opts": {
+            "default": false,
+            "doc": "Enable drag and drop reordering"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "with_drag_handle",
+          "opts": {
+            "default": false,
+            "doc": "Drag only from an explicit handle"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "allow_drop",
+          "opts": {
+            "default": "any",
+            "doc": "Restrict which drop positions are accepted",
+            "values": [
+              "any",
+              "inside-only",
+              "reorder-only"
+            ]
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_expand",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed when a node is expanded"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_collapse",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed when a node is collapsed"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_select",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed when the selection changes"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_check",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed when the checked state changes"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_drag_drop",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed when a node is dropped"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_load_children",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed the first time a node with `has_children: true` is expanded"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_target",
+          "opts": {
+            "default": null,
+            "doc": "Live component target for the pushed events"
+          },
+          "type": "string"
+        },
+        {
+          "name": "aria_label",
+          "opts": {
+            "default": "Tree",
+            "doc": "Accessible name for the tree. The APG requires one; override it per usage"
+          },
+          "type": "string"
+        },
+        {
+          "name": "drag_handle_label",
+          "opts": {
+            "default": "Drag handle",
+            "doc": "Accessible name for each drag handle"
+          },
+          "type": "string"
+        },
+        {
+          "name": "class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for the root"
+          },
+          "type": "any"
+        },
+        {
+          "name": "node_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each node"
+          },
+          "type": "any"
+        },
+        {
+          "name": "label_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each node's label row"
+          },
+          "type": "any"
+        },
+        {
+          "name": "subtree_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each subtree"
+          },
+          "type": "any"
+        },
+        {
+          "name": "checkbox_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each checkbox"
+          },
+          "type": "any"
+        },
+        {
+          "name": "expand_icon_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each expand-icon part",
+            "editor": "text"
+          },
+          "type": "any"
+        },
+        {
+          "name": "drag_handle_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each drag handle"
+          },
+          "type": "any"
+        },
+        {
+          "name": "label_text_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each label text"
+          },
+          "type": "any"
+        },
+        {
+          "name": "loader_class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for each loader"
+          },
+          "type": "any"
+        },
+        {
+          "name": "rest",
+          "opts": {},
+          "type": "global"
+        }
+      ],
+      "body": "assigns =\n  assigns\n  |> assign(:expanded_set, expanded_set(assigns.expanded, assigns.nodes))\n  |> assign(:selected_set, MapSet.new(assigns.selected))\n  |> assign(:checked_set, MapSet.new(assigns.checked))",
+      "dependencies": [
+        "tree.js"
+      ],
+      "examples": [
+        "<.component component_name=\"chelekom-headless-tree\" site=\"Global\" id=\"docs-outline\" class=\"w-full max-w-xs text-sm\" nodes={[%{label: \"Getting started\", value: \"start\", children: [%{label: \"Installation\", value: \"install\"}, %{label: \"First page\", value: \"first-page\"}]}, %{label: \"Reference\", value: \"reference\"}]} expanded={[\"start\"]} />",
+        "<.component component_name=\"chelekom-headless-tree\" site=\"Global\" id=\"project-files\" class=\"w-full max-w-xs text-sm\" with_checkboxes nodes={[%{label: \"src\", value: \"src\", children: [%{label: \"app.ex\", value: \"app\"}, %{label: \"router.ex\", value: \"router\"}]}, %{label: \"README.md\", value: \"readme\"}]} expanded={[\"src\"]} />"
+      ],
+      "extra": {
+        "clauses": null,
+        "component": "tree",
+        "doc_examples": [],
+        "doc_url": "https://mishka.tools/chelekom/docs/headless/tree",
+        "examples": [
+          {
+            "base": true,
+            "label": "Documentation outline",
+            "requires": {},
+            "section": null,
+            "source": "<.component component_name=\"chelekom-headless-tree\" site=\"Global\" id=\"docs-outline\" class=\"w-full max-w-xs text-sm\" nodes={[%{label: \"Getting started\", value: \"start\", children: [%{label: \"Installation\", value: \"install\"}, %{label: \"First page\", value: \"first-page\"}]}, %{label: \"Reference\", value: \"reference\"}]} expanded={[\"start\"]} />"
+          },
+          {
+            "base": false,
+            "label": "Project files with checkboxes",
+            "requires": {},
+            "section": null,
+            "source": "<.component component_name=\"chelekom-headless-tree\" site=\"Global\" id=\"project-files\" class=\"w-full max-w-xs text-sm\" with_checkboxes nodes={[%{label: \"src\", value: \"src\", children: [%{label: \"app.ex\", value: \"app\"}, %{label: \"router.ex\", value: \"router\"}]}, %{label: \"README.md\", value: \"readme\"}]} expanded={[\"src\"]} />"
+          }
+        ],
+        "function": "tree",
+        "furnishing": {
+          "attrs": {
+            "class": "w-full max-w-xs text-sm",
+            "expanded": [
+              "start"
+            ],
+            "nodes": [
+              {
+                ":label": "Overview",
+                ":value": "overview"
+              },
+              {
+                ":children": [
+                  {
+                    ":label": "Installation",
+                    ":value": "install"
+                  },
+                  {
+                    ":label": "First page",
+                    ":value": "first-page"
+                  }
+                ],
+                ":label": "Getting started",
+                ":value": "start"
+              },
+              {
+                ":children": [
+                  {
+                    ":label": "Layouts",
+                    ":value": "layouts"
+                  },
+                  {
+                    ":label": "Components",
+                    ":value": "components"
+                  }
+                ],
+                ":label": "Guides",
+                ":value": "guides"
+              },
+              {
+                ":label": "Reference",
+                ":value": "reference"
+              }
+            ]
+          },
+          "body": "",
+          "slots": []
+        },
+        "module_attributes": [],
+        "prelude": null,
+        "ui_kit": "chelekom_headless",
+        "ui_kit_version": "0.0.10"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "assigns",
+          "attrs": [
+            {
+              "name": "node",
+              "opts": {
+                "required": true
+              },
+              "type": "map"
+            },
+            {
+              "name": "level",
+              "opts": {
+                "required": true
+              },
+              "type": "integer"
+            },
+            {
+              "name": "root_index",
+              "opts": {
+                "default": null
+              },
+              "type": "integer"
+            },
+            {
+              "name": "setsize",
+              "opts": {
+                "required": true
+              },
+              "type": "integer"
+            },
+            {
+              "name": "posinset",
+              "opts": {
+                "required": true
+              },
+              "type": "integer"
+            },
+            {
+              "name": "expanded_set",
+              "opts": {
+                "required": true
+              },
+              "type": "any"
+            },
+            {
+              "name": "selected_set",
+              "opts": {
+                "required": true
+              },
+              "type": "any"
+            },
+            {
+              "name": "checked_set",
+              "opts": {
+                "required": true
+              },
+              "type": "any"
+            },
+            {
+              "name": "with_checkboxes",
+              "opts": {
+                "required": true
+              },
+              "type": "boolean"
+            },
+            {
+              "name": "with_expand_icon",
+              "opts": {
+                "required": true
+              },
+              "type": "boolean"
+            },
+            {
+              "name": "keep_mounted",
+              "opts": {
+                "required": true
+              },
+              "type": "boolean"
+            },
+            {
+              "name": "draggable",
+              "opts": {
+                "required": true
+              },
+              "type": "boolean"
+            },
+            {
+              "name": "with_drag_handle",
+              "opts": {
+                "required": true
+              },
+              "type": "boolean"
+            },
+            {
+              "name": "drag_handle_label",
+              "opts": {
+                "required": true
+              },
+              "type": "string"
+            },
+            {
+              "name": "node_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "label_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "subtree_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "checkbox_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "expand_icon_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "drag_handle_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "label_text_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "loader_class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            },
+            {
+              "name": "node_slot",
+              "opts": {
+                "default": []
+              },
+              "type": "any"
+            },
+            {
+              "name": "expand_icon",
+              "opts": {
+                "default": []
+              },
+              "type": "any"
+            },
+            {
+              "name": "drag_icon",
+              "opts": {
+                "default": []
+              },
+              "type": "any"
+            },
+            {
+              "name": "loader",
+              "opts": {
+                "default": []
+              },
+              "type": "any"
+            },
+            {
+              "name": "name",
+              "opts": {
+                "default": null
+              },
+              "type": "string"
+            }
+          ],
+          "code": "node = assigns.node\nchildren = Map.get(node, :children) || []\nhas_children = children != [] || Map.get(node, :has_children, false)\n\nassigns =\n  assigns\n  |> assign(:children, children)\n  |> assign(:has_children, has_children)\n  |> assign(:value, node.value)\n  |> assign(:expanded, MapSet.member?(assigns.expanded_set, node.value))\n  |> assign(:selected, MapSet.member?(assigns.selected_set, node.value))\n  |> assign(:checked, checked?(node, children, assigns.checked_set))\n  |> assign(:indeterminate, indeterminate?(node, children, assigns.checked_set))\n  |> assign(:disabled, Map.get(node, :disabled, false))\n  |> assign(:selectable, Map.get(node, :selectable, true))\n\n~H\"\"\"\n<li\n  role=\"treeitem\"\n  data-value={@value}\n  data-level={@level}\n  data-expanded={@has_children && to_string(@expanded)}\n  data-has-children={@has_children && \"true\"}\n  data-selected={@selected && \"true\"}\n  data-checked={@with_checkboxes && to_string(@checked)}\n  data-indeterminate={@indeterminate && \"true\"}\n  data-disabled={@disabled && \"true\"}\n  data-selectable={!@selectable && \"false\"}\n  aria-disabled={@disabled && \"true\"}\n  aria-level={@level}\n  aria-setsize={@setsize}\n  aria-posinset={@posinset}\n  aria-expanded={@has_children && to_string(@expanded)}\n  {aria_state(@with_checkboxes, @selectable, @selected, @checked, @indeterminate)}\n  tabindex={if(@root_index == 0, do: \"0\", else: \"-1\")}\n  style={\"--label-offset: calc(var(--level-offset) * #{@level - 1});\"}\n  class={[\"chelekom-tree__node\", @node_class]}\n>\n  <div\n    data-part=\"label\"\n    data-selected={@selected && \"true\"}\n    draggable={@draggable && !@with_drag_handle && \"true\"}\n    class={[\"chelekom-tree__label\", @label_class]}\n  >\n    <span\n      :if={@draggable && @with_drag_handle}\n      data-part=\"drag-handle\"\n      draggable=\"true\"\n      aria-label={@drag_handle_label}\n      class={[\"chelekom-tree__drag-handle\", @drag_handle_class]}\n    >\n      {render_slot(@drag_icon)}\n    </span>\n\n    <input\n      :if={@with_checkboxes}\n      type=\"checkbox\"\n      data-part=\"checkbox\"\n      name={@name}\n      value={@name && @value}\n      checked={@checked}\n      disabled={@disabled}\n      tabindex=\"-1\"\n      aria-hidden=\"true\"\n      class={[\"chelekom-tree__checkbox\", @checkbox_class]}\n    />\n\n    <span\n      :if={@with_expand_icon}\n      data-part=\"expand-icon\"\n      data-has-children={@has_children && \"true\"}\n      aria-hidden=\"true\"\n      class={[\"chelekom-tree__expand-icon\", @expand_icon_class]}\n    >\n      <%= if @has_children do %>\n        {render_slot(@expand_icon)}\n      <% end %>\n    </span>\n\n    <span data-part=\"label-text\" class={[\"chelekom-tree__label-text\", @label_text_class]}>\n      <%= if @node_slot != [] do %>\n        {render_slot(@node_slot, %{\n          node: @node,\n          icon: Map.get(@node, :icon),\n          level: @level,\n          expanded: @expanded,\n          selected: @selected,\n          checked: @checked,\n          indeterminate: @indeterminate,\n          has_children: @has_children,\n          is_root: @level == 1\n        })}\n      <% else %>\n        {label_text(@node)}\n      <% end %>\n    </span>\n\n    <span data-part=\"loader\" class={[\"chelekom-tree__loader\", @loader_class]}>\n      {render_slot(@loader)}\n    </span>\n  </div>\n\n  <ul\n    :if={@has_children && (@keep_mounted || @expanded) && @children != []}\n    role=\"group\"\n    data-part=\"subtree\"\n    data-level={@level}\n    hidden={!@expanded}\n    class={[\"chelekom-tree__subtree\", @subtree_class]}\n  >\n    <.tree_node\n      :for={{child, index} <- Enum.with_index(@children)}\n      node={child}\n      level={@level + 1}\n      setsize={length(@children)}\n      posinset={index + 1}\n      expanded_set={@expanded_set}\n      selected_set={@selected_set}\n      checked_set={@checked_set}\n      with_checkboxes={@with_checkboxes}\n      with_expand_icon={@with_expand_icon}\n      keep_mounted={@keep_mounted}\n      draggable={@draggable}\n      with_drag_handle={@with_drag_handle}\n      drag_handle_label={@drag_handle_label}\n      node_class={@node_class}\n      label_class={@label_class}\n      subtree_class={@subtree_class}\n      checkbox_class={@checkbox_class}\n      expand_icon_class={@expand_icon_class}\n      drag_handle_class={@drag_handle_class}\n      label_text_class={@label_text_class}\n      loader_class={@loader_class}\n      node_slot={@node_slot}\n      expand_icon={@expand_icon}\n      drag_icon={@drag_icon}\n      loader={@loader}\n      name={@name}\n    />\n  </ul>\n</li>\n\"\"\"",
+          "discriminators": [],
+          "name": "tree_node",
+          "slots": []
+        },
+        {
+          "args": "true, _selectable, _selected, checked, indeterminate",
+          "attrs": [],
+          "code": "%{\n  \"aria-checked\" =>\n    if indeterminate do\n      \"mixed\"\n    else\n      to_string(checked)\n    end\n}",
+          "discriminators": [],
+          "name": "aria_state",
+          "slots": []
+        },
+        {
+          "args": "false, false, _selected, _checked, _indeterminate",
+          "attrs": [],
+          "code": "%{}",
+          "discriminators": [],
+          "name": "aria_state",
+          "slots": []
+        },
+        {
+          "args": "false, true, selected, _checked, _indeterminate",
+          "attrs": [],
+          "code": "%{\"aria-selected\" => to_string(selected)}",
+          "discriminators": [],
+          "name": "aria_state",
+          "slots": []
+        },
+        {
+          "args": "node",
+          "attrs": [],
+          "code": "Map.get(node, :label) || Map.get(node, :value)",
+          "discriminators": [],
+          "name": "label_text",
+          "slots": []
+        },
+        {
+          "args": ":all, nodes",
+          "attrs": [],
+          "code": "nodes |> all_parent_values() |> MapSet.new()",
+          "discriminators": [],
+          "name": "expanded_set",
+          "slots": []
+        },
+        {
+          "args": "values, _nodes when is_list(values)",
+          "attrs": [],
+          "code": "MapSet.new(values)",
+          "discriminators": [],
+          "name": "expanded_set",
+          "slots": []
+        },
+        {
+          "args": "_other, _nodes",
+          "attrs": [],
+          "code": "MapSet.new()",
+          "discriminators": [],
+          "name": "expanded_set",
+          "slots": []
+        },
+        {
+          "args": "nodes",
+          "attrs": [],
+          "code": "Enum.flat_map(nodes, &parent_values/1)",
+          "discriminators": [],
+          "name": "all_parent_values",
+          "slots": []
+        },
+        {
+          "args": "node",
+          "attrs": [],
+          "code": "case Map.get(node, :children) || [] do\n  [] ->\n    if Map.get(node, :has_children, false) do\n      [node.value]\n    else\n      []\n    end\n\n  children ->\n    [node.value | all_parent_values(children)]\nend",
+          "discriminators": [],
+          "name": "parent_values",
+          "slots": []
+        },
+        {
+          "args": "node, [], checked_set",
+          "attrs": [],
+          "code": "MapSet.member?(checked_set, node.value)",
+          "discriminators": [],
+          "name": "checked?",
+          "slots": []
+        },
+        {
+          "args": "_node, children, checked_set",
+          "attrs": [],
+          "code": "Enum.all?(leaf_values(children), &MapSet.member?(checked_set, &1))",
+          "discriminators": [],
+          "name": "checked?",
+          "slots": []
+        },
+        {
+          "args": "_node, [], _checked_set",
+          "attrs": [],
+          "code": "false",
+          "discriminators": [],
+          "name": "indeterminate?",
+          "slots": []
+        },
+        {
+          "args": "_node, children, checked_set",
+          "attrs": [],
+          "code": "leaves = leaf_values(children)\nchecked = Enum.count(leaves, &MapSet.member?(checked_set, &1))\nchecked > 0 and checked < length(leaves)",
+          "discriminators": [],
+          "name": "indeterminate?",
+          "slots": []
+        },
+        {
+          "args": "nodes",
+          "attrs": [],
+          "code": "Enum.flat_map(nodes, fn node ->\n  case Map.get(node, :children) || [] do\n    [] -> [node.value]\n    children -> leaf_values(children)\n  end\nend)",
+          "discriminators": [],
+          "name": "leaf_values",
+          "slots": []
+        }
+      ],
+      "name": "chelekom-headless-tree",
+      "permissions": [],
+      "precompile": false,
+      "priority": 50,
+      "required": false,
+      "site_id": null,
+      "slots": [
+        {
+          "attrs": [],
+          "name": "expand_icon",
+          "opts": {
+            "doc": "Shared icon rendered inside every parent node's expand-icon (e.g. a chevron)"
+          }
+        },
+        {
+          "attrs": [],
+          "name": "drag_icon",
+          "opts": {
+            "doc": "Shared icon rendered inside every drag handle"
+          }
+        },
+        {
+          "attrs": [],
+          "name": "loader",
+          "opts": {
+            "doc": "Shared busy indicator, revealed on a node's `data-loading`"
+          }
+        },
+        {
+          "attrs": [],
+          "name": "node",
+          "opts": {
+            "doc": "Renders a node label. Receives the node map plus its derived state"
+          }
+        }
+      ],
+      "stateful": false,
+      "template": "<ul\n  id={@id}\n  role=\"tree\"\n  phx-hook=\"GlobalChelekomHeadlessTree\"\n  data-tree-root\n  aria-label={@aria_label}\n  {%{\"aria-multiselectable\" => to_string(@multiple)}}\n  style={\"--level-offset: #{@level_offset};\"}\n  data-with-lines={@with_lines}\n  data-with-checkboxes={to_string(@with_checkboxes)}\n  data-expanded-values={Jason.encode!(MapSet.to_list(@expanded_set))}\n  data-selected-values={Jason.encode!(MapSet.to_list(@selected_set))}\n  data-checked-values={Jason.encode!(MapSet.to_list(@checked_set))}\n  data-expand-on-click={to_string(@expand_on_click)}\n  data-expand-on-space={to_string(@expand_on_space)}\n  data-check-on-space={to_string(@check_on_space)}\n  data-select-on-click={to_string(@select_on_click)}\n  data-allow-range-selection={to_string(@allow_range_selection)}\n  data-clear-selection-on-outside-click={to_string(@clear_selection_on_outside_click)}\n  data-keep-mounted={to_string(@keep_mounted)}\n  data-check-strictly={to_string(@check_strictly)}\n  data-multiple={to_string(@multiple)}\n  data-draggable={to_string(@draggable)}\n  data-with-drag-handle={to_string(@with_drag_handle)}\n  data-allow-drop={@allow_drop}\n  data-on-expand={@on_expand}\n  data-on-collapse={@on_collapse}\n  data-on-select={@on_select}\n  data-on-check={@on_check}\n  data-on-drag-drop={@on_drag_drop}\n  data-on-load-children={@on_load_children}\n  data-on-target={@on_target}\n  phx-target={@on_target}\n  class={[\"chelekom-tree\", @class]}\n  {@rest}\n>\n  <.tree_node\n    :for={{node, index} <- Enum.with_index(@nodes)}\n    node={node}\n    level={1}\n    root_index={index}\n    setsize={length(@nodes)}\n    posinset={index + 1}\n    expanded_set={@expanded_set}\n    selected_set={@selected_set}\n    checked_set={@checked_set}\n    with_checkboxes={@with_checkboxes}\n    with_expand_icon={@with_expand_icon}\n    keep_mounted={@keep_mounted}\n    draggable={@draggable}\n    with_drag_handle={@with_drag_handle}\n    drag_handle_label={@drag_handle_label}\n    node_class={@node_class}\n    label_class={@label_class}\n    subtree_class={@subtree_class}\n    checkbox_class={@checkbox_class}\n    expand_icon_class={@expand_icon_class}\n    drag_handle_class={@drag_handle_class}\n    label_text_class={@label_text_class}\n    loader_class={@loader_class}\n    node_slot={@node}\n    expand_icon={@expand_icon}\n    drag_icon={@drag_icon}\n    loader={@loader}\n    name={@name}\n  />\n</ul>\n",
+      "type": "navigation"
+    },
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "id",
+          "opts": {
+            "doc": "Unique id",
+            "required": true
+          },
+          "type": "string"
+        },
+        {
+          "name": "rows",
+          "opts": {
+            "doc": "The rows to render",
+            "required": true
+          },
+          "type": "list"
+        },
+        {
+          "name": "caption",
+          "opts": {
+            "default": null,
+            "doc": "Names the table for assistive tech"
+          },
+          "type": "string"
+        },
+        {
+          "name": "show_caption",
+          "opts": {
+            "default": false,
+            "doc": "Also show the caption; it is there for screen readers either way"
+          },
+          "type": "boolean"
+        },
+        {
+          "name": "row_id",
+          "opts": {
+            "default": null,
+            "doc": "A function of the row returning its DOM id, so LiveView can patch one row"
+          },
+          "type": "any"
+        },
+        {
+          "name": "row_click",
+          "opts": {
+            "default": null,
+            "doc": "A function of the row returning a JS command"
+          },
+          "type": "any"
+        },
+        {
+          "name": "sort_by",
+          "opts": {
+            "default": null,
+            "doc": "Which column is sorted"
+          },
+          "type": "string"
+        },
+        {
+          "name": "sort_dir",
+          "opts": {
+            "default": "asc",
+            "doc": "Which way the sorted column runs",
+            "values": [
+              "asc",
+              "desc"
+            ]
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_sort",
+          "opts": {
+            "default": null,
+            "doc": "LiveView event pushed as `%{key, dir}` when a sortable header is activated"
+          },
+          "type": "string"
+        },
+        {
+          "name": "selected",
+          "opts": {
+            "default": [],
+            "doc": "Ids of the selected rows"
+          },
+          "type": "list"
+        },
+        {
+          "name": "on_select",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed as `%{id, selected}` per row"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_select_all",
+          "opts": {
+            "default": null,
+            "doc": "Event pushed as `%{selected}` for the header"
+          },
+          "type": "string"
+        },
+        {
+          "name": "select_label",
+          "opts": {
+            "default": "Select row",
+            "doc": "Accessible name for a row's checkbox"
+          },
+          "type": "string"
+        },
+        {
+          "name": "select_all_label",
+          "opts": {
+            "default": "Select all rows",
+            "doc": "…and for the header's"
+          },
+          "type": "string"
+        },
+        {
+          "name": "class",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes for the root"
+          },
+          "type": "any"
+        },
+        {
+          "name": "row_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "cell_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "body_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "caption_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "empty_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "foot_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "head_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "header_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "select_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "sort_class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "rest",
+          "opts": {},
+          "type": "global"
+        }
+      ],
+      "body": "assigns = assign(assigns, :selectable?, assigns.on_select != nil)",
+      "dependencies": [
+        "indeterminate.js"
+      ],
+      "examples": [
+        "<.component component_name=\"chelekom-headless-table\" site=\"Global\" id=\"people-table\" rows={[%{name: \"Ada Lovelace\", role: \"Engineer\"}, %{name: \"Grace Hopper\", role: \"Admiral\"}, %{name: \"Alan Turing\", role: \"Researcher\"}]} class=\"w-full max-w-xl text-left text-sm\" head_class=\"border-b border-current/15\" header_class=\"px-3 py-2 font-medium\" body_class=\"divide-y divide-current/10\" cell_class=\"px-3 py-2\"><:col :let={person} label=\"Name\">{person.name}</:col><:col :let={person} label=\"Role\">{person.role}</:col></.component>",
+        "<.component component_name=\"chelekom-headless-table\" site=\"Global\" id=\"empty-table\" rows={[]} caption=\"Team\" show_caption caption_class=\"pb-2 text-left font-medium\" class=\"w-full max-w-xl text-left text-sm\" head_class=\"border-b border-current/15\" header_class=\"px-3 py-2 font-medium\" body_class=\"divide-y divide-current/10\" cell_class=\"px-3 py-2\" empty_class=\"px-3 py-6 text-center opacity-70\"><:col label=\"Name\"></:col><:col label=\"Role\"></:col><:empty>Nobody here yet.</:empty></.component>"
+      ],
+      "extra": {
+        "clauses": null,
+        "component": "table",
+        "doc_examples": [],
+        "doc_url": "https://mishka.tools/chelekom/docs/headless/table",
+        "examples": [
+          {
+            "base": true,
+            "label": "People with their role",
+            "requires": {},
+            "section": null,
+            "source": "<.component component_name=\"chelekom-headless-table\" site=\"Global\" id=\"people-table\" rows={[%{name: \"Ada Lovelace\", role: \"Engineer\"}, %{name: \"Grace Hopper\", role: \"Admiral\"}, %{name: \"Alan Turing\", role: \"Researcher\"}]} class=\"w-full max-w-xl text-left text-sm\" head_class=\"border-b border-current/15\" header_class=\"px-3 py-2 font-medium\" body_class=\"divide-y divide-current/10\" cell_class=\"px-3 py-2\"><:col :let={person} label=\"Name\">{person.name}</:col><:col :let={person} label=\"Role\">{person.role}</:col></.component>"
+          },
+          {
+            "base": false,
+            "label": "Team with a caption and no members yet",
+            "requires": {},
+            "section": null,
+            "source": "<.component component_name=\"chelekom-headless-table\" site=\"Global\" id=\"empty-table\" rows={[]} caption=\"Team\" show_caption caption_class=\"pb-2 text-left font-medium\" class=\"w-full max-w-xl text-left text-sm\" head_class=\"border-b border-current/15\" header_class=\"px-3 py-2 font-medium\" body_class=\"divide-y divide-current/10\" cell_class=\"px-3 py-2\" empty_class=\"px-3 py-6 text-center opacity-70\"><:col label=\"Name\"></:col><:col label=\"Role\"></:col><:empty>Nobody here yet.</:empty></.component>"
+          }
+        ],
+        "function": "table",
+        "furnishing": {
+          "attrs": {
+            "body_class": "divide-y divide-current/10",
+            "cell_class": "px-3 py-2",
+            "class": "w-full max-w-xl text-left text-sm",
+            "empty_class": "px-3 py-6 text-center opacity-70",
+            "head_class": "border-b border-current/15",
+            "header_class": "px-3 py-2 font-medium",
+            "rows": []
+          },
+          "body": "",
+          "slots": [
+            {
+              "attrs": {
+                "label": "Name"
+              },
+              "name": "col"
+            },
+            {
+              "attrs": {
+                "label": "Role"
+              },
+              "name": "col"
+            },
+            {
+              "attrs": {
+                "label": "Status"
+              },
+              "name": "col"
+            },
+            {
+              "body": "No rows yet.",
+              "name": "empty"
+            }
+          ]
+        },
+        "module_attributes": [],
+        "prelude": null,
+        "ui_kit": "chelekom_headless",
+        "ui_kit_version": "0.0.10"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "col, on_sort",
+          "attrs": [],
+          "code": "!!(col[:key] && on_sort)",
+          "discriminators": [],
+          "name": "sortable?",
+          "slots": []
+        },
+        {
+          "args": "col, sort_by, sort_dir",
+          "attrs": [],
+          "code": "if col[:key] && col[:key] == sort_by do\n  if sort_dir == \"desc\" do\n    \"descending\"\n  else\n    \"ascending\"\n  end\nend",
+          "discriminators": [],
+          "name": "aria_sort",
+          "slots": []
+        },
+        {
+          "args": "col, sort_by, sort_dir",
+          "attrs": [],
+          "code": "if col[:key] == sort_by and sort_dir == \"asc\" do\n  \"desc\"\nelse\n  \"asc\"\nend",
+          "discriminators": [],
+          "name": "next_dir",
+          "slots": []
+        },
+        {
+          "args": "col",
+          "attrs": [],
+          "code": "if col[:row_header] do\n  %{\"scope\" => \"row\"}\nelse\n  %{}\nend",
+          "discriminators": [],
+          "name": "cell_attrs",
+          "slots": []
+        },
+        {
+          "args": "row, selected, row_id",
+          "attrs": [],
+          "code": "row_id != nil and row_id.(row) in selected",
+          "discriminators": [],
+          "name": "selected?",
+          "slots": []
+        },
+        {
+          "args": "[], _selected, _row_id",
+          "attrs": [],
+          "code": "false",
+          "discriminators": [],
+          "name": "all_selected?",
+          "slots": []
+        },
+        {
+          "args": "rows, selected, row_id",
+          "attrs": [],
+          "code": "row_id != nil and Enum.all?(rows, &(row_id.(&1) in selected))",
+          "discriminators": [],
+          "name": "all_selected?",
+          "slots": []
+        },
+        {
+          "args": "rows, selected, row_id",
+          "attrs": [],
+          "code": "row_id != nil and Enum.any?(rows, &(row_id.(&1) in selected)) and\n  not Enum.all?(rows, &(row_id.(&1) in selected))",
+          "discriminators": [],
+          "name": "some_selected?",
+          "slots": []
+        }
+      ],
+      "name": "chelekom-headless-table",
+      "permissions": [],
+      "precompile": false,
+      "priority": 50,
+      "required": false,
+      "site_id": null,
+      "slots": [
+        {
+          "attrs": [
+            {
+              "name": "label",
+              "opts": {
+                "doc": "Header text"
+              },
+              "type": "string"
+            },
+            {
+              "name": "key",
+              "opts": {
+                "doc": "Sort key; a column without one is not sortable"
+              },
+              "type": "string"
+            },
+            {
+              "name": "row_header",
+              "opts": {
+                "doc": "Render this column's cells as `<th scope=\"row\">`"
+              },
+              "type": "boolean"
+            },
+            {
+              "name": "align",
+              "opts": {
+                "doc": "start | center | end, reflected as data-align"
+              },
+              "type": "string"
+            },
+            {
+              "name": "class",
+              "opts": {},
+              "type": "any"
+            }
+          ],
+          "name": "col",
+          "opts": {
+            "doc": "One column",
+            "required": true
+          }
+        },
+        {
+          "attrs": [],
+          "name": "empty",
+          "opts": {
+            "doc": "Shown instead of the body when there are no rows"
+          }
+        },
+        {
+          "attrs": [],
+          "name": "foot",
+          "opts": {
+            "doc": "A `<tfoot>` row; receives no rows, so totals are the caller's to compute"
+          }
+        }
+      ],
+      "stateful": false,
+      "template": "<table\n  id={@id}\n  data-part=\"root\"\n  data-sort-by={@sort_by}\n  data-sort-dir={@sort_by && @sort_dir}\n  class={[\"chelekom-table\", @class]}\n  {@rest}\n>\n  <caption\n    :if={@caption}\n    data-part=\"caption\"\n    data-hidden={!@show_caption}\n    class={[\"chelekom-table__caption\", @caption_class]}\n  >{@caption}</caption>\n\n  <thead data-part=\"head\" class={[\"chelekom-table__head\", @head_class]}>\n    <tr data-part=\"row\" class={[\"chelekom-table__row\", @row_class]}>\n      <th :if={@selectable?} scope=\"col\" data-part=\"header\" class={[\"chelekom-table__header\", @header_class]}>\n        <input\n          type=\"checkbox\"\n          id={\"#{@id}-select-all\"}\n          phx-hook=\"GlobalChelekomHeadlessIndeterminate\"\n          data-part=\"select-all\"\n          data-indeterminate={some_selected?(@rows, @selected, @row_id)}\n          checked={all_selected?(@rows, @selected, @row_id)}\n          aria-label={@select_all_label}\n          phx-click={@on_select_all && JS.push(@on_select_all)}\n          class={[\"chelekom-table__select\", @select_class]}\n        />\n      </th>\n\n      <th\n        :for={col <- @col}\n        scope=\"col\"\n        data-part=\"header\"\n        data-align={col[:align]}\n        data-sortable={sortable?(col, @on_sort)}\n        aria-sort={aria_sort(col, @sort_by, @sort_dir)}\n        class={[\"chelekom-table__header\", @header_class, col[:class]]}\n      >\n        <button\n          :if={sortable?(col, @on_sort)}\n          type=\"button\"\n          data-part=\"sort\"\n          data-dir={col[:key] == @sort_by && @sort_dir}\n          phx-click={JS.push(@on_sort, value: %{key: col[:key], dir: next_dir(col, @sort_by, @sort_dir)})}\n          class={[\"chelekom-table__sort\", @sort_class]}\n        >{col[:label]}</button>\n\n        <span :if={!sortable?(col, @on_sort)}>{col[:label]}</span>\n      </th>\n    </tr>\n  </thead>\n\n  <tbody :if={@rows != []} data-part=\"body\" id={\"#{@id}-body\"} class={[\"chelekom-table__body\", @body_class]}>\n    <tr\n      :for={row <- @rows}\n      id={@row_id && @row_id.(row)}\n      data-part=\"row\"\n      data-selected={selected?(row, @selected, @row_id)}\n      phx-click={@row_click && @row_click.(row)}\n      class={[\"chelekom-table__row\", @row_class]}\n    >\n      <td :if={@selectable?} data-part=\"cell\" class={[\"chelekom-table__cell\", @cell_class]}>\n        <input\n          type=\"checkbox\"\n          data-part=\"select\"\n          checked={selected?(row, @selected, @row_id)}\n          aria-label={@select_label}\n          phx-click={JS.push(@on_select, value: %{id: @row_id && @row_id.(row)})}\n          class={[\"chelekom-table__select\", @select_class]}\n        />\n      </td>\n\n      <.dynamic_tag\n        :for={col <- @col}\n        tag_name={if col[:row_header], do: \"th\", else: \"td\"}\n        data-part=\"cell\"\n        data-align={col[:align]}\n        class={[\"chelekom-table__cell\", @cell_class, col[:class]]}\n        {cell_attrs(col)}\n      >{render_slot(col, row)}</.dynamic_tag>\n    </tr>\n  </tbody>\n\n  <tbody :if={@rows == [] && @empty != []} data-part=\"body\" class={[\"chelekom-table__body\", @body_class]}>\n    <tr data-part=\"row\" class={[\"chelekom-table__row\", @row_class]}>\n      <td\n        data-part=\"empty\"\n        colspan={length(@col) + if(@selectable?, do: 1, else: 0)}\n        class={[\"chelekom-table__empty\", @empty_class]}\n      >{render_slot(@empty)}</td>\n    </tr>\n  </tbody>\n\n  <tfoot :if={@foot != []} data-part=\"foot\" class={[\"chelekom-table__foot\", @foot_class]}>\n    <tr data-part=\"row\" class={[\"chelekom-table__row\", @row_class]}>{render_slot(@foot)}</tr>\n  </tfoot>\n</table>\n",
+      "type": "data-display"
+    }
+  ],
+  "icons": {},
+  "js_hooks": [],
+  "name": "chelekom_headless",
+  "stylesheets": [],
+  "version": "0.0.10"
+}

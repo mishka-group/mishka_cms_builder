@@ -1,0 +1,671 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_builder/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+defmodule MishkaCmsBuilder.PaletteEntryTest do
+  @moduledoc """
+  A component that cannot be a stored template registers as a descriptor on `builder:components`
+  (the palette's extension seam, §22) and appears alongside the database ones.
+
+  The registry conventions are asserted here rather than assumed — seeded with core (never `[]`),
+  first declaration wins, and the module-call whitelist that keeps the editor from being talked into
+  emitting a call to a module nobody registered.
+  """
+  use MishkaCmsCore.DataCase, async: false
+
+  alias MishkaCmsCore.Builder.Events
+  alias MishkaCmsBuilder.PaletteEntry
+  alias MishkaCmsCore.Runtime.Authoring.Fields
+  alias MishkaCmsBuilder.Presets
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsBuilder.Wizard
+  alias MishkaCmsBuilder.Test.Plugins.BuilderComponentsPlugin
+  alias MishkaInstaller.Event.{Event, EventHandler}
+
+  describe "the descriptor" do
+    test "derives a key and a label from the name" do
+      entry = PaletteEntry.new!(%{name: "latest-posts"})
+
+      assert entry.key == "latest-posts"
+      assert entry.label == "Latest Posts"
+      assert entry.type == "general"
+      assert entry.examples == []
+    end
+
+    test "an explicit key and label win" do
+      entry = PaletteEntry.new!(%{name: "x", key: "custom", label: "Nice Name"})
+
+      assert entry.key == "custom"
+      assert entry.label == "Nice Name"
+    end
+
+    test "a nameless descriptor is refused" do
+      assert {:error, _errors} = PaletteEntry.build(%{label: "No name"})
+    end
+
+    test "new!/1 raises so a malformed declaration fails the build, not the page" do
+      assert_raise ArgumentError, ~r/invalid palette entry/, fn ->
+        PaletteEntry.new!(%{label: "No name"})
+      end
+    end
+  end
+
+  describe "template/2" do
+    test "a tenant component is bound to the page's own site" do
+      entry = PaletteEntry.new!(%{name: "chelekom-card", global?: false})
+
+      assert PaletteEntry.template(entry, "acme") ==
+               ~s(<.component component_name="chelekom-card" site="acme" />)
+    end
+
+    test "a site-less scope falls back to Global" do
+      entry = PaletteEntry.new!(%{name: "chelekom-card", global?: false})
+      assert PaletteEntry.template(entry, nil) =~ ~s(site="Global")
+    end
+
+    # The compiled module's name is hashed from this attribute. Binding a global component to the
+    # page's site named a module nobody ever built, so dropping one from the palette painted the
+    # runtime's red "failed to render" over a component that works.
+    test "a global component stays bound to Global whatever page it is dropped on" do
+      entry = PaletteEntry.new!(%{name: "global-footer"})
+
+      assert entry.global?
+      assert PaletteEntry.template(entry, "acme") =~ ~s(site="Global")
+    end
+
+    # Reading an assign that was never set raises `KeyError`, and inside the canvas that takes the
+    # LiveView down — the author drops a component and gets a 500 page. A required attribute with no
+    # default and a required slot are both assigns nothing supplies, so both are seeded.
+    test "a required attribute with no default is seeded rather than left to raise" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-video",
+          attrs: [
+            %{"name" => "poster", "type" => "string", "opts" => %{"required" => true}},
+            %{"name" => "width", "type" => "string", "opts" => %{"default" => "full"}}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(poster="")
+
+      # An attribute the component already defaults is left alone, so its own default keeps applying.
+      refute template =~ "width="
+    end
+
+    # A MAP ATTRIBUTE MUST BE SEEDED WITH A MAP. Every non-scalar type fell through to the string
+    # clause, so a required `map` was written `flash="example"` and the component's own
+    # `Phoenix.Flash.get(@flash, :info)` called `Map.get/2` on a binary — a BadMapError that took the
+    # preview LiveView down and turned the wizard tab into a 500. `chelekom-flash-group` was the one
+    # component in the kit that declares one, and any kit with another would have done the same.
+    test "a required map attribute is seeded as a map expression, never a quoted string" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-flash-group",
+          attrs: [%{"name" => "flash", "type" => "map", "opts" => %{"required" => true}}]
+        })
+
+      assert PaletteEntry.seeded(entry, [], :blank) == " flash={%{}}"
+
+      refute PaletteEntry.seeded(entry, [], :blank) =~ ~s(flash="),
+             "a string here is a BadMapError the moment the component reads it"
+    end
+
+    # An empty map is valid and renders NOTHING, which is indistinguishable from the crash it
+    # replaced. A preview has no author to fill it in, so `flash` — a Phoenix convention, not a kit's
+    # — is seeded with the string-keyed messages `Phoenix.Flash.get/2` actually reads.
+    test "a preview seeds flash with messages it can render" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-flash-group",
+          attrs: [%{"name" => "flash", "type" => "map", "opts" => %{"required" => true}}]
+        })
+
+      seeded = PaletteEntry.seeded(entry, [], :preview)
+
+      assert seeded =~ ~s("info" =>)
+      assert seeded =~ ~s("error" =>)
+    end
+
+    # A list attribute has the same hole: `sections=""` where the template does `for s <- @sections`.
+    test "a required list attribute is seeded as a list expression" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-accordion",
+          attrs: [%{"name" => "sections", "type" => "list", "opts" => %{"required" => true}}]
+        })
+
+      assert PaletteEntry.seeded(entry, [], :blank) == " sections={[]}"
+    end
+
+    # A value the component actually has a clause for beats a neutral literal it may fall through on.
+    test "a seeded attribute takes the first value it declares" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-alert",
+          attrs: [
+            %{
+              "name" => "kind",
+              "type" => "atom",
+              "opts" => %{"required" => true, "values" => ["natural", "danger"]}
+            }
+          ]
+        })
+
+      assert PaletteEntry.template(entry, "acme") =~ "kind={:natural}"
+    end
+
+    test "a required slot is opened so its assign exists" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-video",
+          slots: [
+            %{
+              "name" => "source",
+              "opts" => %{"required" => true},
+              "attrs" => [%{"name" => "src", "type" => "string", "opts" => %{"required" => true}}]
+            },
+            %{"name" => "track", "opts" => %{}, "attrs" => []}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      # PLACEMENT leaves it blank on purpose: the inspector marks it "Required" and the save refuses
+      # until the author fills it. Only the wizard's PREVIEW seeds a real placeholder — see
+      # `seeded/3` with `:preview`.
+      assert template =~ ~s(<:source src=""></:source>)
+      # An optional slot already arrives as `[]`, so opening one would only add markup to delete.
+      refute template =~ "<:track"
+      assert template =~ "</.component>"
+    end
+
+    # TWO SAMPLE ENTRIES ARE TWO THINGS. A group's `<:item>` requires a `value`, and the component
+    # builds each item's id out of it — `chelekom-headless-checkbox-group` writes
+    # `id={"#{@id}-#{item.value}"}`. Seeded blank on both sample entries, the two items shared one
+    # id, and the canvas logged "Multiple IDs detected" the moment the group was dropped.
+    test "the sample entries of a list are told apart by the value they require" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-checkbox-group",
+          slots: [
+            %{
+              "name" => "item",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}},
+                %{"name" => "checked", "type" => "boolean", "opts" => %{}}
+              ]
+            }
+          ]
+        })
+
+      values =
+        ~r/<:item[^>]*\svalue="([^"]*)"/
+        |> Regex.scan(PaletteEntry.template(entry, "acme"), capture: :all_but_first)
+        |> List.flatten()
+
+      assert length(values) == 2, "the group is meant to arrive with two sample items"
+      assert Enum.uniq(values) == values, "two items share one value, and so one id"
+      refute "" in values, "an item without a value is a choice that cannot be chosen"
+    end
+
+    # A sample that brings its own value keeps it: an `<:option>` is already "one", "two", "three".
+    test "a sample's own value is not replaced" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "acme-select",
+          slots: [
+            %{
+              "name" => "option",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            }
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(<:option value="one">)
+      assert template =~ ~s(<:option value="two">)
+      refute template =~ ~s(value="one" value=)
+    end
+
+    # A COMPONENT PLACED WITH WHAT IT ARRIVES WITH HAS TO BE PUBLISHABLE. Five pages of the palette
+    # sweep were refused at Publish the moment their components were dropped:
+    # `chelekom-headless-highlight.highlight`, `chelekom-headless-mask-input.mask`, and the required
+    # `value` and `label` of a slot's entries. Each required value now arrives with a sample.
+    test "a required text attribute arrives with a sample on placement" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-highlight",
+          attrs: [
+            %{"name" => "text", "type" => "string", "opts" => %{"required" => true}},
+            %{"name" => "highlight", "type" => "any", "opts" => %{"required" => true}},
+            %{"name" => "mask", "type" => "string", "opts" => %{"required" => true}},
+            %{"name" => "label", "type" => "string", "opts" => %{"required" => true}}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(text="Example")
+      assert template =~ ~s(highlight="Example")
+      assert template =~ ~s(mask="999-999")
+      assert template =~ ~s(label="Example")
+    end
+
+    # What the template merely READS is not a promise the author has to keep, and a form field's
+    # `name` and `value` are exactly that: a written value would stop the drop binding them.
+    test "an attribute seeded only because the template reads it stays blank" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-input",
+          template: ~S(<input name={@name} value={@value} />),
+          attrs: [
+            %{"name" => "name", "type" => "string"},
+            %{"name" => "value", "type" => "string"}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(name="")
+      assert template =~ ~s(value="")
+    end
+
+    # An icon and a picture are chosen, not sampled: the canvas draws "needs src", the inspector
+    # marks the field and the save waits for the author. Neither is the words an `any` might hold.
+    test "a required icon, picture or non-word value stays blank" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "probe",
+          attrs: [
+            %{
+              "name" => "icon",
+              "type" => "string",
+              "opts" => %{"required" => true, "editor" => "icon"}
+            },
+            %{"name" => "src", "type" => "string", "opts" => %{"required" => true}},
+            %{"name" => "value", "type" => "any", "opts" => %{"required" => true}}
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(icon="")
+      assert template =~ ~s(src="")
+      assert template =~ ~s(value="")
+    end
+
+    # A group whose every option had the same value could not tell them apart.
+    test "the required values of a slot's entries are counted down the list" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-checkbox-group",
+          slots: [
+            %{
+              "name" => "item",
+              "opts" => %{},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            },
+            %{
+              "name" => "target",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            },
+            %{
+              "name" => "menu",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "label", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            }
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(<:target value="one"></:target>)
+      assert template =~ ~s(<:menu label="Example"></:menu>)
+      assert [_first, _second] = Regex.scan(~r/<:item [^>]*value="(one|two)"/, template)
+      assert template =~ ~s(value="two")
+    end
+
+    test "a component with nothing to seed stays self-closing" do
+      entry = PaletteEntry.new!(%{name: "chelekom-card", attrs: [], slots: []})
+
+      assert PaletteEntry.template(entry, "acme") =~ " />"
+    end
+
+    test "a descriptor with a render ref becomes a module call" do
+      entry = PaletteEntry.new!(%{name: "latest-posts", render: {MishkaBlogWeb.Latest, :render}})
+
+      assert PaletteEntry.template(entry, "acme") == "<MishkaBlogWeb.Latest.render />"
+      assert PaletteEntry.module_component?(entry)
+    end
+
+    test "a database component is not a module component" do
+      refute PaletteEntry.module_component?(PaletteEntry.new!(%{name: "card"}))
+    end
+  end
+
+  # Another kit's contact form: its one outer element is that kit's form component, and its `for` is
+  # optional. Only the palette says the component it calls owns a form.
+  defp acme_forms do
+    [
+      PaletteEntry.new!(%{
+        name: "acme-form",
+        attrs: [%{"name" => "for", "type" => "any", "opts" => %{"required" => true}}],
+        slots: [%{"name" => "inner_block"}],
+        template: ~S|<.form :let={f} for={@for}>{render_slot(@inner_block, f)}</.form>|
+      }),
+      PaletteEntry.new!(%{
+        name: "acme-contact",
+        attrs: [
+          %{"name" => "for", "type" => "any", "opts" => %{}},
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "plain", "values" => ["plain", "boxed"]}
+          }
+        ],
+        slots: [%{"name" => "inner_block"}],
+        template:
+          ~S|<.component component_name="acme-form" site="Global" :let={f} for={@for} class={@variant}>{render_slot(@inner_block, f)}</.component>|
+      })
+    ]
+  end
+
+  describe "seeding a form that calls another kit's form" do
+    test "is seeded an empty map when the palette says what it calls" do
+      [_form, contact] = palette = acme_forms()
+
+      assert PaletteEntry.template(contact, nil, palette) =~ "for={%{}}"
+      assert PaletteEntry.seeded(contact, [], :preview, palette) =~ "for={%{}}"
+      refute PaletteEntry.template(contact, nil) =~ "for={%{}}"
+    end
+
+    test "the placed component is a form to the editor, holding a form's data" do
+      [_form, contact] = palette = acme_forms()
+      tree = contact |> PaletteEntry.template(nil, palette) |> Tree.parse!()
+      placed = tree |> Tree.walk() |> Enum.find(&(&1.kind == :component))
+
+      assert Fields.form_node?(placed, Fields.roles([placed], palette))
+      assert Tree.Node.attr(placed, "for") == {:expr, "%{}"}
+    end
+
+    test "the wizard and the site's preset seed it the same way" do
+      [_form, contact] = palette = acme_forms()
+
+      assert Wizard.compose(contact, %{}, nil, :preview, palette) =~ "for={%{}}"
+      assert Wizard.compose(contact, %{"variant" => "boxed"}, nil, :blank, palette) =~ "for={%{}}"
+      assert Presets.template(contact, nil, %{}, palette) =~ "for={%{}}"
+
+      assert Presets.template(contact, nil, %{"acme-contact" => %{"variant" => "boxed"}}, palette) =~
+               "for={%{}}"
+
+      assert Presets.template(contact, nil, nil, palette) =~ "for={%{}}"
+    end
+  end
+
+  # A COPY OF CHELEKOM'S HEADLESS TABLE, as the kit ships it (`chelekom_headless.json` at
+  # mishka_chelekom 51c329c2). Its `row_id` is "a function of the row returning its DOM id", declared
+  # `any` with a nil default, and the table calls it on every row: `id={@row_id && @row_id.(row)}`.
+  @headless Path.expand("../fixtures/chelekom_headless_furnished.json", __DIR__)
+
+  defp headless(name) do
+    row =
+      @headless
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.fetch!("components")
+      |> Enum.find(&(&1["name"] == name))
+
+    PaletteEntry.new!(%{
+      name: row["name"],
+      template: row["template"],
+      attrs: row["attrs"],
+      slots: row["slots"],
+      helpers: row["helpers"],
+      furnishing: row["extra"]["furnishing"]
+    })
+  end
+
+  defp attr(name, type, opts), do: %{"name" => name, "type" => type, "opts" => opts}
+
+  describe "what an id is" do
+    # THE REPORTED DEFECT. `row_id` ends in `_id`, so it was minted a random string, and the table
+    # raised `BadFunctionError` on its first row: the furnished one has none, so the drop survived and
+    # the first row the author added in the Inspector took the canvas down.
+    test "a function of the row is not an id, whatever it is called" do
+      template = PaletteEntry.template(headless("chelekom-headless-table"), "Global")
+
+      assert template =~ ~r/ id="phx-[^"]+"/
+      refute template =~ "row_id=", "the table calls row_id on every row: #{template}"
+    end
+
+    # The styled kit's table declares the same function, documented "the function for generating the
+    # row id". The two tables' `row_id` are the only id-named attributes in either Chelekom bundle the
+    # rule tells apart from an id; the other 229 hold one.
+    test "and neither is the styled table's" do
+      row =
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.fetch!("components")
+        |> Enum.find(&(&1["name"] == "chelekom-table"))
+
+      entry =
+        PaletteEntry.new!(%{
+          name: row["name"],
+          template: row["template"],
+          attrs: row["attrs"],
+          slots: row["slots"],
+          helpers: row["helpers"]
+        })
+
+      refute PaletteEntry.template(entry, "Global") =~ "row_id="
+    end
+
+    test "an attribute the kit types as a string is an id by its name, suffix and all" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-editor",
+          template: ~S(<div id={@id} aria-labelledby={@label_id}></div>),
+          attrs: [
+            attr("id", "string", %{"required" => true}),
+            attr("label_id", "string", %{
+              "default" => nil,
+              "doc" => "id of the element labelling the surface"
+            })
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "Global")
+
+      assert template =~ ~r/ id="phx-[^"]+"/
+      assert template =~ ~r/ label_id="phx-[^"]+"/
+    end
+
+    # `chelekom-input`, `chelekom-combobox`, `chelekom-checkbox-field` and `chelekom-group-checkbox`
+    # declare their `id` as `any`, documented "A unique identifier is used to manage state and
+    # interaction". The doc is what says it holds an id.
+    test "an attribute declared any is an id when its doc says it holds one" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-input",
+          template: ~S(<input id={@id} />),
+          attrs: [
+            attr("id", "any", %{
+              "default" => nil,
+              "doc" => "A unique identifier is used to manage state and interaction"
+            })
+          ]
+        })
+
+      assert PaletteEntry.template(entry, "Global") =~ ~r/ id="phx-[^"]+"/
+    end
+
+    test "and is left to its default when its doc says nothing of the kind" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-table",
+          template: ~S|<tr :for={row <- @rows} id={@row_id && @row_id.(row)} />|,
+          attrs: [
+            attr("rows", "list", %{"default" => []}),
+            attr("row_id", "any", %{
+              "default" => nil,
+              "doc" => "the function for generating the row id"
+            }),
+            attr("owner_id", "any", %{"default" => nil})
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "Global")
+
+      refute template =~ "row_id="
+      refute template =~ "owner_id="
+    end
+
+    test "a function, an atom, a list or a map is never minted an id" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "probe",
+          attrs: [
+            attr("row_id", "fun", %{"required" => true}),
+            attr("kind_id", "atom", %{"required" => true}),
+            attr("item_id", "list", %{"required" => true}),
+            attr("map_id", "map", %{"required" => true})
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "Global")
+
+      refute template =~ "phx-", "only an id is minted: #{template}"
+      assert template =~ "kind_id={nil}"
+      assert template =~ "item_id={[]}"
+      assert template =~ "map_id={%{}}"
+    end
+  end
+
+  describe "the serialization whitelist" do
+    setup do
+      entries = [
+        PaletteEntry.new!(%{name: "a", render: {MishkaBlogWeb.Latest, :render}}),
+        PaletteEntry.new!(%{name: "b"})
+      ]
+
+      %{whitelist: PaletteEntry.whitelist(entries)}
+    end
+
+    test "only modules a descriptor named are in it", %{whitelist: whitelist} do
+      assert MapSet.to_list(whitelist) == [MishkaBlogWeb.Latest]
+    end
+
+    test "a template calling a registered module passes", %{whitelist: whitelist} do
+      assert PaletteEntry.permitted?("<MishkaBlogWeb.Latest.render />", whitelist)
+    end
+
+    # A fully-qualified call in a template is arbitrary code at compile time.
+    test "a template calling anything else is refused", %{whitelist: whitelist} do
+      refute PaletteEntry.permitted?("<System.Evil.run />", whitelist)
+      refute PaletteEntry.permitted?(~s(<div><File.rm_rf /></div>), whitelist)
+    end
+
+    # A name the author typed is only looked up: asking about it must not leave an atom behind.
+    test "a tag naming no module is refused without making an atom of it", %{whitelist: whitelist} do
+      name = "NoSuchRoot#{System.unique_integer([:positive])}"
+
+      refute PaletteEntry.permitted?("<#{name}.run />", whitelist)
+      assert_raise ArgumentError, fn -> String.to_existing_atom("Elixir." <> name) end
+    end
+
+    test "plain markup and wrapper components are unaffected", %{whitelist: whitelist} do
+      assert PaletteEntry.permitted?(~s(<div class="x"><p>hi</p></div>), whitelist)
+      assert PaletteEntry.permitted?(~s(<.component component_name="card" site="a" />), whitelist)
+    end
+  end
+
+  describe "builder:components — the registry" do
+    setup do
+      Process.register(self(), :__builder_palette_probe__)
+
+      {:ok, _} =
+        Event.write(%{
+          name: BuilderComponentsPlugin,
+          event: "builder:components",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("builder:components", :start, false)
+      on_exit(fn -> Event.unregister(:name, BuilderComponentsPlugin, false) end)
+      :ok
+    end
+
+    test "a plugin's descriptor joins the core's seeded palette" do
+      seed = [%{key: "core-card", name: "core-card", type: "layout", priority: 50}]
+
+      collected = Events.collect(:components, seed)
+      names = Enum.map(collected, & &1.name)
+
+      assert "core-card" in names
+      assert "latest-posts" in names
+    end
+
+    test "the plugin receives the core's entries, it does not replace them" do
+      Events.collect(:components, [
+        %{key: "a", name: "a", priority: 50},
+        %{key: "b", name: "b", priority: 50}
+      ])
+
+      assert_receive {:builder_components, 2}
+    end
+
+    # THE ONE THAT WAS MISSING, and the reason a contributed component took the editor down. Every
+    # test above asserts the descriptor reaches the list; none of them drew it. The palette asked
+    # each card `entry[:has_examples?]`, which a plain map answers and a `%PaletteEntry{}` — the
+    # documented shape for a contribution — raises on, because structs have no `Access`.
+    test "and the palette can actually draw it" do
+      entry = BuilderComponentsPlugin.entry()
+
+      assert PaletteEntry.optional(entry, :has_examples?) == nil
+      assert PaletteEntry.optional(entry, :offers_options?) == nil
+      assert PaletteEntry.optional(entry, :kit) == nil
+    end
+
+    test "while the core's own entries still answer what they carry" do
+      core = %{key: "core-card", name: "core-card", has_examples?: true, kit: "Chelekom"}
+
+      assert PaletteEntry.optional(core, :has_examples?) == true
+      assert PaletteEntry.optional(core, :kit) == "Chelekom"
+    end
+
+    # `sidebar:menus` convention: a plugin may add but never redefine a core entry.
+    test "the first declaration of a key wins" do
+      seed = [%{key: "latest-posts", name: "latest-posts", type: "core-wins", priority: 1}]
+
+      collected = Events.collect(:components, seed)
+      entry = Enum.find(collected, &(&1.name == "latest-posts"))
+
+      assert entry.type == "core-wins"
+      assert length(Enum.filter(collected, &(&1.name == "latest-posts"))) == 1
+    end
+
+    test "entries come back sorted by priority" do
+      seed = [%{key: "z", name: "z", priority: 90}]
+      collected = Events.collect(:components, seed)
+
+      # The plugin declares priority 10, so it sorts ahead of the seed's 90.
+      assert Enum.map(collected, & &1.name) == ["latest-posts", "z"]
+    end
+  end
+end
