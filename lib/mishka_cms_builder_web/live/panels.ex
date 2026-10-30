@@ -25,6 +25,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   import MishkaCmsCore.CoreComponents, only: [roadmap_notice: 1, select_chevron: 1]
 
   alias MishkaCmsBuilder.Collection
+  alias MishkaCmsCore.Builder.Literal
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsBuilder.PaletteEntry
@@ -4430,6 +4431,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       # the component's business, and `Inspector.icon_in/1` reads the name out of whichever shape the
       # value arrives in — the bundle's default or the expression the editor writes back.
       |> assign(:icon_map?, Inspector.icon_map?(assigns.attr))
+      |> then(&assign(&1, :label_kind, label_kind(&1)))
       |> then(&assign(&1, :value, shown(&1, Node.attr_text(&1.node, &1.name))))
       |> then(&assign(&1, :default, shown(&1, Inspector.default(&1.attr))))
       # An ATOM is written as an expression too — `kind={:danger}` is how HEEx spells one — but it is
@@ -4588,10 +4590,31 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp chosen?(current, value),
     do: String.trim_leading(to_string(current), ":") == to_string(value)
 
-  # What the control puts in its box. An icon carried in a map shows the name inside it; everything
-  # else shows itself.
+  # What the control puts in its box. An icon carried in a map shows the name inside it, and words
+  # carried in one the words; everything else shows itself.
+  defp shown(%{icon_map?: true, label_kind: :text}, value), do: words_in(value)
   defp shown(%{icon_map?: true}, value), do: Inspector.icon_in(value)
   defp shown(_assigns, value), do: value
+
+  # Which of the two an icon-or-words label holds on this node. Words once it holds them, and an icon
+  # otherwise, because the component's own default is one.
+  defp label_kind(%{icon_map?: true, node: node, name: name}) do
+    case node |> Node.attr_text(name) |> words_in() do
+      nil -> :icon
+      _words -> :text
+    end
+  end
+
+  defp label_kind(_assigns), do: nil
+
+  defp words_in(source) when is_binary(source) do
+    case Literal.value(source) do
+      {:ok, %{type: :text, value: words}} when is_binary(words) -> words
+      _not_words -> nil
+    end
+  end
+
+  defp words_in(_value), do: nil
 
   # TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP, the same reading `Inspector.unmet/3` gives the
   # publish refusal.
@@ -4791,174 +4814,62 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     """
   end
 
-  # An icon's value is a CLASS NAME the Tailwind heroicons plugin resolves — `hero-check`,
-  # `hero-check-solid`. Fifty-seven attributes across the kit are one, and every one of them used to
-  # be a bare text box: the author had to know the exact string, and a typo rendered nothing at all
-  # rather than an error. The catalogue is read from the same directory the plugin reads.
-  #
-  # The chip shows what is set; the popover searches 1,288 classes across the four weights the set
-  # ships. `MishkaCmsCore.Runtime.Authoring.Icons.available?/0` is false when the host has no
-  # heroicons, and the control falls back to the text box below.
-  defp widget_control(%{widget: :icon} = assigns) do
-    assigns =
-      assigns
-      |> assign(:open?, assigns.icon_picker == assigns.name)
-      |> assign_new(:icon_library, fn -> nil end)
-      |> assign_new(:icon_map?, fn -> false end)
-
-    # THE BUTTON WAS DEAD. `:icon_library` was assigned on the LiveView and defaulted here, and then
-    # never reached `Icons.search/2` — while `icon_variant`, threaded one line above, did. Clicking a
-    # library left the grid on the same 60 heroicons and the footer reading "Showing 60 of 316",
-    # because `Enum.take/2` on the merged list is spent before a second set is reached.
-    library = library_module(assigns.icon_library)
-
-    assigns =
-      assigns
-      |> assign(
-        :results,
-        Icons.search(assigns.icon_query, variant: assigns.icon_variant, library: library)
-      )
-      |> assign(:total, Icons.count(assigns.icon_query, assigns.icon_variant, library: library))
-
+  # AN ICON OR WORDS, AND THE AUTHOR SAYS WHICH. `chelekom-pagination`'s arrows and separator are
+  # maps the component draws as an icon when `type` is `:icon` and as words otherwise, defaulting to
+  # an icon. Offered the icon control alone, the words an author typed became the icon's name — the
+  # palette sweep typed `E2E-4` into `next_label`, the next arrow went, and `chelekom-icon` refused
+  # the name. So the two are a choice, each writing the map in the shape the default has, and the
+  # icon's box no longer writes a name no installed set has.
+  defp widget_control(%{widget: :icon, icon_map?: true} = assigns) do
     ~H"""
-    <div :if={!Icons.available?()}>
-      <.plain_input {assigns} />
-    </div>
+    <div class="flex flex-col gap-1.5">
+      <div class="flex gap-1" role="group" aria-label={gettext("Show as")}>
+        <button
+          :for={{kind, label} <- [{:icon, gettext("Icon")}, {:text, gettext("Text")}]}
+          type="button"
+          id={"pb-label-kind-#{@node.id}-#{@name}-#{kind}"}
+          phx-click="label_kind"
+          phx-value-node_id={@node.id}
+          phx-value-name={@name}
+          phx-value-kind={kind}
+          aria-pressed={to_string(@label_kind == kind)}
+          class={[
+            "h-[24px] flex-1 rounded-[7px] text-[10.5px] font-bold",
+            (@label_kind == kind && "bg-[#17161a] text-white") ||
+              "bg-[#f6f5f2] text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+          ]}
+        >
+          {label}
+        </button>
+      </div>
 
-    <div :if={Icons.available?()} class="relative">
-      <%!-- The TRIGGER IS THE FIELD. It was a button opening a popover with a search box of its own,
-            so the only reachable values were the ones this install has a catalogue for — and the
-            catalogue is only ever the sets registered here. An author naming a glyph from a set the
-            editor was never told about had no way to write it down. Typing now sets the attribute
-            directly and narrows the grid below with the same keystrokes. --%>
+      <.icon_control :if={@label_kind == :icon} {assigns} />
+
       <form
-        id={"pb-icon-form-#{@node.id}-#{@name}"}
+        :if={@label_kind == :text}
+        id={"pb-label-text-form-#{@node.id}-#{@name}"}
         phx-change="icon_typed"
         phx-submit="icon_typed"
-        class="flex h-[30px] w-full items-center gap-2 rounded-[8px] border border-[#ecebe6] bg-white px-2 focus-within:border-[#c3c1f0]"
       >
         <input type="hidden" name="name" value={@name} />
         <input type="hidden" name="node_id" value={@node.id} />
-        <%!-- WHAT THE COMPONENT EXPECTS BACK. A bare name for an icon-typed attribute, and the map
-              the component reads `type` and `value` out of for one declared as a map — writing a
-              binary into the second is a `Map.get/2` on a string the moment it renders. --%>
-        <input :if={@icon_map?} type="hidden" name="shape" value="map" />
-
-        <span :if={Icons.known?(@value)} class="flex-none text-[#3a382f]">
-          {Icons.svg(@value, 15)}
-        </span>
-        <span
-          :if={!Icons.known?(@value)}
-          class="grid size-[15px] flex-none place-items-center rounded-[4px] bg-[#f2f1ec] text-[9px] font-bold text-[#a8a5a0]"
-          title={gettext("Not in any installed icon set — it will still be written as you typed it")}
-        >
-          ?
-        </span>
+        <input type="hidden" name="shape" value="text" />
         <input
           type="text"
-          id={"pb-icon-open-#{@node.id}-#{@name}"}
+          id={"pb-label-text-#{@node.id}-#{@name}"}
           name="value"
           value={@value}
-          placeholder={@default || gettext("Type or pick an icon")}
+          placeholder={gettext("Words in place of the icon")}
           autocomplete="off"
-          spellcheck="false"
-          phx-debounce="250"
-          phx-focus="toggle_icon_picker"
-          phx-value-name={@name}
-          class="min-w-0 flex-1 border-0 bg-transparent p-0 font-['Space_Grotesk'] text-[11px] font-semibold text-[#1b1a18] placeholder:font-medium placeholder:text-[#a8a5a0] focus:outline-none"
+          phx-debounce="350"
+          class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-medium text-[#3a382f] focus:border-[#c3c1f0] focus:outline-none"
         />
-        <button
-          type="button"
-          phx-click="toggle_icon_picker"
-          phx-value-name={@name}
-          class="flex-none"
-          aria-label={gettext("Browse icons")}
-        >
-          <.icon name={:chevron} size={11} class="rotate-90 text-[#a8a5a0]" />
-        </button>
       </form>
-
-      <div
-        :if={@open?}
-        id={"pb-icon-picker-#{@name}"}
-        phx-mounted={menu_in()}
-        phx-remove={menu_out()}
-        phx-click-away="close_icon_picker"
-        class="absolute left-0 right-0 top-[34px] z-50 rounded-[12px] border border-[#ecebe6] bg-white p-2 shadow-[0_16px_44px_rgba(20,18,26,.2)]"
-      >
-        <%!-- One row per registered set, and only when there is a choice to make. `Icons.libraries/0`
-              is a list, so an install that adds Lucide beside Heroicons gets the selector for free. --%>
-        <div :if={length(Icons.libraries()) > 1} class="mb-1.5 flex gap-1">
-          <button
-            :for={library <- Icons.libraries()}
-            type="button"
-            id={"pb-icon-library-#{library.prefixes() |> List.first() |> to_string() |> String.trim_trailing("-")}"}
-            phx-click="icon_library"
-            phx-value-library={inspect(library)}
-            class={[
-              "h-[22px] flex-1 rounded-[6px] text-[9.5px] font-bold",
-              (library_module(@icon_library) == library && "bg-[#4f4bcc] text-white") ||
-                "bg-[#f6f5f2] text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
-            ]}
-          >
-            {library.label()}
-          </button>
-        </div>
-
-        <div class="mb-1.5 flex gap-1">
-          <button
-            :for={{suffix, label} <- Icons.variants()}
-            type="button"
-            id={"pb-icon-variant-#{(suffix == "" && "outline") || String.trim_leading(suffix, "-")}"}
-            phx-click="icon_variant"
-            phx-value-variant={suffix}
-            class={[
-              "h-[22px] flex-1 rounded-[6px] text-[9.5px] font-bold",
-              (@icon_variant == suffix && "bg-[#17161a] text-white") ||
-                "bg-[#f6f5f2] text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
-            ]}
-          >
-            {translate(label)}
-          </button>
-        </div>
-
-        <div class="grid max-h-[188px] grid-cols-8 gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <button
-            :for={name <- @results}
-            type="button"
-            id={"pb-icon-#{name}"}
-            phx-click="icon_picked"
-            phx-value-node_id={@node.id}
-            phx-value-name={@name}
-            phx-value-shape={@icon_map? && "map"}
-            value={name}
-            title={name}
-            class={[
-              "grid aspect-square place-items-center rounded-[6px] hover:bg-[#f2f1fc]",
-              (@value == name && "bg-[#f2f1fc] ring-1 ring-[#c3c1f0]") || ""
-            ]}
-          >
-            <span class="text-[#3a382f]">{Icons.svg(name, 15)}</span>
-          </button>
-        </div>
-
-        <p :if={@results == []} class="px-1 py-3 text-center text-[10.5px] font-medium text-[#a8a5a0]">
-          {gettext("No icon matches “%{query}”.", query: @icon_query)}
-        </p>
-
-        <p
-          :if={@total > length(@results)}
-          class="mt-1 px-1 text-[9.5px] font-medium text-[#a8a5a0]"
-        >
-          {gettext("Showing %{shown} of %{total} — keep typing to narrow it.",
-            shown: length(@results),
-            total: @total
-          )}
-        </p>
-      </div>
     </div>
     """
   end
+
+  defp widget_control(%{widget: :icon} = assigns), do: icon_control(assigns)
 
   defp widget_control(%{widget: :color} = assigns) do
     ~H"""
@@ -5159,6 +5070,179 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   end
 
   defp widget_control(assigns), do: plain_input(assigns)
+
+  # An icon's value is a CLASS NAME the Tailwind heroicons plugin resolves — `hero-check`,
+  # `hero-check-solid`. Fifty-seven attributes across the kit are one, and every one of them used to
+  # be a bare text box: the author had to know the exact string, and a typo rendered nothing at all
+  # rather than an error. The catalogue is read from the same directory the plugin reads.
+  #
+  # The chip shows what is set; the popover searches 1,288 classes across the four weights the set
+  # ships. `MishkaCmsCore.Runtime.Authoring.Icons.available?/0` is false when the host has no
+  # heroicons, and the control falls back to the text box below.
+  defp icon_control(assigns) do
+    assigns =
+      assigns
+      |> assign(:open?, assigns.icon_picker == assigns.name)
+      |> assign_new(:icon_library, fn -> nil end)
+      |> assign_new(:icon_map?, fn -> false end)
+
+    # THE BUTTON WAS DEAD. `:icon_library` was assigned on the LiveView and defaulted here, and then
+    # never reached `Icons.search/2` — while `icon_variant`, threaded one line above, did. Clicking a
+    # library left the grid on the same 60 heroicons and the footer reading "Showing 60 of 316",
+    # because `Enum.take/2` on the merged list is spent before a second set is reached.
+    library = library_module(assigns.icon_library)
+
+    assigns =
+      assigns
+      |> assign(
+        :results,
+        Icons.search(assigns.icon_query, variant: assigns.icon_variant, library: library)
+      )
+      |> assign(:total, Icons.count(assigns.icon_query, assigns.icon_variant, library: library))
+
+    ~H"""
+    <div :if={!Icons.available?()}>
+      <.plain_input {assigns} />
+    </div>
+
+    <div :if={Icons.available?()} class="relative">
+      <%!-- The TRIGGER IS THE FIELD. It was a button opening a popover with a search box of its own,
+            so the only reachable values were the ones this install has a catalogue for — and the
+            catalogue is only ever the sets registered here. An author naming a glyph from a set the
+            editor was never told about had no way to write it down. Typing now sets the attribute
+            directly and narrows the grid below with the same keystrokes. --%>
+      <form
+        id={"pb-icon-form-#{@node.id}-#{@name}"}
+        phx-change="icon_typed"
+        phx-submit="icon_typed"
+        class="flex h-[30px] w-full items-center gap-2 rounded-[8px] border border-[#ecebe6] bg-white px-2 focus-within:border-[#c3c1f0]"
+      >
+        <input type="hidden" name="name" value={@name} />
+        <input type="hidden" name="node_id" value={@node.id} />
+        <%!-- WHAT THE COMPONENT EXPECTS BACK. A bare name for an icon-typed attribute, and the map
+              the component reads `type` and `value` out of for one declared as a map — writing a
+              binary into the second is a `Map.get/2` on a string the moment it renders. --%>
+        <input :if={@icon_map?} type="hidden" name="shape" value="map" />
+
+        <span :if={Icons.known?(@value)} class="flex-none text-[#3a382f]">
+          {Icons.svg(@value, 15)}
+        </span>
+        <span
+          :if={!Icons.known?(@value)}
+          class="grid size-[15px] flex-none place-items-center rounded-[4px] bg-[#f2f1ec] text-[9px] font-bold text-[#a8a5a0]"
+          title={
+            (@icon_map? &&
+               gettext("Not in any installed icon set. Pick one, or choose Text for words.")) ||
+              gettext("Not in any installed icon set — it will still be written as you typed it")
+          }
+        >
+          ?
+        </span>
+        <input
+          type="text"
+          id={"pb-icon-open-#{@node.id}-#{@name}"}
+          name="value"
+          value={@value}
+          placeholder={@default || gettext("Type or pick an icon")}
+          autocomplete="off"
+          spellcheck="false"
+          phx-debounce="250"
+          phx-focus="toggle_icon_picker"
+          phx-value-name={@name}
+          class="min-w-0 flex-1 border-0 bg-transparent p-0 font-['Space_Grotesk'] text-[11px] font-semibold text-[#1b1a18] placeholder:font-medium placeholder:text-[#a8a5a0] focus:outline-none"
+        />
+        <button
+          type="button"
+          phx-click="toggle_icon_picker"
+          phx-value-name={@name}
+          class="flex-none"
+          aria-label={gettext("Browse icons")}
+        >
+          <.icon name={:chevron} size={11} class="rotate-90 text-[#a8a5a0]" />
+        </button>
+      </form>
+
+      <div
+        :if={@open?}
+        id={"pb-icon-picker-#{@name}"}
+        phx-mounted={menu_in()}
+        phx-remove={menu_out()}
+        phx-click-away="close_icon_picker"
+        class="absolute left-0 right-0 top-[34px] z-50 rounded-[12px] border border-[#ecebe6] bg-white p-2 shadow-[0_16px_44px_rgba(20,18,26,.2)]"
+      >
+        <%!-- One row per registered set, and only when there is a choice to make. `Icons.libraries/0`
+              is a list, so an install that adds Lucide beside Heroicons gets the selector for free. --%>
+        <div :if={length(Icons.libraries()) > 1} class="mb-1.5 flex gap-1">
+          <button
+            :for={library <- Icons.libraries()}
+            type="button"
+            id={"pb-icon-library-#{library.prefixes() |> List.first() |> to_string() |> String.trim_trailing("-")}"}
+            phx-click="icon_library"
+            phx-value-library={inspect(library)}
+            class={[
+              "h-[22px] flex-1 rounded-[6px] text-[9.5px] font-bold",
+              (library_module(@icon_library) == library && "bg-[#4f4bcc] text-white") ||
+                "bg-[#f6f5f2] text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+            ]}
+          >
+            {library.label()}
+          </button>
+        </div>
+
+        <div class="mb-1.5 flex gap-1">
+          <button
+            :for={{suffix, label} <- Icons.variants()}
+            type="button"
+            id={"pb-icon-variant-#{(suffix == "" && "outline") || String.trim_leading(suffix, "-")}"}
+            phx-click="icon_variant"
+            phx-value-variant={suffix}
+            class={[
+              "h-[22px] flex-1 rounded-[6px] text-[9.5px] font-bold",
+              (@icon_variant == suffix && "bg-[#17161a] text-white") ||
+                "bg-[#f6f5f2] text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+            ]}
+          >
+            {translate(label)}
+          </button>
+        </div>
+
+        <div class="grid max-h-[188px] grid-cols-8 gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            :for={name <- @results}
+            type="button"
+            id={"pb-icon-#{name}"}
+            phx-click="icon_picked"
+            phx-value-node_id={@node.id}
+            phx-value-name={@name}
+            phx-value-shape={@icon_map? && "map"}
+            value={name}
+            title={name}
+            class={[
+              "grid aspect-square place-items-center rounded-[6px] hover:bg-[#f2f1fc]",
+              (@value == name && "bg-[#f2f1fc] ring-1 ring-[#c3c1f0]") || ""
+            ]}
+          >
+            <span class="text-[#3a382f]">{Icons.svg(name, 15)}</span>
+          </button>
+        </div>
+
+        <p :if={@results == []} class="px-1 py-3 text-center text-[10.5px] font-medium text-[#a8a5a0]">
+          {gettext("No icon matches “%{query}”.", query: @icon_query)}
+        </p>
+
+        <p
+          :if={@total > length(@results)}
+          class="mt-1 px-1 text-[9.5px] font-medium text-[#a8a5a0]"
+        >
+          {gettext("Showing %{shown} of %{total} — keep typing to narrow it.",
+            shown: length(@results),
+            total: @total
+          )}
+        </p>
+      </div>
+    </div>
+    """
+  end
 
   # HOW DEEP THE PANEL DRAWS A COLLECTION INSIDE A COLLECTION. A tree's node holds its children and
   # each child its own; three levels inside the attribute's own list is a four-level outline, and past

@@ -69,6 +69,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsBuilder.Review
   alias MishkaGervaz.Table.Web.UrlSync
   alias MishkaCmsBuilder.States.EditorSessionState
+  alias MishkaCmsCore.Runtime.Authoring.Icons
   alias MishkaCmsCore.Runtime.Authoring.Inspector
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsBuilder.Marketplace
@@ -3975,6 +3976,20 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # ships itself. A control that refuses those makes the editor the arbiter of what icons exist,
   # which it is not in a position to be. So every keystroke writes the attribute AND narrows the
   # grid, and the grid is there to save typing rather than to constrain it.
+  #
+  # WORDS ARE NOT AN ICON IN A MAP. An icon-or-words label is drawn through `chelekom-icon`, which
+  # refuses a name it cannot draw, so in that box a name no installed set has narrows the grid and is
+  # not written; the label's Text choice is where words go.
+  def handle_event("icon_typed", %{"shape" => "text"} = params, socket) do
+    %{"name" => name, "node_id" => node_id, "value" => value} = params
+
+    handle_event(
+      "op",
+      icon_op(params, %{"kind" => "set_attr", "node_id" => node_id, "name" => name}, value),
+      socket
+    )
+  end
+
   def handle_event(
         "icon_typed",
         %{"name" => name, "node_id" => node_id, "value" => value} = params,
@@ -3983,13 +3998,37 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     # Through the ordinary `op` path, so clearing the box removes the attribute and the component's
     # own default comes back — the same rule every other field follows.
     {:noreply, socket} =
-      handle_event(
-        "op",
-        icon_op(params, %{"kind" => "set_attr", "node_id" => node_id, "name" => name}, value),
-        socket
-      )
+      case unknown_in_map?(params, value) do
+        true ->
+          {:noreply, socket}
+
+        false ->
+          handle_event(
+            "op",
+            icon_op(params, %{"kind" => "set_attr", "node_id" => node_id, "name" => name}, value),
+            socket
+          )
+      end
 
     {:noreply, socket |> assign(:icon_query, value) |> assign(:icon_picker, name)}
+  end
+
+  # ICON OR WORDS, CHOSEN. Each choice writes the map the component reads: words start as the
+  # property's own name, `next_label` saying "Next", for the author to change; the icon goes back to
+  # the component's default. One `set_attr` each, so one undo step.
+  def handle_event("label_kind", %{"node_id" => node_id, "name" => name, "kind" => kind}, socket) do
+    with %{} = editor <- socket.assigns[:editor],
+         %Node{} = node <- Tree.get(editor.tree, node_id),
+         {:ok, value} <- label_of(kind, name, declared_default(socket, node, name)) do
+      handle_event(
+        "op",
+        %{"kind" => "set_attr", "node_id" => node_id, "name" => name, "value" => value}
+        |> Map.merge((value != "" && %{"value_kind" => "expr"}) || %{}),
+        socket
+      )
+    else
+      _nothing_to_choose -> {:noreply, socket}
+    end
   end
 
   def handle_event("icon_variant", %{"variant" => variant}, socket),
@@ -5182,7 +5221,36 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> Map.put("value_kind", "expr")
   end
 
+  defp icon_op(%{"shape" => "text"}, op, ""), do: Map.put(op, "value", "")
+
+  defp icon_op(%{"shape" => "text"}, op, value) do
+    op
+    |> Map.put("value", ~s(%{type: :text, value: #{inspect(value)}}))
+    |> Map.put("value_kind", "expr")
+  end
+
   defp icon_op(_params, op, value), do: Map.put(op, "value", value)
+
+  defp unknown_in_map?(%{"shape" => "map"}, value),
+    do: value != "" and Icons.available?() and not Icons.known?(value)
+
+  defp unknown_in_map?(_params, _value), do: false
+
+  # The map a label's Text or Icon choice writes. Removing the attribute is how the default icon comes
+  # back when the default holds no icon to write.
+  defp label_of("text", name, _default) do
+    words = name |> String.replace_suffix("_label", "") |> Inspector.label()
+    {:ok, ~s(%{type: :text, value: #{inspect(words)}})}
+  end
+
+  defp label_of("icon", _name, default) do
+    case Inspector.icon_in(default) do
+      icon when is_binary(icon) -> {:ok, ~s(%{type: :icon, value: #{inspect(icon)}})}
+      nil -> {:ok, ""}
+    end
+  end
+
+  defp label_of(_kind, _name, _default), do: :error
 
   defp item_target(%{"index" => index, "key" => key}) do
     with {number, ""} <- Integer.parse(to_string(index)),
