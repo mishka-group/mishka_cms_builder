@@ -6621,7 +6621,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
     with heex <- Events.serialize(serialized, %{section: editor.section, stage: stage}),
          :ok <- gate(stage, editor, heex),
-         {:ok, record} <- persist(socket, heex, going_live(stage)) do
+         {:ok, record} <- persist(socket, heex, written_with(socket, stage)) do
       published_draft_is_spent(socket, stage, editor)
       css = prune_element_css(socket, editor, record)
       announce(stage, record, editor)
@@ -6863,6 +6863,40 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # it stayed off until somebody found the switch on the list page.
   defp going_live(:published), do: %{"active" => true}
   defp going_live(_draft), do: %{}
+
+  # A PUBLISH FROM THE DRAFT TAKES THE DRAFT'S SETTINGS WITH IT, in the same write as the markup.
+  defp written_with(socket, :published),
+    do: socket |> drafted_settings() |> Map.merge(going_live(:published))
+
+  defp written_with(_socket, stage), do: going_live(stage)
+
+  # THE DRAFT'S SETTINGS, WHEN THEY ARE THE ONES THE EDITOR SHOWS. In Draft mode the settings dialog
+  # and the canvas's layout are the draft's (`settings_draft/2`), and the publish that follows deletes
+  # that draft (`published_draft_is_spent/3`) — so its layout, SEO, address, title and permissions
+  # reach the page now or never. They never did: the dialog said "The page takes them when the draft
+  # is published", the publish wrote the markup alone, and the draft went with everything else in
+  # it. In Publish mode both are the page's own, and the page keeps them.
+  #
+  # `Drafts.carried/2` is what the draft's own `:publish` writes, so the two publishes agree, and it
+  # leaves the page's code where it is. Read again rather than taken from `@draft`, which another tab
+  # of this session may have saved past. The markup is this editor's, never the draft's copy of it.
+  defp drafted_settings(%{assigns: %{editor: %{draft_id: id}}} = socket) when is_binary(id) do
+    section = section(socket)
+
+    with %{id: ^id} <- settings_draft(socket.assigns.stage, socket.assigns[:draft]),
+         {:ok, draft} <- Drafts.get(section, id, socket.assigns.current_user) do
+      markup = section |> Section.save_fields("", status: socket.assigns[:status]) |> Map.keys()
+
+      section
+      |> Drafts.carried(draft)
+      |> Map.new(fn {field, value} -> {Atom.to_string(field), value} end)
+      |> Map.drop(markup)
+    else
+      _not_the_settings_on_screen -> %{}
+    end
+  end
+
+  defp drafted_settings(_socket), do: %{}
 
   defp persist(socket, heex, extra) do
     %{editor: editor} = socket.assigns

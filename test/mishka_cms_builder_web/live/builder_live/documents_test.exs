@@ -235,6 +235,64 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).path == page.path
     end
 
+    # PUBLISHING FROM THE DRAFT PUTS ITS SETTINGS ON THE PAGE. The dialog says the page takes them when
+    # the draft is published, and the editor publishes its working copy straight to the page and then
+    # throws the draft away — with the markup alone, so the layout, the SEO and the address chosen
+    # here went with the draft, under a flash saying the page was published.
+    test "a draft's settings reach the page with its markup when it is published", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          name: "drafted-shell",
+          path: "/layouts/drafted-shell",
+          template: ~S|<header id="layout-probe">Shell</header>{@inner_content}|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      _draft_id = autosave!(view)
+
+      open_settings(view)
+      form = settings_form("page-draft")
+      view |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+
+      view
+      |> element("#{form} [phx-click='relation_select'][phx-value-id='#{layout.id}']")
+      |> render_click()
+
+      view
+      |> form(form, %{"form" => %{"title" => "Drafted title", "path" => "/drafted"}})
+      |> render_submit()
+
+      open_seo(view)
+      view |> element("#pb-seo-image-manual") |> render_click()
+
+      seo_change(
+        view,
+        %{"description" => "Drafted description.", "image" => "/uploads/drafted.png"},
+        ["image"]
+      )
+
+      seo_save(view)
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).layout_id == nil
+
+      html = view |> element("#pb-stage-publish-now") |> render_click()
+      assert html =~ "Page published."
+
+      live = reread!(MishkaCmsCore.Runtime.Page, page.id)
+      assert live.layout_id == layout.id
+      assert live.title == "Drafted title"
+      assert live.path == "/drafted"
+      assert live.description == "Drafted description."
+      assert stored_tag(live, "property", "og:image").content == "/uploads/drafted.png"
+      refute live.template =~ "Contact Us", "the markup did not go with them"
+      assert live.template =~ "Reach out any time."
+    end
+
     test "while a draft is being written, the canvas draws the draft's layout", %{
       conn: conn,
       site: site
