@@ -257,6 +257,25 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
     end
   end
 
+  # A COMPONENT THAT DRAWS NOTHING KEEPS A FLOOR. The canvas hook measures the editor's own boxes
+  # and marks one whose content has no size (`markBlanks`, asserted in `pb_canvas_blank.test.js`);
+  # the chrome gives the mark a floor and the component's name. Only the editor's box is measured:
+  # a stamped root is the component's own element.
+  describe "the box the canvas measures for a component that draws nothing" do
+    test "is the editor's own, and the chrome names what is in it", %{conn: conn, page: page} do
+      html = canvas_html(conn, page)
+
+      assert html =~ ~r/<div(?=[^>]*data-component="cell-table")(?=[^>]*data-pb-frame="true")/
+      refute html =~ ~r/<t[dr][^>]*data-pb-frame/
+
+      assert html =~
+               ~r/\[data-pb-blank\]::before \{ content: "" attr\(data-component\) " — draws nothing visible here"/
+
+      assert html =~
+               ~r/\[data-pb-blank\]\[data-stateful\]::before \{ content: "Live · " attr\(data-component\)/
+    end
+  end
+
   # A PARENT THAT JOINS WHAT IS INSIDE IT. `chelekom-button-group` writes
   # `[&>*]:rounded-none [&>*]:border-0` — the element immediately inside, which was the editor's
   # wrapper and not the button. Three separately rounded buttons on the canvas, one joined control

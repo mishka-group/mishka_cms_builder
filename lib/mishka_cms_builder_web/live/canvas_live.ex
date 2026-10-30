@@ -1389,6 +1389,41 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         pointer-events: none;
       }
 
+      /* NOTHING DRAWN IS STILL SOMETHING THERE. The canvas hook sets `data-pb-blank` on a
+         component's box when nothing inside it has a size (`markBlanks` in `hooks.js`): a pager with
+         one page, a card handed no post, a block with nothing to read on the canvas, a widget whose
+         stylesheet the frame does not load. The layers rail listed it and the canvas had nothing to
+         point at. It gets the floor and the dashed edge an empty box gets, and its name, so it can be
+         found, selected and dropped beside — the same promise the media well makes for a picture.
+
+         `::before`, because `::after` is the live chip's; an overlay, a media well and a placeholder
+         are never marked, so neither of theirs is in the way. Editing only: this whole block is off
+         in preview, and nothing here is saved. */
+      [data-pb-blank] {
+        position: relative;
+        min-height: 44px;
+        border-radius: 10px;
+        outline: 1px dashed #c9c7ee;
+        outline-offset: -1px;
+        background: rgba(91, 87, 214, .04);
+      }
+
+      [data-pb-blank]::before {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        color: #8580d8;
+        font: 600 12px ui-sans-serif, system-ui;
+        letter-spacing: .01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        pointer-events: none;
+      }
+
       /* A LIVE COMPONENT SAYS WHAT IT IS, where the pointer is. It is drawn with real data and
          looks like any other markup, so without this the only place that said it runs on the
          published page — and nowhere in this frame — was a badge in the Inspector.
@@ -1944,6 +1979,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     [data-pb-overlay]::before { content: #{css_content(gettext("%{name} — opens from its trigger", name: @word_marker), "data-pb-overlay")}; }
     #{reveal}[data-pb-hollow]::after { content: #{css_content(gettext("Empty %{name} — drop something in here", name: @word_marker), "data-pb-hollow")}; }
     :is([data-pb-live]:hover, [data-pb-live][data-selected="true"])::after { content: #{css_content(gettext("Live · %{name} — runs on the published page", name: @word_marker), "data-pb-live")}; }
+    [data-pb-blank]::before { content: #{css_content(gettext("%{name} — draws nothing visible here", name: @word_marker), "data-component")}; }
+    [data-pb-blank][data-stateful]::before { content: #{css_content(gettext("Live · %{name} — draws nothing here; it fills in on the published page", name: @word_marker), "data-component")}; }
     """
   end
 
@@ -2569,9 +2606,14 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   defp shapes_children?(_parent, _assigns), do: false
 
+  # `data-pb-frame` says the box is the editor's, which is what the canvas hook measures to give a
+  # component that draws nothing a floor (`markBlanks` in `hooks.js`). Never on a stamped root, which
+  # is the component's own element.
   defp wrapped_frame(assigns) do
     ~H"""
-    <div {Map.put(marker_attrs(assigns), "data-pb-live", assigns[:live])}>{@body}</div>
+    <div {Map.merge(marker_attrs(assigns), %{"data-pb-live" => assigns[:live], "data-pb-frame" => "true"})}>
+      {@body}
+    </div>
     """
   end
 

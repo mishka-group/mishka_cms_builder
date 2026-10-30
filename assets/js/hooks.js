@@ -1034,6 +1034,44 @@ function leavingTo(link) {
 // The last revision announced lives as a JS property on the ELEMENT, the same place `FrameLoader`
 // keeps `__pbLoaded` and for the same reason: a `data-*` the server did not render is stripped on
 // the next patch, and a field on the hook is gone the moment LiveView remounts it.
+// A COMPONENT THAT DRAWS NOTHING IS STILL A NODE ON THE PAGE. A pager with one page, a card handed
+// no post, a slider whose stylesheet the frame does not load and a flash group pinned to the corner
+// of the viewport all leave their box at zero pixels: the layers rail lists them and the canvas has
+// nothing to point at, select or drop beside. `data-pb-blank` is what `#pb-canvas-chrome` gives a
+// floor, a dashed edge and the component's name.
+//
+// MEASURED, because only the browser knows: whether a box is empty is a question about the site's
+// stylesheet, a hook and the viewport as much as about the markup. What is measured is the CONTENT —
+// the boxes of the elements directly inside and any words of its own — and never the box itself,
+// which once floored measures its own floor; asking it that would take the floor off on the next
+// patch and put it back on the one after. A box with no element inside is blank whatever it says.
+//
+// Only the editor's own boxes around a component, never a placeholder that already says what it
+// wants (an overlay chip, a media well, a missing required field, a failed render).
+const BLANK_SKIP = "[data-pb-overlay], [data-wants-media], [data-incomplete], [data-render-error]";
+
+export function drawsNothing(el) {
+  for (const child of el.childNodes) {
+    if (child.nodeType === 3 && child.textContent.trim() !== "") return false;
+
+    if (child.nodeType === 1) {
+      const box = child.getBoundingClientRect();
+      if (box.width >= 1 && box.height >= 1) return false;
+    }
+  }
+
+  return true;
+}
+
+export function markBlanks(root) {
+  for (const el of root.querySelectorAll('[data-pb-frame][data-node-id]')) {
+    const blank = !el.matches(BLANK_SKIP) && drawsNothing(el);
+
+    if (blank) el.setAttribute("data-pb-blank", "true");
+    else el.removeAttribute("data-pb-blank");
+  }
+}
+
 function announcePainted(el) {
   const revision = el.dataset.revision;
   if (revision === undefined || revision === el.__pbPainted) return;
@@ -2170,14 +2208,23 @@ const PbCanvas = {
     this.el.addEventListener("dragleave", this.onDragLeave);
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("pb:dragend", this.onDragAway);
+
+    // On every patch, and again whenever a picture or a frame inside the canvas loads, because either
+    // can give an empty box its content.
+    this.blanks = () => {
+      if (!previewing()) markBlanks(this.el);
+    };
+    this.el.ownerDocument.addEventListener("load", this.blanks, true);
+    this.blanks();
     announcePainted(this.el);
   },
   updated() {
     // A patch re-renders from the server's HTML, which does not carry the ring — the attribute is
     // client state. Re-applying it here is what keeps a selection visible across an unrelated
-    // update.
+    // update. The blank floors are client state too.
     this.markSelected?.(this.selectedId);
     this.placeToolbar?.();
+    this.blanks?.();
     announcePainted(this.el);
   },
   destroyed() {
@@ -2203,6 +2250,7 @@ const PbCanvas = {
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("pb:dragend", this.onDragAway);
     window.removeEventListener("pb:hints", this.onHints);
+    this.el.ownerDocument.removeEventListener("load", this.blanks, true);
     this.indicator?.remove();
   },
 };
