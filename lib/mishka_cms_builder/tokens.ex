@@ -75,6 +75,10 @@ defmodule MishkaCmsBuilder.Tokens do
 
   `usage` counts how many other declarations reference the token — `--danger-hover-light:
   var(--danger-light)` counts once — which is what the Studio dims an unused token by.
+
+  `default` is the value the shared sheets declare, the one a site's own declaration overrides, or
+  `nil` where nothing shared declares the token. A token is `custom?` when the site's own sheet
+  declares it with a value other than that one.
   """
   @spec list(String.t() | nil) :: [Token.t()]
   def list(site_id) do
@@ -87,17 +91,51 @@ defmodule MishkaCmsBuilder.Tokens do
     # to one string and threw that away, one line before `custom?` needed it. So every token was
     # `custom?: false`, and with it went the Custom chip, the Custom filter, the highlighted row and
     # the Studio's own toolbar badge: four surfaces that have never once been seen.
-    |> Enum.reduce(%{}, fn sheet, acc ->
+    |> resolve()
+    |> Enum.map(fn {key, %{value: value, site?: site?, default: default}} ->
+      token(key, value, source, custom?(site?, value, default), default)
+    end)
+    |> Enum.sort_by(&{category_order(&1.category), &1.key})
+  end
+
+  # Each declared name, as the cascade leaves it: the value that wins, whether a site's sheet said
+  # it, and the value the shared sheets said, which is what a site's declaration overrides. A later
+  # declaration of the same name wins, exactly as it does in the browser.
+  defp resolve(sheets) do
+    Enum.reduce(sheets, %{}, fn sheet, acc ->
+      shared? = is_nil(sheet.site_id)
+
       sheet.content
       |> without_theme_block()
       |> declarations()
-      # A later declaration of the same name wins, exactly as it does in the browser.
       |> Enum.reduce(acc, fn {key, value}, inner ->
-        Map.put(inner, key, {value, not is_nil(sheet.site_id)})
+        default = (shared? && value) || get_in(inner, [key, :default])
+        Map.put(inner, key, %{value: value, site?: not shared?, default: default})
       end)
     end)
-    |> Enum.map(fn {key, {value, custom?}} -> token(key, value, source, custom?) end)
-    |> Enum.sort_by(&{category_order(&1.category), &1.key})
+  end
+
+  # BACK AT THE SHARED VALUE IS NOT CUSTOM. A token changed and then set back to the kit's value
+  # kept its CUSTOM label and the toolbar's count, because the site's sheet still declared it — with
+  # the very value it overrode.
+  defp custom?(false, _value, _default), do: false
+  defp custom?(true, _value, nil), do: true
+  defp custom?(true, value, default), do: not same_value?(value, default)
+
+  # The same value written two ways: spacing aside, and a hex colour in either case. Nothing else is
+  # folded — a custom property's name inside `var()` is case-sensitive.
+  defp same_value?(left, right) when is_binary(left) and is_binary(right),
+    do: comparable(left) == comparable(right)
+
+  defp same_value?(_left, _right), do: false
+
+  defp comparable(value) do
+    value = value |> String.trim() |> String.replace(~r/\s+/, " ")
+
+    case Regex.match?(~r/^#[0-9a-f]+$/i, value) do
+      true -> String.downcase(value)
+      false -> value
+    end
   end
 
   @doc """
@@ -117,12 +155,73 @@ defmodule MishkaCmsBuilder.Tokens do
   def put(nil, _site_id, _key, _value), do: {:error, :forbidden}
 
   def put(actor, site_id, key, value) do
-    with {:ok, value} <- sane_value(value),
-         {:ok, target} <- target_sheet(site_id, key),
-         {:ok, sheet} <- write(target, key, value, actor) do
-      # The sheet this landed in decides it, the same way `list/1` decides it.
-      {:ok, token(key, value, sheet.content, not is_nil(sheet.site_id))}
+    with {:ok, value} <- sane_value(value) do
+      sheets = token_sheets(site_id)
+
+      with {:ok, target} <- target_sheet(sheets, site_id, key) do
+        write_token(target, key, value, sheets, actor)
+      end
     end
+  end
+
+  # THE OVERRIDE GOES WHEN IT SAYS WHAT IS UNDER IT. A value equal to what the site would render
+  # without the Studio's own sheet is not an override, so writing it takes the declaration out of
+  # that sheet rather than repeating the shared value there — and a token never overridden is left
+  # without a sheet at all. That is also what resetting a token to its default writes.
+  defp write_token(target, key, value, sheets, actor) do
+    default = sheets |> Enum.filter(&is_nil(&1.site_id)) |> declared_value(key)
+
+    case studio_sheet?(target) and same_value?(value, beneath_studio(sheets, key)) do
+      true -> drop_override(target, key, value, default, actor)
+      false -> keep_override(target, key, value, default, actor)
+    end
+  end
+
+  defp drop_override({:override, _site_id}, key, value, default, _actor),
+    do: {:ok, token(key, value, "", false, default)}
+
+  defp drop_override(sheet, key, value, default, actor) do
+    content = remove_declaration(sheet.content || "", key)
+
+    written =
+      case content == sheet.content do
+        true -> {:ok, sheet}
+        false -> update_sheet(sheet, content, actor)
+      end
+
+    with {:ok, sheet} <- written,
+         do: {:ok, token(key, value, sheet.content, custom?(true, value, default), default)}
+  end
+
+  defp keep_override(target, key, value, default, actor) do
+    with {:ok, sheet} <- write(target, key, value, actor) do
+      # The sheet this landed in decides it, the same way `list/1` decides it.
+      site? = not is_nil(sheet.site_id)
+      {:ok, token(key, value, sheet.content, custom?(site?, value, default), default)}
+    end
+  end
+
+  # The Studio's own sheet for a site, made or still to be made: the one row this module may take
+  # a declaration out of.
+  defp studio_sheet?({:override, _site_id}), do: true
+  defp studio_sheet?(%{name: @override_name, site_id: site_id}), do: is_binary(site_id)
+  defp studio_sheet?(_sheet), do: false
+
+  # What the site renders for the token without the Studio's own sheet.
+  defp beneath_studio(sheets, key),
+    do: sheets |> Enum.reject(&studio_sheet?/1) |> declared_value(key)
+
+  # The value the last of `sheets` to declare `key` gives it, or `nil`.
+  defp declared_value(sheets, key) do
+    Enum.reduce(sheets, nil, fn sheet, found ->
+      sheet.content
+      |> without_theme_block()
+      |> declarations()
+      |> Enum.reduce(found, fn
+        {^key, value}, _found -> value
+        _other, found -> found
+      end)
+    end)
   end
 
   # A SITE'S FIRST OVERRIDE IS ONE WRITE: its sheet is created holding the declaration, rather than
@@ -171,9 +270,8 @@ defmodule MishkaCmsBuilder.Tokens do
   defp scope_to_site(query, site_id),
     do: Ash.Query.filter(query, is_nil(site_id) or site_id == ^site_id)
 
-  defp declaring_sheet(site_id, key) do
-    site_id
-    |> token_sheets()
+  defp declaring_sheet(sheets, key) do
+    sheets
     |> Enum.reverse()
     |> Enum.find(fn sheet -> Regex.match?(declaration_regex(key), sheet.content || "") end)
     |> case do
@@ -194,14 +292,14 @@ defmodule MishkaCmsBuilder.Tokens do
   #
   # A MASTER EDITING WITHOUT A SITE still writes the shared row, because that is the document they
   # have open: `site_id` nil is the global scope, not a missing one.
-  defp target_sheet(site_id, key) when is_binary(site_id) do
-    case declaring_sheet(site_id, key) do
+  defp target_sheet(sheets, site_id, key) when is_binary(site_id) do
+    case declaring_sheet(sheets, key) do
       {:ok, %{site_id: nil}} -> override_sheet(site_id)
       other -> other
     end
   end
 
-  defp target_sheet(site_id, key), do: declaring_sheet(site_id, key)
+  defp target_sheet(sheets, _site_id, key), do: declaring_sheet(sheets, key)
 
   # One row per site, found by name and made on demand. Its whole content is this module's, which is
   # what lets a declaration be appended without guessing at the shape of somebody else's CSS — the
@@ -281,6 +379,10 @@ defmodule MishkaCmsBuilder.Tokens do
     end
   end
 
+  # The whole line, so taking the last one out leaves the sheet's `:root {}` as it was made.
+  defp remove_declaration(content, key),
+    do: Regex.replace(~r/\n?[ \t]*#{Regex.escape(key)}\s*:\s*[^;]+;[ \t]*/i, content, "")
+
   defp declaration_regex(key) do
     ~r/(#{Regex.escape(key)})\s*:\s*[^;]+;/i
   end
@@ -302,12 +404,13 @@ defmodule MishkaCmsBuilder.Tokens do
 
   defp sane_value(_value), do: {:error, :invalid_value}
 
-  defp token(key, value, source, custom?) do
+  defp token(key, value, source, custom?, default) do
     Token.new!(%{
       category: category(value),
       label: label(key),
       key: String.trim_leading(key, "--"),
       value: value,
+      default: default,
       usage: usage(key, source),
       custom?: custom?,
       glyph: glyph(category(value))

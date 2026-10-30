@@ -284,6 +284,24 @@ defmodule MishkaCmsBuilderWeb.Templates.StudioTokens do
       >
         {gettext("Custom")}
       </span>
+      <%!-- THE WAY BACK, on the row it is about: the theme's own value, through the same
+            `set_token` the field writes with, so a design-system plugin is asked about it like any
+            other value — and a value equal to the theme's takes the site's override out. Only
+            where there is a theme value to go back to; a token the site alone declares has none.
+            The value rides as the button's own `value`: a browser sends a clicked button's value
+            under that key, over any `phx-value-value`. --%>
+      <button
+        :if={@token.custom and is_binary(@token.default)}
+        type="button"
+        id={"pb-token-reset-#{@token.key}"}
+        phx-click="set_token"
+        phx-value-key={@token.key}
+        value={@token.default}
+        title={gettext("Reset to the default, %{value}", value: @token.default)}
+        class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
+      >
+        {gettext("Reset")}
+      </button>
       <span
         :if={@token.usage == 0}
         title={gettext("Not used by any component")}

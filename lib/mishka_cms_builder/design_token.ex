@@ -177,6 +177,9 @@ defmodule MishkaCmsBuilder.DesignToken do
     attribute :key, :string, public?: true
     attribute :label, :string, public?: true
     attribute :value, :string, public?: true
+    # The theme's own value, which a custom token's Reset puts back; nil where the site alone
+    # declares it.
+    attribute :default, :string, public?: true
     attribute :category, :string, public?: true
     attribute :glyph, :string, public?: true
     attribute :usage, :integer, public?: true
@@ -208,6 +211,7 @@ defmodule MishkaCmsBuilder.DesignToken do
         key: token.key,
         label: token.label,
         value: token.value,
+        default: Map.get(token, :default),
         category: token.category,
         glyph: token.glyph,
         usage: token.usage,

@@ -8,7 +8,8 @@ defmodule MishkaCmsBuilder.Marketplace.Token do
 
   `usage` is how many places in the site currently reference the token; the Studio sorts and dims by
   it, so an unused token is visibly unused. `custom?` marks a token the team added rather than one
-  the theme shipped with, which the CSS generator highlights.
+  the theme shipped with, which the CSS generator highlights. `default` is the value the theme
+  shipped, where it shipped one, which is what the Studio offers to reset a custom token to.
   """
   use GuardedStruct
 
@@ -25,6 +26,7 @@ defmodule MishkaCmsBuilder.Marketplace.Token do
 
     field(:key, String.t(), enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
     field(:value, String.t(), enforce: true, derives: "validate(string, not_empty)")
+    field(:default, String.t())
     field(:usage, integer(), default: 0)
     field(:custom?, boolean(), default: false)
     field(:glyph, String.t(), default: "")

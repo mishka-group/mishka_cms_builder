@@ -189,6 +189,91 @@ defmodule MishkaCmsBuilder.TokensTest do
     end
   end
 
+  # A VALUE IS CUSTOM WHEN IT DIFFERS FROM THE ONE IT OVERRIDES, not when the site's sheet happens to
+  # say it. A token changed and set back to the kit's value kept its CUSTOM label and the Studio's
+  # badge, because the site's override sheet still declared it — with the very value it shadowed.
+  describe "a token back at its default" do
+    test "list/1 gives each token the value the shared sheets declare", %{site: site} do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#ff0000")
+
+      token = token_of(Tokens.list(site.id), "danger-light")
+      assert token.value == "#ff0000"
+      assert token.default == "#de1135"
+      assert token.custom?
+    end
+
+    test "put/4 of the shared value is not custom, and the site's sheet stops declaring it", %{
+      site: site
+    } do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#ff0000")
+      assert {:ok, token} = Tokens.put(builder(), site.id, "--danger-light", "#de1135")
+
+      refute token.custom?
+      refute token_of(Tokens.list(site.id), "danger-light").custom?
+      refute override_content(site.id) =~ "--danger-light"
+    end
+
+    test "a hex colour written in capitals is the same colour", %{site: site} do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#ff0000")
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#DE1135")
+
+      refute token_of(Tokens.list(site.id), "danger-light").custom?
+    end
+
+    test "a site sheet that repeats the shared value is not custom either", %{site: site} do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--space-unit", "0.5rem")
+      assert token_of(Tokens.list(site.id), "space-unit").custom?
+
+      put_override_content!(site.id, ":root {\n  --space-unit: 0.25rem;\n}\n")
+
+      refute token_of(Tokens.list(site.id), "space-unit").custom?
+    end
+
+    test "putting the shared value back leaves the site's other overrides alone", %{site: site} do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#ff0000")
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--space-unit", "0.5rem")
+
+      assert {:ok, token} = Tokens.put(builder(), site.id, "--danger-light", "#de1135")
+      assert token.value == "#de1135"
+
+      tokens = Tokens.list(site.id)
+      assert value_of(tokens, "danger-light") == "#de1135"
+      assert value_of(tokens, "space-unit") == "0.5rem"
+      assert override_content(site.id) =~ "--space-unit: 0.5rem;"
+    end
+
+    test "putting the shared value on a token nothing overrides writes nothing", %{site: site} do
+      before = sheet_count(site.id)
+
+      assert {:ok, token} = Tokens.put(builder(), site.id, "--danger-light", "#de1135")
+      assert token.value == "#de1135"
+      refute token.custom?
+      assert sheet_count(site.id) == before
+    end
+
+    # Its own value is all a token the site alone declares has: there is nothing to go back to.
+    test "a token nothing shared declares has no default", %{site: site} do
+      {:ok, _own} =
+        MishkaCmsCore.Runtime.Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            name: "own-theme",
+            kind: :theme,
+            content: ":root {\n  --brand-only: #123456;\n}\n",
+            site_id: site.id,
+            active: true
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      token = token_of(Tokens.list(site.id), "brand-only")
+      assert token.custom?
+      assert token.default == nil
+    end
+  end
+
   describe "put/4" do
     test "accepts any legitimate CSS value", %{site: site} do
       assert {:ok, _} = Tokens.put(builder(), site.id, "--space-unit", "0.5rem")
@@ -378,6 +463,24 @@ defmodule MishkaCmsBuilder.TokensTest do
   end
 
   defp value_of(tokens, key), do: tokens |> Enum.find(&(&1.key == key)) |> Map.get(:value)
+
+  defp token_of(tokens, key), do: Enum.find(tokens, &(&1.key == key))
+
+  defp override_sheet(site_id) do
+    MishkaCmsCore.Runtime.Stylesheet
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(site_id == ^site_id and name == "studio-tokens")
+    |> Ash.read_one!(authorize?: false)
+  end
+
+  defp override_content(site_id), do: override_sheet(site_id).content
+
+  defp put_override_content!(site_id, content) do
+    site_id
+    |> override_sheet()
+    |> Ash.Changeset.for_update(:master_update, %{content: content}, authorize?: false)
+    |> Ash.update!(authorize?: false)
+  end
 
   defp sheet_jobs(site_id) do
     for %{args: %{"resource" => "MishkaCmsCore.Runtime.Stylesheet", "data" => sheet} = args} <-

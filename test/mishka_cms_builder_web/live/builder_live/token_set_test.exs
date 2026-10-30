@@ -120,6 +120,42 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.TokenSetTest do
              Enum.find(live_assigns(view).style_tokens, &(elem(&1, 0) == @key))
   end
 
+  # BACK AT THE KIT'S VALUE IS NOT CUSTOM. Setting a token and then setting it back left the row
+  # labelled CUSTOM and the toolbar's badge at one, because the site's sheet still declared the
+  # value it shadowed.
+  test "a token set back to the kit's value is no longer custom", %{view: view} do
+    render_click(view, "set_token", %{"key" => @key, "value" => "#b91c1c"})
+    _settled = render_async(view)
+    assert view |> element("#pb-token-#{@key}") |> render() =~ "Custom"
+    assert has_element?(view, "#pb-studio [data-role=pb-studiobadge]")
+
+    render_click(view, "set_token", %{"key" => @key, "value" => "#5b57d6"})
+    _settled = render_async(view)
+
+    refute view |> element("#pb-token-#{@key}") |> render() =~ "Custom"
+    refute has_element?(view, "#pb-studio [data-role=pb-studiobadge]")
+  end
+
+  # AND THE WAY BACK IS ONE PRESS, on the row it is about, offered only where there is a value to go
+  # back to. It writes through `set_token`, so a design-system plugin is asked about it like any
+  # other value.
+  test "a custom token's row resets it to the kit's value", %{view: view, site: site} do
+    refute has_element?(view, "#pb-token-reset-#{@key}")
+
+    render_click(view, "set_token", %{"key" => @key, "value" => "#b91c1c"})
+    _settled = render_async(view)
+
+    assert view |> element("#pb-token-reset-#{@key}") |> render() =~ "#5b57d6"
+
+    view |> element("#pb-token-reset-#{@key}") |> render_click()
+    _settled = render_async(view)
+
+    assert value_of(site.id, @key) == "#5b57d6"
+    refute has_element?(view, "#pb-token-reset-#{@key}")
+    refute has_element?(view, "#pb-studio [data-role=pb-studiobadge]")
+    refute has_element?(view, "#flash-error")
+  end
+
   # Read as the browser reads them — the text of the block and the attribute the PbCopy hook copies —
   # so the quotes of the generated file compare as quotes, not as escaped HTML.
   defp export(view),
