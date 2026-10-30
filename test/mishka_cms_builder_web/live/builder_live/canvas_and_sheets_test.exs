@@ -3651,6 +3651,43 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       refute editor(view).preview?
     end
 
+    # A PUBLISH SPENDS THE DRAFT, AND ITS LINK WITH IT. The caret went on offering the token the
+    # publish had just deleted, so "Open in a new tab" opened a 404, and the settings dialog went on
+    # pointing at the same gone row and never finished loading. The next draft brings both back.
+    test "a published draft's link and settings go with it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      spent =
+        Ash.get!(MishkaCmsCore.Runtime.PageDraft, autosave!(view),
+          action: :read_any,
+          authorize?: false
+        )
+
+      assert has_element?(view, ~s(#pb-preview-tab[href$="/#{spent.preview_token}"]))
+
+      view |> element("#pb-stage-publish-now") |> render_click()
+
+      refute has_element?(view, "#pb-preview-menu")
+      refute has_element?(view, "#pb-preview-tab")
+
+      view |> element("#pb-settings-open") |> render_click()
+      _settled = render_async(view)
+      refute has_element?(view, "#pb-settings-draft-note")
+      assert has_element?(view, "#pb-settings-page-form")
+      view |> element("#pb-settings-close") |> render_click()
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+      _written = render_async(view)
+
+      next =
+        Ash.get!(MishkaCmsCore.Runtime.PageDraft, editor(view).draft_id,
+          action: :read_any,
+          authorize?: false
+        )
+
+      assert has_element?(view, ~s(#pb-preview-tab[href$="/#{next.preview_token}"]))
+    end
+
     # A DESCRIPTION GOES UNDER THE TITLE. Beside it the two ran together into one line that read as
     # neither, so the markup has to put the label in a block of its own.
     test "a menu item's description sits under its title", %{conn: conn, page: page} do

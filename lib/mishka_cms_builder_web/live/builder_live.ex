@@ -6657,6 +6657,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       socket
       |> collect_history(stage, editor, record, heex)
       |> assign_written(record)
+      |> forget_spent_draft(stage)
       |> assign(:stage, next_stage(stage))
       |> assign(:applied, {stage, editor.revision})
       |> assign(:applied_stage, stage)
@@ -6925,6 +6926,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp drafted_settings(_socket), do: %{}
+
+  # THE DRAFT A PUBLISH SPENT IS GONE, and so is what pointed at it: its shareable link, whose token
+  # now answers 404, and the settings dialog, which went on loading a row that no longer exists. The
+  # next change makes the next draft, and both come back with it.
+  defp forget_spent_draft(socket, :published), do: assign(socket, :draft, nil)
+  defp forget_spent_draft(socket, _stage), do: socket
 
   defp persist(socket, heex, extra) do
     %{editor: editor} = socket.assigns
