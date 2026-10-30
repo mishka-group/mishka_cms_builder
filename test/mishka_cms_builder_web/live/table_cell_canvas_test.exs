@@ -243,14 +243,16 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
           site_id: site.id,
           template: """
           <div class="box"><.component component_name="cell-cell" site="localhost">Lost</.component></div>
-          <.component component_name="cell-row" site="localhost">Row</.component>
+          <.component component_name="cell-row" site="localhost"><.component component_name="cell-cell" site="localhost">In a lost row</.component></.component>
           <.component component_name="cell-table" site="localhost"><.component component_name="cell-row" site="localhost"><.component component_name="cell-cell" site="localhost">Kept</.component></.component></.component>
           """
         )
 
       html = canvas_html(conn, page)
 
-      assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-cell"/, html)) == 1
+      assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-cell"/, html)) == 2,
+             "a cell in a row lying loose on the page is lost with the row"
+
       assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-row"/, html)) == 1
       assert html =~ ~r/<td[^>]*\sdata-component="cell-cell"/, "a cell in a row is still stamped"
       assert html =~ ~r/<tr[^>]*\sdata-component="cell-row"/, "a row in a table is still stamped"

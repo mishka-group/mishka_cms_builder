@@ -2558,38 +2558,35 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       (Containment.parent_restricted?(tag) or shaped_by_parent?(assigns))
   end
 
-  # Whether the node's parent puts its children where this part may sit. A parent whose content
-  # cannot be read — a slot — is let through, as it always was.
-  defp table_home?(assigns, tag) do
+  # Whether the node's parent puts its children where this part may sit, and that parent is itself
+  # where it may sit, up to the table: a cell inside a row that is lying loose on a page is lost with
+  # the row. A parent whose content cannot be read — a slot — is let through, as it always was.
+  defp table_home?(%{node: node, tree: tree} = assigns, tag),
+    do: at_home?(tree, assigns[:holders] || %{}, node, tag)
+
+  defp at_home?(tree, holders, node, tag) do
     case Containment.table_homes(tag) do
       nil -> true
-      homes -> assigns |> parent_content() |> at_home?(homes)
+      homes -> tree |> Tree.get(node.parent_id) |> holds?(tree, holders, homes)
     end
   end
 
-  defp at_home?(:unread, _homes), do: true
-  defp at_home?(content, homes), do: content in homes
+  defp holds?(nil, _tree, _holders, _homes), do: false
 
-  defp parent_content(%{node: %Node{parent_id: parent_id}, tree: tree} = assigns) do
-    case Tree.get(tree, parent_id) do
-      nil ->
-        nil
+  defp holds?(%Node{kind: :tag, tag: tag} = parent, tree, holders, homes),
+    do: String.downcase(tag) in homes and at_home?(tree, holders, parent, tag)
 
-      %Node{kind: :tag} = parent ->
-        Containment.content_element(parent)
-
-      %Node{kind: :component} = parent ->
-        Map.get(assigns[:holders] || %{}, Node.component_name(parent))
-
-      _slot ->
-        :unread
+  defp holds?(%Node{kind: :component} = parent, tree, holders, homes) do
+    case Map.get(holders, Node.component_name(parent)) do
+      {root, content} -> content in homes and at_home?(tree, holders, parent, root)
+      nil -> false
     end
   end
+
+  defp holds?(_slot, _tree, _holders, _homes), do: true
 
   defp shaped_by_parent?(%{node: node, tree: tree} = assigns),
     do: tree |> Tree.get(node.parent_id) |> shapes_children?(assigns)
-
-  defp shaped_by_parent?(_assigns), do: false
 
   # A KIT SAYS IT IN ITS OWN MARKUP; AN AUTHOR SAYS IT IN A CLASS. `<div class="[&>*]:rounded-none">`
   # is the same promise written by hand, and the canvas has to keep it the same way — otherwise the
@@ -2784,24 +2781,27 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   # And of every component whose content lands in a table's own element — a kit row's in its `<tr>`,
-  # a kit table's in its `<tbody>` — by name, so a cell inside one is stamped and a cell anywhere
-  # else keeps its box. Only a template that writes one of those tags is parsed.
+  # a kit table's in its `<tbody>` — by name, with the element it opens with, so a cell inside one is
+  # stamped and a cell anywhere else keeps its box. Only a template that writes one of those tags is
+  # parsed.
   @table_tags ~w(<table <thead <tbody <tfoot <tr <colgroup)
 
   defp holders(components) do
     for %{name: name, template: template} = entry <- components || [],
         is_binary(name) and is_binary(template),
         String.contains?(template, @table_tags),
-        content = holder_content(entry),
+        {_root, content} = held = holder(entry),
         is_binary(content),
         into: %{},
-        do: {name, content}
+        do: {name, held}
   end
 
-  defp holder_content(%{name: name} = entry) do
-    :component
-    |> Node.new(tag: ".component", attrs: [{"component_name", {:string, name}}])
-    |> Containment.content_element(components: [entry])
+  # The element the component's markup opens with, and the one it renders its content in.
+  defp holder(%{name: name} = entry) do
+    node = Node.new(:component, tag: ".component", attrs: [{"component_name", {:string, name}}])
+
+    {Containment.element(node, components: [entry]),
+     Containment.content_element(node, components: [entry])}
   end
 
   # And of every component that reaches for the elements an author puts inside it, read off the same
