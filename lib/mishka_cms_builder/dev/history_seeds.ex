@@ -274,7 +274,7 @@ defmodule MishkaCmsBuilder.Dev.HistorySeeds do
         detail: "9 elements live",
         author_type: :system,
         note:
-          "Published to the live page. The changes behind this are recorded but no longer restorable.",
+          "Published to the live page, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own.",
         snapshot_id: snapshot
       },
 
@@ -371,7 +371,7 @@ defmodule MishkaCmsBuilder.Dev.HistorySeeds do
         snapshot_id: nil
       },
 
-      # DROPPED: retention took the payload and left the row readable
+      # COLLECTED: a publish took the payload and left the row readable
       %{
         minutes: 1500,
         label: "Card padding tightened",
@@ -381,7 +381,7 @@ defmodule MishkaCmsBuilder.Dev.HistorySeeds do
         detail: "padding: 18px · base",
         author: authors.human,
         note:
-          "Older than this page keeps documents for. The change is recorded; it can no longer be restored.",
+          "A later publish keeps the record of this change but not its restore point. Revert to that publish instead.",
         snapshot_id: nil
       },
 

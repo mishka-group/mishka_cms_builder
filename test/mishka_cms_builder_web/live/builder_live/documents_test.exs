@@ -2838,7 +2838,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       render_click(view, "apply_stage", %{})
       _collected = render_async(view)
 
-      refute render_async(view) =~ "history_revert"
+      # The change it shipped is no longer offered; the publish row is, holding the page as it
+      # went live.
+      reverts =
+        view
+        |> render_async()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s(li[id] button[phx-click="history_revert"]))
+        |> LazyHTML.attribute("phx-value-id")
+
+      assert [row_id] = reverts
+      assert [%{op: :publish}] = Enum.filter(history_rows(page), &(&1.id == row_id))
     end
   end
 end

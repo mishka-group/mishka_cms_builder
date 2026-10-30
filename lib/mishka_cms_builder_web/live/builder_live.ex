@@ -6524,7 +6524,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       announce(stage, record, editor)
 
       socket
-      |> collect_history(stage, editor, record)
+      |> collect_history(stage, editor, record, heex)
       |> assign_written(record)
       |> assign(:stage, next_stage(stage))
       |> assign(:applied, {stage, editor.revision})
@@ -6547,7 +6547,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # A PUBLISH DROPS WEIGHT, NOT RECORD. The snapshots behind this branch go — they are 91% of what
   # history costs, and reverting into the middle of a shipped draft is not a thing anyone wants — and
   # the rows stay, because they are the record of who did what. One summary row is written in their
-  # place, carrying the published document, so the page's own timeline has a revert point per publish.
+  # place, carrying the published document — `heex`, exactly what went live — so the page's own
+  # timeline has a revert point per publish.
   #
   # Off the LiveView, because publishing already compiles, rebuilds CSS and broadcasts; and after the
   # write rather than inside it, so cleanup can never fail a publish. `start_async` rather than a
@@ -6561,7 +6562,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   #
   # `editor.draft_id` is read here rather than by the task, because `published_draft_is_spent/3` has
   # already spent the session's copy by now — what this collects is the branch the publish shipped.
-  defp collect_history(socket, :published, editor, record) do
+  defp collect_history(socket, :published, editor, record, heex) do
     actor = socket.assigns.current_user
     section = Section.to_atom!(editor.section)
     draft_id = editor.draft_id
@@ -6570,9 +6571,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       site_id: editor.site_id,
       label: gettext("Published %{name}", name: record.name),
       detail: publish_detail(editor),
+      document: heex,
       note:
         gettext(
-          "Published to the live page. The changes behind this are recorded but no longer restorable."
+          "Published to the live page, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own."
         )
     }
 
@@ -6582,7 +6584,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end)
   end
 
-  defp collect_history(socket, _draft, _editor, _record), do: socket
+  defp collect_history(socket, _draft, _editor, _record, _heex), do: socket
 
   defp publish_detail(%{tree: tree}) do
     ngettext("1 element live", "%{count} elements live", length(Tree.walk(tree)))

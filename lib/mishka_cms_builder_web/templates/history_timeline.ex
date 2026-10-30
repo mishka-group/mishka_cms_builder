@@ -190,7 +190,7 @@ defmodule MishkaCmsBuilderWeb.Templates.HistoryTimeline do
                 <span class="flex-1"></span>
 
                 <%!-- A row whose document was not kept says WHY, rather than offering a button that
-                      fails. That is what makes dropping old payloads a safe answer to the cap. --%>
+                      fails: too large to keep, or taken by a publish that kept its own. --%>
                 <span
                   :if={is_nil(record.snapshot_id)}
                   title={unrevertible_title(record)}
@@ -343,7 +343,7 @@ defmodule MishkaCmsBuilderWeb.Templates.HistoryTimeline do
   defp note_icon_class(_record), do: "mt-0.5 size-3 flex-none text-[#7a5bd0]"
 
   defp unrevertible_label(%{refused: true}), do: dgettext("mishka_gervaz", "Too large to restore")
-  defp unrevertible_label(_record), do: dgettext("mishka_gervaz", "Snapshot dropped")
+  defp unrevertible_label(_record), do: dgettext("mishka_gervaz", "No restore point")
 
   defp unrevertible_title(%{refused: true}),
     do:
@@ -352,11 +352,17 @@ defmodule MishkaCmsBuilderWeb.Templates.HistoryTimeline do
         "The document was past the size this keeps, so no snapshot was taken."
       )
 
+  # THE RULE THAT RAN, not one that does not exist. A change's restore point goes when the page is
+  # published (`MishkaCmsBuilder.History.collect/5`) — never with age — and the publish row keeps the
+  # page it published, which is where going back starts.
+  defp unrevertible_title(%{op: :publish, author_type: :system}),
+    do: dgettext("mishka_gervaz", "This publish kept no copy of the page it published.")
+
   defp unrevertible_title(_record),
     do:
       dgettext(
         "mishka_gervaz",
-        "Older than this page keeps documents for. The change is recorded; it can no longer be restored."
+        "A later publish keeps the record of this change but not its restore point. Revert to that publish instead."
       )
 
   defp reader(%{current_user: %{site_id: site_id}}), do: %{site_id: site_id}

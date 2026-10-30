@@ -630,6 +630,69 @@ defmodule MishkaCmsBuilder.HistoryTest do
       assert Enum.any?(kept, &(&1.op == :publish and &1.author_type == :system))
     end
 
+    # THE PUBLISH ROW IS A REVERT POINT, which is what both halves of this were written to say — "one
+    # summary row is written in their place, carrying the published document" — and what the row
+    # never was: it was written with no snapshot, so the timeline read it as "Snapshot dropped"
+    # and offered no Revert on the one row a publish leaves to go back to.
+    test "the publish row keeps the document it published, and reverts to it", context do
+      {:ok, _} = text_edit(context.token, heading(context.session), "Talk to us")
+      {:ok, 1} = History.flush(context.token, context.author)
+
+      published = ~s(<div id="root"><h1>Talk to us</h1><p>Say hello</p></div>)
+
+      assert {:ok, %{dropped: 1}} =
+               History.collect(
+                 :page,
+                 context.page.id,
+                 nil,
+                 %{site_id: context.site.id, label: "Published contact", document: published},
+                 context.author
+               )
+
+      [publish] = Enum.filter(rows(context.page), &(&1.op == :publish))
+      assert publish.snapshot_id, "the publish row is no revert point"
+      refute publish.refused
+      assert [%{id: kept}] = snapshots()
+      assert kept == publish.snapshot_id
+
+      {:ok, _} = text_edit(context.token, heading(context.session), "Something else")
+      assert {:ok, session} = History.revert(context.token, publish.id, context.author)
+      assert html(session) =~ "Talk to us"
+    end
+
+    test "and a later publish leaves an earlier one's revert point alone", context do
+      summary = %{site_id: context.site.id, label: "Published contact", document: @template}
+
+      {:ok, _} = History.collect(:page, context.page.id, nil, summary, context.author)
+      {:ok, _} = text_edit(context.token, heading(context.session), "Talk to us")
+      {:ok, 1} = History.flush(context.token, context.author)
+      {:ok, _} = History.collect(:page, context.page.id, nil, summary, context.author)
+
+      publishes = Enum.filter(rows(context.page), &(&1.op == :publish))
+      assert length(publishes) == 2
+      assert Enum.all?(publishes, & &1.snapshot_id), "an earlier publish lost its revert point"
+      assert length(snapshots()) == 2
+    end
+
+    test "a published document past the size kept is said to be, not dropped", context do
+      huge =
+        ~s(<div id="root">) <>
+          Enum.map_join(1..120_000, &"<p>#{&1}-#{Ecto.UUID.generate()}</p>") <> "</div>"
+
+      {:ok, _} =
+        History.collect(
+          :page,
+          context.page.id,
+          nil,
+          %{site_id: context.site.id, label: "Published contact", document: huge},
+          context.author
+        )
+
+      [publish] = Enum.filter(rows(context.page), &(&1.op == :publish))
+      refute publish.snapshot_id
+      assert publish.refused
+    end
+
     test "running it twice is not an error", context do
       summary = %{site_id: context.site.id, label: "Published contact"}
 

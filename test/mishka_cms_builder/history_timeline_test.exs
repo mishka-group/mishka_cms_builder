@@ -226,11 +226,33 @@ defmodule MishkaCmsBuilder.HistoryTimelineTest do
       assert html =~ "Too large to restore"
     end
 
-    test "a change whose payload retention took says something different", _context do
+    # THE RULE IT NAMES IS THE ONE THAT RAN. A change loses its restore point when the page is
+    # published (`MishkaCmsBuilder.History.collect/5`), not with age — and the row said it was
+    # "older than this page keeps documents for", which no rule anywhere says.
+    test "a change a publish took the restore point of says so, and where to go back to",
+         _context do
       html = render_row(row(%{snapshot_id: nil, refused: false}), master())
 
       refute html =~ ">Revert<"
-      assert html =~ "Snapshot dropped"
+      assert html =~ "No restore point"
+      assert html =~ "A later publish keeps the record of this change but not its restore point"
+      refute html =~ "Snapshot dropped"
+      refute html =~ "Older than this page keeps documents for"
+    end
+
+    test "a publish that kept no copy of its page does not claim one was dropped", _context do
+      record = row(%{op: :publish, kind: :publish, author_type: :system, snapshot_id: nil})
+      html = render_row(record, master())
+
+      refute html =~ ">Revert<"
+      assert html =~ "This publish kept no copy of the page it published."
+      refute html =~ "A later publish keeps the record"
+    end
+
+    test "a publish that kept its page can be reverted to", _context do
+      html = render_row(row(%{op: :publish, kind: :publish, author_type: :system}), master())
+
+      assert html =~ "Revert"
     end
   end
 

@@ -216,8 +216,8 @@ defmodule MishkaCmsBuilder.History do
       {:ok, row} ->
         {row.id, false}
 
-      # A FAILED WRITE IS NOT RETENTION. Both leave a row with no payload, and the timeline reads
-      # that one shape as "older than this page keeps documents for" — which, seconds after a write
+      # A FAILED WRITE IS NOT A PUBLISH. Both leave a row with no payload, and the timeline reads
+      # that one shape as "a later publish took its restore point" — which, seconds after a write
       # that failed, is simply untrue. It is told apart by being said out loud: the row still records
       # what happened and who did it, and the reader is not given a reason that did not happen.
       {:error, reason} ->
@@ -352,7 +352,9 @@ defmodule MishkaCmsBuilder.History do
   publish would erase who wrote what at the exact moment the work shipped.
 
   What is given up is reverting INTO the middle of a shipped draft, which nobody wants: the published
-  state is right there, and the summary row is itself a revert point.
+  state is right there, and the summary row is itself a revert point. It carries the published
+  document — `summary[:document]` — as its own snapshot, under the same size cap as any other row,
+  and no later publish takes it, so the timeline keeps one revert point per publish.
 
   Idempotent, so a retried job that finds the payloads already gone still succeeds — and it does not
   care whether the draft it is collecting still exists, which is what makes it safe to call at any
@@ -362,12 +364,14 @@ defmodule MishkaCmsBuilder.History do
   the LiveView is linked to, so an author who publishes and leaves the builder in the same breath
   kills it in the middle of the sweep — and a sweep that dies half done costs weight the next publish
   takes anyway, where the row saying the page was published would be gone for good. It is read back
-  by the query below and carries no payload, so it sweeps nothing of its own.
+  by the query below, which spares the payload of every publish row, its own included.
   """
   @spec collect(atom(), String.t(), String.t() | nil, map(), map() | nil) ::
           {:ok, %{dropped: non_neg_integer()}} | {:error, term()}
   def collect(source_type, source_id, draft_id, summary, actor) do
-    with {:ok, _summary_row} <- write_summary(source_type, source_id, summary, actor),
+    {document, summary} = Map.pop(summary, :document)
+
+    with {:ok, _summary_row} <- write_summary(source_type, source_id, summary, document, actor),
          {:ok, rows} <- anchored_rows(source_type, source_id, draft_id, actor) do
       {:ok, %{dropped: drop_snapshots(rows)}}
     end
@@ -415,6 +419,7 @@ defmodule MishkaCmsBuilder.History do
   defp drop_snapshots(rows) do
     held =
       rows
+      |> Enum.reject(&publish_row?/1)
       |> Enum.flat_map(fn
         %{snapshot: %{id: _} = snapshot} -> [snapshot]
         _no_payload -> []
@@ -451,7 +456,14 @@ defmodule MishkaCmsBuilder.History do
     end
   end
 
-  defp write_summary(source_type, source_id, summary, actor) do
+  # A PUBLISH ROW IS THE REVERT POINT A PUBLISH LEAVES, so no publish takes its payload — not the
+  # one that wrote it, which reads it back with the rest of its branch, and not a later one.
+  defp publish_row?(%{op: :publish, author_type: :system}), do: true
+  defp publish_row?(_row), do: false
+
+  defp write_summary(source_type, source_id, summary, document, actor) do
+    {snapshot_id, refused?} = published_snapshot(document, actor)
+
     HistoryEvent
     |> Ash.Changeset.for_create(
       :create,
@@ -463,15 +475,27 @@ defmodule MishkaCmsBuilder.History do
           kind: :publish,
           op: :publish,
           author_type: :system,
+          refused: refused?,
           inserted_at: DateTime.utc_now()
         },
         summary
       ),
       tenant: summary[:site_id],
-      actor: actor
+      actor: actor,
+      private_arguments: %{snapshot_id: snapshot_id}
     )
     |> Ash.create()
   end
+
+  # The page as it went live, kept the way a change's document is: compressed, and refused past the
+  # same size, which the timeline then says rather than offering a Revert that cannot work.
+  defp published_snapshot(document, actor) when is_binary(document) do
+    document
+    |> HistorySnapshot.compress(HistorySnapshot.max_bytes(:system))
+    |> store_snapshot(actor)
+  end
+
+  defp published_snapshot(_no_document, _actor), do: {nil, false}
 
   @doc """
   Delete snapshots no row points at.

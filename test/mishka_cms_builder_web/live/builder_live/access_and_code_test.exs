@@ -402,9 +402,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       publish!(view)
       _collected = render_async(view)
 
-      assert snapshots() == []
-      assert Enum.all?(history_rows(page), &is_nil(&1.snapshot_id))
-      assert Enum.any?(history_rows(page), &(&1.op == :publish))
+      {publishes, changes} = Enum.split_with(history_rows(page), &(&1.op == :publish))
+      assert Enum.all?(changes, &is_nil(&1.snapshot_id))
+
+      # AND THE ONE IT LEAVES IS THE PUBLISH'S: the page as it went live, so the timeline keeps a
+      # revert point per publish.
+      assert [%{snapshot_id: kept}] = publishes
+      assert kept, "the publish row is no revert point"
+      assert Enum.map(snapshots(), & &1.id) == [kept]
     end
   end
 
