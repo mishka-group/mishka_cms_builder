@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    # TEMPORARY: feat/separation, so the pushes of the branch that carries the editor out of
-    # mishka_cms_core run before it is merged. Drop it when mishka_cms_core 0.0.3 is released.
-    branches: [master, feat/separation]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -43,27 +41,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: mishka_cms_builder
-
     steps:
-      # TEMPORARY: core comes from its `feat/separation` branch until `mishka_cms_core` 0.0.3 is on
-      # Hex; then delete the second checkout and the working-directory, and core comes from Hex like
-      # installer and gervaz. This repository is private, and `actions/checkout` reads it with the
-      # workflow's default `GITHUB_TOKEN` (the `contents: read` above), so it needs no token of its
-      # own. mishka_cms_core is public, so a sibling checkout of it needs none either. Both go side by
-      # side, because `mishka_dep` in mix.exs takes `../mishka_cms_core` over Hex when it is a git
-      # checkout. Installer and gervaz are not checked out: they come from Hex.
+      # Core, installer and gervaz come from Hex: with no `../<name>` git checkout beside this one,
+      # `mishka_dep` in mix.exs takes the Hex release.
       - uses: actions/checkout@v7
-        with:
-          path: mishka_cms_builder
-
-      - uses: actions/checkout@v7
-        with:
-          repository: mishka-group/mishka_cms_core
-          ref: feat/separation
-          path: mishka_cms_core
 
       - uses: erlef/setup-beam@v1
         with:
@@ -75,10 +56,10 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: |
-            mishka_cms_builder/deps
-            mishka_cms_builder/_build
-          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_builder/mix.lock') }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_builder/mix.lock') }}-
+            deps
+            _build
+          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-
 
       - run: mix deps.get
 
@@ -89,21 +70,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: mishka_cms_builder
-
     steps:
-      # TEMPORARY, as in `build`: core's `feat/separation` branch beside this repository.
       - uses: actions/checkout@v7
-        with:
-          path: mishka_cms_builder
-
-      - uses: actions/checkout@v7
-        with:
-          repository: mishka-group/mishka_cms_core
-          ref: feat/separation
-          path: mishka_cms_core
 
       - uses: erlef/setup-beam@v1
         with:
@@ -115,9 +83,9 @@ jobs:
       - uses: actions/cache/restore@v6
         with:
           path: |
-            mishka_cms_builder/deps
-            mishka_cms_builder/_build
-          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_builder/mix.lock') }}-${{ github.sha }}
+            deps
+            _build
+          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       # The formatter takes the DSL's paren-free calls (`table "pages"`, `reference :site, ...`)
@@ -130,21 +98,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: mishka_cms_builder
-
     steps:
-      # TEMPORARY, as in `build`: core's `feat/separation` branch beside this repository.
       - uses: actions/checkout@v7
-        with:
-          path: mishka_cms_builder
-
-      - uses: actions/checkout@v7
-        with:
-          repository: mishka-group/mishka_cms_core
-          ref: feat/separation
-          path: mishka_cms_core
 
       - uses: erlef/setup-beam@v1
         with:
@@ -156,9 +111,9 @@ jobs:
       - uses: actions/cache/restore@v6
         with:
           path: |
-            mishka_cms_builder/deps
-            mishka_cms_builder/_build
-          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_builder/mix.lock') }}-${{ github.sha }}
+            deps
+            _build
+          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - run: MIX_ENV="test" mix deps.audit
@@ -190,21 +145,8 @@ jobs:
       POSTGRES_HOST: localhost
       MIX_TEST_PARTITION: ${{ matrix.partition }}
 
-    defaults:
-      run:
-        working-directory: mishka_cms_builder
-
     steps:
-      # TEMPORARY, as in `build`: core's `feat/separation` branch beside this repository.
       - uses: actions/checkout@v7
-        with:
-          path: mishka_cms_builder
-
-      - uses: actions/checkout@v7
-        with:
-          repository: mishka-group/mishka_cms_core
-          ref: feat/separation
-          path: mishka_cms_core
 
       - uses: erlef/setup-beam@v1
         with:
@@ -216,9 +158,9 @@ jobs:
       - uses: actions/cache/restore@v6
         with:
           path: |
-            mishka_cms_builder/deps
-            mishka_cms_builder/_build
-          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_builder/mix.lock') }}-${{ github.sha }}
+            deps
+            _build
+          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       # The migrations are generated, not in git: generate them before the test alias's `ash.setup`
@@ -236,7 +178,7 @@ jobs:
       - run: mix test --warnings-as-errors --partitions 4
 
   # The editor's ES-module hooks (`assets/js`) and their tests (`assets/test`). They import nothing
-  # from npm, so this job needs neither Elixir nor the sibling checkout.
+  # from npm, so this job needs no Elixir.
   assets:
     runs-on: ubuntu-latest
     steps:
