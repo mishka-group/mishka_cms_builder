@@ -3775,6 +3775,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         :extras,
         assigns.entry |> extra_attr_rows(assigns.node) |> without(assigns.hidden)
       )
+      |> assign(:state_words?, state_words?(assigns.entry))
 
     ~H"""
     <%!-- Each group folds, and only the two an author actually came for start open: the words on the
@@ -3799,6 +3800,19 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </.fold_heading>
 
       <div :if={!folded?(@group_folds, "prop", group, false)} class="mb-3 flex flex-col gap-2.5">
+        <%!-- BY DESIGN, SAID BESIDE THE WORDS IT IS ABOUT. The canvas draws a live component cold, in
+              the state it is in, so its words for loading, an empty list, an error or more pages
+              never reach the canvas, whatever is typed here. Without this an author types one, sees
+              nothing change, and concludes the field is broken. --%>
+        <p
+          :if={group == "Content" and @state_words?}
+          data-role="pb-insp-state-words"
+          class="text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+        >
+          {gettext(
+            "The canvas shows this component in one state. Words for its other states, such as loading, empty, an error or more pages, show on the published page."
+          )}
+        </p>
         <.attr_input
           :for={attr <- attrs}
           attr={attr}
@@ -4194,6 +4208,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   defp without(rows, hidden),
     do: Enum.reject(rows, fn {name, _kind, _value} -> name in hidden end)
+
+  # A live component with words of its own for states the canvas does not draw.
+  defp state_words?(entry) do
+    PaletteEntry.optional(entry, :stateful?) == true and
+      Enum.any?(Inspector.attrs(entry), &String.ends_with?(Inspector.name(&1) || "", "_text"))
+  end
 
   defp grouped_attrs(entry) do
     entry

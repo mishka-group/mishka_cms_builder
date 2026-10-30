@@ -68,6 +68,11 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
         template: @counter,
         attrs: [
           %{"name" => "label", "type" => "string", "opts" => %{"default" => "Clicks"}},
+          %{
+            "name" => "empty_text",
+            "type" => "string",
+            "opts" => %{"default" => "No clicks yet"}
+          },
           %{"name" => "rest", "type" => "global", "opts" => %{}}
         ],
         helpers: [
@@ -547,6 +552,20 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
 
       assert has_element?(view, ~s([data-role="pb-insp-cold"]))
       refute has_element?(view, ~s([data-role="pb-insp-cold"]), "Preview")
+    end
+
+    # BY DESIGN, AND SAID WHERE IT MATTERS. The canvas draws a live component cold, in the one state
+    # it is in, so the words for its other states — `empty_text`, `error_text`, a pager's — never
+    # reach the canvas however they are typed. The palette sweep typed into them and saw nothing
+    # change, which is what an author would see too.
+    test "says beside its words that the other states show on the published page", %{
+      conn: conn,
+      page: page
+    } do
+      view = open_builder(conn, page)
+      inspect_counter(view)
+
+      assert has_element?(view, ~s([data-role="pb-insp-state-words"]), "published page")
     end
 
     test "opens the component's own editor, carrying the way back to this page", %{
