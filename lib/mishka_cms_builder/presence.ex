@@ -20,7 +20,10 @@ defmodule MishkaCmsBuilder.Presence do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Accounts.Helper
+  alias MishkaCmsCore.Accounts.User
   alias MishkaCmsBuilder.EditorSession
+
+  require Ash.Query
 
   @doc """
   Announces a user as editing `token`. Safe to call with no user — an anonymous mount tracks nothing.
@@ -54,15 +57,43 @@ defmodule MishkaCmsBuilder.Presence do
 
   A master's avatar reads the first letter of `MishkaCmsCore.Accounts.Helper.label(:master)`, "M",
   unless `user` is a master too.
+
+  Each entry also carries `:name`, who it is as `user` may call them — the same answer a review note's
+  byline gives (`name/2`): the address of somebody `user` may see, "Master" for a master a site user
+  may not. Two people with one set of initials are told apart by it. It is read from the accounts,
+  in one read for the whole session, because the entry itself carries no address.
   """
   @spec others(String.t(), map() | nil) :: [map()]
-  def others(token, nil), do: token |> editors() |> Enum.map(&seen_by(&1, nil))
+  def others(token, nil), do: token |> editors() |> named(nil)
 
   def others(token, user) do
     token
     |> editors()
     |> Enum.reject(&(&1.id == user.id))
-    |> Enum.map(&seen_by(&1, user))
+    |> named(user)
+  end
+
+  defp named([], _viewer), do: []
+
+  defp named(editors, viewer) do
+    accounts = accounts(Enum.map(editors, & &1.id))
+
+    Enum.map(editors, fn editor ->
+      editor
+      |> seen_by(viewer)
+      |> Map.put(:name, who(Map.get(accounts, editor.id), editor.master?, viewer))
+    end)
+  end
+
+  defp accounts(ids) do
+    User
+    |> Ash.Query.filter(id in ^ids)
+    |> Ash.Query.select([:id, :email, :site_id])
+    |> Ash.read(authorize?: false)
+    |> case do
+      {:ok, users} -> Map.new(users, &{&1.id, &1})
+      {:error, _reason} -> %{}
+    end
   end
 
   defp seen_by(%{master?: true} = editor, viewer) do
@@ -73,6 +104,17 @@ defmodule MishkaCmsBuilder.Presence do
   end
 
   defp seen_by(editor, _viewer), do: editor
+
+  @doc """
+  Who `user` is to `viewer`: their address when `viewer` may see it, "Master" for a master when not,
+  "Unknown" for anyone else — what `MishkaCmsBuilderWeb.Templates.ReviewComments` writes on a note by
+  them, so a person's avatar and their notes are named alike.
+  """
+  @spec name(map() | nil, map() | nil) :: String.t()
+  def name(user, viewer), do: who(user, Helper.master_user?(user), viewer)
+
+  defp who(user, master?, viewer),
+    do: Helper.who(Helper.visible_to(user, viewer), master?, :unknown)
 
   @doc ~S"""
   Two letters for an avatar chip, from the local part of an email: `"ada.love@x.com"` gives `"AL"`.

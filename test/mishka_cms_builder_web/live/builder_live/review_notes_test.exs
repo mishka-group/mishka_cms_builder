@@ -9,6 +9,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ReviewNotesTest do
   """
   use MishkaCmsBuilder.LiveCase
 
+  alias MishkaCmsBuilder.Presence
   alias MishkaCmsCore.Notify.Notification
 
   # Where a mention's notification points: the page's editor, at the note.
@@ -241,4 +242,88 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ReviewNotesTest do
     end
   end
 
+  describe "the avatar stack" do
+    # Two masters whose addresses share a first letter both read "M"; the chip has to say who.
+    test "two people with one set of initials wear different colours and their own names", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      shared = token(first)
+      {_twin, twin_conn} = signed_in("bob@example.com")
+
+      {:ok, second, _html} =
+        live(twin_conn, "/admin/dashboard/runtime/builder/page/#{page.id}?session=#{shared}")
+
+      render(first)
+      chips = stack(first)
+
+      assert Enum.map(chips, & &1.initials) == ["B", "B"]
+      assert Enum.map(chips, & &1.label) == ["boss@example.com (you)", "bob@example.com"]
+      assert Enum.map(chips, & &1.title) == Enum.map(chips, & &1.label)
+
+      assert Enum.uniq_by(chips, & &1.colour) == chips,
+             "two people, one colour: #{inspect(chips)}"
+
+      # Each side names the other, and the presence entries still carry no address.
+      assert Enum.map(stack(second), & &1.label) == ["bob@example.com (you)", "boss@example.com"]
+      refute Presence.editors(shared) |> inspect() =~ "@"
+    end
+
+    test "a site user is shown a master as Master", %{conn: conn, page: page, site: site} do
+      {:ok, first, _html} = open_builder(conn, page)
+      joiner = create_admin("tenant.side@example.com", site.id)
+
+      {:ok, second, _html} =
+        live(
+          log_in(build_conn_for_host(), joiner),
+          "/admin/dashboard/runtime/builder/page/#{page.id}?session=#{token(first)}"
+        )
+
+      assert Enum.map(stack(second), & &1.label) == ["tenant.side@example.com (you)", "Master"]
+    end
+
+    # Below 1180px the stack is hidden; a colleague in the session must not vanish with it.
+    test "a narrow bar still counts who is here, and says nothing when you are alone", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      refute has_element?(first, "#pb-editors-count")
+
+      {_colleague, colleague_conn} = signed_in("narrow.colleague@example.com")
+
+      {:ok, _second, _html} =
+        live(
+          colleague_conn,
+          "/admin/dashboard/runtime/builder/page/#{page.id}?session=#{token(first)}"
+        )
+
+      render(first)
+      count = first |> element("#pb-editors-count") |> render()
+
+      assert count =~ "max-[1180px]:flex"
+      assert count =~ "max-[560px]:hidden", "a phone's bar is already cut off at its right end"
+      assert count =~ ~r/>\s*2\s*</
+      assert count =~ "boss@example.com (you), narrow.colleague@example.com"
+    end
+
+    defp stack(view) do
+      view
+      |> element("#pb-avatars")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#pb-avatars > span")
+      |> Enum.map(fn chip ->
+        class = chip |> LazyHTML.attribute("class") |> Enum.join(" ")
+
+        %{
+          initials: chip |> LazyHTML.text() |> String.trim(),
+          label: chip |> LazyHTML.attribute("aria-label") |> List.first(),
+          title: chip |> LazyHTML.attribute("title") |> List.first(),
+          colour: Regex.run(~r/\[background:(#[0-9a-f]{6})\]/, class, capture: :all_but_first)
+        }
+      end)
+    end
+  end
 end

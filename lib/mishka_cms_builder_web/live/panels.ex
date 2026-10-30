@@ -347,7 +347,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     sliders: "M4 5h16M4 12h10M4 19h7",
     move:
       "M12 3v18M3 12h18M12 3 9.5 5.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5",
-    sparkle: "M13 2 4 14h7l-1 8 9-12h-7z"
+    sparkle: "M13 2 4 14h7l-1 8 9-12h-7z",
+    people:
+      "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M2.5 20a6.5 6.5 0 0 1 13 0 M16 4.3a3.5 3.5 0 0 1 0 6.4 M18 14.5a6.5 6.5 0 0 1 3.5 5.5"
   }
 
   # A descriptor's icon is a plain string so a plugin can name one without depending on this module's
@@ -1311,23 +1313,51 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       <%!-- Who is in this session, from Presence on its own topic. You are first, because you are
             always here — that is what gives the bar the prototype's avatar stack without inventing
             colleagues who are not watching. The count is real: a second chip means a second person on
-            this page, where edits are last-write-wins at the op level. --%>
+            this page, where edits are last-write-wins at the op level.
+
+            EACH CHIP IS SOMEBODY, NAMED. Two masters both read "M", so letters alone said how many
+            people were here and not who: each person wears their own colour — the one their notes'
+            discs wear — no two chips in the stack share one, and each is named for a screen reader and
+            on hover (`avatars/2`). --%>
       <div
         data-role="pb-avatars"
         id="pb-avatars"
+        role="group"
+        aria-label={avatars_title(@editors)}
         title={avatars_title(@editors)}
         class="ml-1 flex flex-none items-center max-[1180px]:hidden"
       >
         <span
-          :for={{initials, tone} <- avatars(@current_user, @editors)}
+          :for={chip <- avatars(@current_user, @editors)}
+          role="img"
+          aria-label={chip.name}
+          title={chip.name}
           class={[
             "grid size-[26px] place-items-center rounded-full border-2 border-white font-['Space_Grotesk'] text-[10px] font-bold [&:not(:first-child)]:-ml-2",
-            tone
+            chip.tone
           ]}
         >
-          {initials}
+          {chip.initials}
         </span>
       </div>
+      <%!-- NARROWER THAN THE STACK HAS ROOM FOR, the bar still says somebody else is here. Below
+            1180px the stack goes, with the invitation beside it, and a colleague editing the same page
+            — the one case where an edit can overwrite theirs — would vanish from the screen. One chip
+            counts everybody, you included, and names them on hover; editing alone, there is nothing to
+            say and it is not drawn. At a phone's width (560px and under) the bar is already wider
+            than the screen and its right end is cut off, so the chip would only push more of it out of
+            sight; it stays out. --%>
+      <span
+        :if={@editors != []}
+        id="pb-editors-count"
+        data-role="pb-editors-count"
+        role="img"
+        aria-label={avatars_title(@editors) <> ": " <> editor_names(@current_user, @editors)}
+        title={editor_names(@current_user, @editors)}
+        class="hidden h-[26px] flex-none items-center gap-1 rounded-full bg-[#f2f1fc] px-2 font-['Space_Grotesk'] text-[11px] font-bold text-[#4f4bcc] max-[1180px]:flex max-[560px]:hidden"
+      >
+        <.icon name={:people} size={13} class="flex-none" />{length(@editors) + 1}
+      </span>
       <%!-- THE WAY A SECOND PERSON GETS INTO THIS SESSION. The avatars count who is here; this
             hands out the address that brings someone else in (`BuilderLive.share_url/1`). Opening
             the same page without it starts a session of its own, and the two editors never see each
@@ -15314,22 +15344,62 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   end
 
   # You, then up to two others, then a "+N" for the rest — the prototype's stack, with real people in
-  # it. The tones alternate the way its three chips do.
+  # it, each a map of the letters, the class that paints the disc and the name the chip is read as.
+  #
+  # A PERSON'S COLOUR IS THEIR NOTES' COLOUR: `avatar_colour/1` of the name a note's byline shows,
+  # which is what `MishkaCmsBuilderWeb.Templates.ReviewComments` hashes. Five colours for any number
+  # of people means two can land on one, so a colour already in the stack passes to the next free
+  # one — the stack is where two discs side by side have to differ, and it never holds more than
+  # three people.
   defp avatars(user, editors) do
-    mine = [{Presence.initials(user), "bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] text-white"}]
+    me = Presence.name(user, user)
 
-    others =
-      editors
-      |> Enum.take(2)
-      |> Enum.map(&{&1.initials, "bg-[#177a53] text-white"})
+    people =
+      [{Presence.initials(user), me, gettext("%{name} (you)", name: me)}] ++
+        Enum.map(Enum.take(editors, 2), &{&1.initials, &1.name, &1.name})
 
-    mine ++ others ++ overflow(length(editors) - 2)
+    {chips, _taken} =
+      Enum.map_reduce(people, MapSet.new(), fn {initials, name, label}, taken ->
+        colour = free_colour(avatar_colour(name), taken)
+
+        {%{initials: initials, name: label, tone: avatar_colour_class(colour) <> " text-white"},
+         MapSet.put(taken, colour)}
+      end)
+
+    chips ++ overflow(Enum.drop(editors, 2))
   end
 
-  defp overflow(rest) when rest > 0,
-    do: [{"+#{rest}", "bg-[#f2f1ec] text-[#6d6a63]"}]
+  defp free_colour(colour, taken) do
+    case MapSet.member?(taken, colour) do
+      false ->
+        colour
 
-  defp overflow(_rest), do: []
+      true ->
+        start = Enum.find_index(@avatar_colours, &(&1 == colour))
+
+        Enum.find(rotate(@avatar_colours, start), colour, &(not MapSet.member?(taken, &1)))
+    end
+  end
+
+  defp rotate(list, at), do: Enum.drop(list, at) ++ Enum.take(list, at)
+
+  defp overflow([]), do: []
+
+  defp overflow(rest),
+    do: [
+      %{
+        initials: "+#{length(rest)}",
+        name: Enum.map_join(rest, ", ", & &1.name),
+        tone: "bg-[#f2f1ec] text-[#6d6a63]"
+      }
+    ]
+
+  # Everybody in the session by name, you first — what the narrow bar's count chip is read as.
+  defp editor_names(user, editors) do
+    me = Presence.name(user, user)
+
+    Enum.join([gettext("%{name} (you)", name: me) | Enum.map(editors, & &1.name)], ", ")
+  end
 
   defp avatars_title([]), do: gettext("Only you are editing this page")
 
