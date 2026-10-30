@@ -98,6 +98,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   alias MishkaCmsCore.Runtime.Authoring.Strict
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsBuilder.EditorSession.Journal
+  alias MishkaCmsBuilder.PartPlacement
   alias MishkaCmsBuilder.Placement
   alias MishkaCmsBuilder.TablePlacement
 
@@ -1224,8 +1225,11 @@ defmodule MishkaCmsBuilder.EditorSession do
     end
   end
 
-  # What a placement did about forms and about tables, and what the author is told of both.
-  defp told({form, table}), do: joined([FormPlacement.told(form), TablePlacement.told(table)])
+  # What a placement did about forms and about the parent it put around a table part or a kit's
+  # part, and what the author is told of both.
+  defp told({form, held}), do: joined([FormPlacement.told(form), held(held)])
+
+  defp held(outcome), do: TablePlacement.told(outcome) || PartPlacement.told(outcome)
 
   defp announce_created(session, {:started, _table}), do: form_created(session, :started)
   defp announce_created(session, {:wired, _table}), do: form_created(session, :wired)
@@ -1340,13 +1344,21 @@ defmodule MishkaCmsBuilder.EditorSession do
   defp formed(_session, params), do: {params, @nothing}
 
   # WHAT ARRIVES IS DECIDED WHERE IT LANDS: the form a field needs (`FormPlacement`), then the table a
-  # table part needs (`TablePlacement`), both for the spot the insert is about to use. Answers the
-  # template, the spot and `{form outcome, table outcome}`.
+  # table part needs (`TablePlacement`) or the parent a kit's part needs (`PartPlacement`), all for
+  # the spot the insert is about to use. Answers the template, the spot and
+  # `{form outcome, table or part outcome}`.
   defp arriving(template, session, params) do
     {template, spot, form} = FormPlacement.place(template, session, params)
-    {template, table} = TablePlacement.wrap(template, session, spot["parent_id"])
+    {template, held} = held_by(template, session, spot["parent_id"])
 
-    {template, spot, {form, table}}
+    {template, spot, {form, held}}
+  end
+
+  defp held_by(template, session, parent) do
+    case TablePlacement.wrap(template, session, parent) do
+      {template, :none} -> PartPlacement.wrap(template, session, parent)
+      tabled -> tabled
+    end
   end
 
   defp drop_kind(%{"node_id" => id}) when is_binary(id) and id != "", do: "move"
@@ -1863,9 +1875,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   defp placed(session, nil, outcome), do: landed(session, outcome)
 
   defp placed(session, sentence, {_form, table} = outcome),
-    do:
-      {:relocated, announce_created(session, outcome),
-       joined([sentence, TablePlacement.told(table)])}
+    do: {:relocated, announce_created(session, outcome), joined([sentence, held(table)])}
 
   # Elements are looked up first in `picked_template/1` and their ids are namespaced (`el-…`), so a
   # block id is the only thing that answers here.

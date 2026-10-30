@@ -34,6 +34,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.EveryPage
   alias MishkaCmsBuilder.PaletteEntry
+  alias MishkaCmsBuilder.PartPlacement
   alias MishkaCmsCore.Localized
   alias MishkaCmsBuilder.CardPreview
   alias MishkaCmsCore.Runtime.Authoring.Strict
@@ -1915,6 +1916,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       :ui_kit_label,
       :form_meta
     ])
+    |> PartPlacement.with_kit_facts()
     # EVERY PAGE. This asked for 1000 at once, and the read takes 250 a page: a site whose own
     # components and the kits' came to more lost the rest from the palette without a word, the
     # kit's `chelekom-table` among them.
@@ -2072,6 +2074,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       # because a row read before the column existed answers `nil`.
       stateful?: component.stateful == true
     }
+    # Which component this one is a part of, if its kit says so: `kit_family` and `example_heads`,
+    # read in the query — see `PartPlacement.holder/2`.
+    |> Map.merge(PartPlacement.kit_facts(component))
   end
 
   # The example's `source` is the whole point and the old payload stripped it, which is why

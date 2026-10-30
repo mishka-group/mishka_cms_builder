@@ -14,6 +14,7 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
+  alias MishkaCmsBuilder.PartPlacement
   alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsCore.Runtime.Authoring.Elements
   alias MishkaCmsCore.Runtime.Authoring.PageForms
@@ -30,7 +31,41 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
      chelekom:
        Factory.chelekom_rows(
          ~w(chelekom-card chelekom-text-field chelekom-email-field chelekom-form-wrapper chelekom-button)
+       ),
+     parts:
+       with_kit_facts(
+         ~w(chelekom-card chelekom-card-footer chelekom-card-title chelekom-card-media chelekom-card-content chelekom-navbar chelekom-number-field chelekom-h4)
        )}
+  end
+
+  @bundle MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
+
+  # The rows as the palette carries them: the two facts its query reads out of `extra`
+  # (`PartPlacement.with_kit_facts/1`) — the family, and the component each example opens with —
+  # read here out of the same bundle.
+  # sobelow_skip ["Traversal.FileModule"]
+  defp with_kit_facts(names) do
+    extras =
+      @bundle
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.fetch!("components")
+      |> Map.new(&{&1["name"], &1["extra"] || %{}})
+
+    for row <- Factory.chelekom_rows(names) do
+      extra = Map.fetch!(extras, row.name)
+
+      Map.merge(row, %{
+        kit_family: extra["component"],
+        example_heads:
+          for %{"source" => source} <- extra["examples"] || [] do
+            case Regex.run(~r/component_name="([^"]+)"/, source, capture: :all_but_first) do
+              [name] -> name
+              nil -> nil
+            end
+          end
+      })
+    end
   end
 
   defp open(template \\ ~s(<div id="root"><p>hello</p></div>), attrs \\ %{}) do
@@ -2908,6 +2943,150 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
       assert {:ok, session} = table_drop(session, "<td>two</td>", "root")
       assert html(session) =~ "<td>two</td>"
       refute html(session) =~ "<table>"
+    end
+  end
+
+  # A KIT'S PART ARRIVES IN ITS PARENT. Chelekom's Card Footer is a `<div>` that renders anywhere, but
+  # it is a Card's footer: dropped on a navbar it landed in the navbar's `:end_content` slot as a
+  # padded box. Which components are parts, and of what, is read off the kit — every example it
+  # ships for the part opens with the parent, and the two are one family in its catalogue — and the
+  # palette carries those two facts (`PartPlacement.with_kit_facts/1`).
+  describe "a kit's part dropped where its parent does not hold it" do
+    setup %{parts: kit}, do: %{kit: kit}
+
+    defp part_kit(name, inner \\ ""),
+      do: ~s(<.component component_name="#{name}" site="Global">#{inner}</.component>)
+
+    defp part_named(session, name),
+      do: Enum.filter(Tree.walk(session.tree), &(Node.component_name(&1) == name))
+
+    defp part_drop(session, template, parent_id),
+      do:
+        EditorSession.apply_drop(session.token, %{
+          "template" => template,
+          "parent_id" => parent_id,
+          "index" => "0"
+        })
+
+    test "the kit's own examples say which components are parts, and of what", %{kit: kit} do
+      holder = &(&1 |> PartPlacement.holder(kit) |> then(fn entry -> entry && entry.name end))
+
+      for part <-
+            ~w(chelekom-card-footer chelekom-card-title chelekom-card-media chelekom-card-content) do
+        assert holder.(part) == "chelekom-card"
+      end
+
+      # Shown under a heading every time, but the heading is another family.
+      assert holder.("chelekom-number-field") == nil
+      # Shown standing alone.
+      assert holder.("chelekom-card") == nil
+      assert holder.("chelekom-navbar") == nil
+    end
+
+    test "a Card Footer dropped in another element arrives in a new Card", %{kit: kit} do
+      session = open(~s(<main id="root"><header id="bar"></header></main>), %{components: kit})
+      bar = find(session, "header")
+
+      assert {:relocated, session, message} =
+               part_drop(session, part_kit("chelekom-card-footer", "Read more"), bar.id)
+
+      assert message =~ "Card Footer goes inside Card, so it arrived in a new one."
+      assert [footer] = part_named(session, "chelekom-card-footer")
+      assert [card] = part_named(session, "chelekom-card")
+      assert footer.parent_id == card.id
+      assert card.parent_id == bar.id
+      assert html(session) =~ "Read more"
+    end
+
+    test "and at the top of the page too", %{kit: kit} do
+      session = open(~s(<main id="root"></main>), %{components: kit})
+
+      assert {:relocated, session, _message} =
+               part_drop(session, part_kit("chelekom-card-title"), "root")
+
+      assert [card] = part_named(session, "chelekom-card")
+      assert card.parent_id == nil
+      assert [%Node{parent_id: parent}] = part_named(session, "chelekom-card-title")
+      assert parent == card.id
+    end
+
+    test "inside its Card, at any depth, it lands as it is", %{kit: kit} do
+      session =
+        open(
+          ~s(<main id="root">#{part_kit("chelekom-card", ~s(<div id="cols"></div>))}</main>),
+          %{components: kit}
+        )
+
+      [card] = part_named(session, "chelekom-card")
+
+      assert {:ok, session} = part_drop(session, part_kit("chelekom-card-footer"), card.id)
+
+      assert {:ok, session} =
+               part_drop(session, part_kit("chelekom-card-title"), find(session, "div").id)
+
+      assert length(part_named(session, "chelekom-card")) == 1
+    end
+
+    test "a click with a box selected puts the new Card inside the box", %{kit: kit} do
+      session = open(~s(<main id="root"><section id="band"></section></main>), %{components: kit})
+      band = find(session, "section")
+
+      assert {:relocated, session, message} =
+               EditorSession.place_template(
+                 session.token,
+                 part_kit("chelekom-card-footer"),
+                 band.id
+               )
+
+      assert message =~ "goes inside Card"
+      assert [card] = part_named(session, "chelekom-card")
+      assert card.parent_id == band.id
+    end
+
+    test "a part already on the page is moved, never wrapped", %{kit: kit} do
+      session =
+        open(
+          ~s(<main id="root">#{part_kit("chelekom-card", part_kit("chelekom-card-footer", "x"))}</main>),
+          %{components: kit}
+        )
+
+      [footer] = part_named(session, "chelekom-card-footer")
+      main = find(session, "main")
+
+      assert {:ok, session} =
+               EditorSession.apply_drop(session.token, %{
+                 "node_id" => footer.id,
+                 "parent_id" => main.id,
+                 "index" => "0"
+               })
+
+      assert Tree.get(session.tree, footer.id).parent_id == main.id
+      assert length(part_named(session, "chelekom-card")) == 1
+    end
+
+    test "a component that is no part lands bare", %{kit: kit} do
+      session = open(~s(<main id="root"></main>), %{components: kit})
+      main = find(session, "main")
+
+      # The number field is a field, so it may arrive in a form — never under a heading.
+      for name <- ~w(chelekom-card chelekom-number-field chelekom-navbar) do
+        case part_drop(session, part_kit(name), main.id) do
+          {:ok, _session} -> :ok
+          {:relocated, _session, message} -> refute message =~ "goes inside"
+        end
+      end
+
+      {:ok, session} = EditorSession.fetch(session.token)
+      assert part_named(session, "chelekom-h4") == []
+      assert length(part_named(session, "chelekom-card")) == 1
+    end
+
+    test "a component's own markup may open with a part", %{kit: kit} do
+      {:ok, session} =
+        EditorSession.open(%{section: "component", template: "<div></div>", components: kit})
+
+      assert {:ok, session} = part_drop(session, part_kit("chelekom-card-footer"), "root")
+      assert part_named(session, "chelekom-card") == []
     end
   end
 
