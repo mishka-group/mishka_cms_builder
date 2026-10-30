@@ -1978,6 +1978,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     """
     [data-pb-overlay]::before { content: #{css_content(gettext("%{name} — opens from its trigger", name: @word_marker), "data-pb-overlay")}; }
     #{reveal}[data-pb-hollow]::after { content: #{css_content(gettext("Empty %{name} — drop something in here", name: @word_marker), "data-pb-hollow")}; }
+    #{reveal}[data-pb-hollow][data-pb-sealed]::after { content: #{css_content(gettext("%{name} — draws its own content; nothing goes in here", name: @word_marker), "data-pb-hollow")}; }
     :is([data-pb-live]:hover, [data-pb-live][data-selected="true"])::after { content: #{css_content(gettext("Live · %{name} — runs on the published page", name: @word_marker), "data-pb-live")}; }
     [data-pb-blank]::before { content: #{css_content(gettext("%{name} — draws nothing visible here", name: @word_marker), "data-component")}; }
     [data-pb-blank][data-stateful]::before { content: #{css_content(gettext("Live · %{name} — draws nothing here; it fills in on the published page", name: @word_marker), "data-component")}; }
@@ -2483,6 +2484,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       |> assign(:overlay, overlay(assigns))
       |> assign(:reveal, reveal(assigns))
       |> assign(:hollow, hollow(assigns))
+      |> then(&assign(&1, :sealed, sealed(&1)))
 
     assigns
     |> assign(
@@ -2662,6 +2664,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       "data-pb-overlay" => assigns[:overlay],
       "data-pb-reveal" => assigns[:reveal],
       "data-pb-hollow" => assigns[:hollow],
+      "data-pb-sealed" => assigns[:sealed],
       "data-pb-hidden" => Visibility.hidden?(assigns.node) && "true",
       "phx-click" => "select",
       "phx-value-id" => assigns.node.id,
@@ -2750,10 +2753,22 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end
   end
 
+  # AND ONE THAT TAKES NOTHING DOES NOT ASK FOR ANYTHING. A live document switcher renders its own
+  # list closed and declares no slot, so "drop something in here" over its empty box sent the author
+  # to make a drop the core then refused. `data-pb-sealed` picks the other sentence.
+  defp sealed(%{hollow: hollow, node: node} = assigns) when is_binary(hollow) do
+    case Map.get(assigns[:conceals] || %{}, Node.component_name(node)) do
+      true -> "true"
+      _takes_content -> nil
+    end
+  end
+
+  defp sealed(_assigns), do: nil
+
   defp conceals?(assigns, %Node{kind: :component} = node) do
     case assigns[:conceals] do
       nil -> false
-      names -> MapSet.member?(names, Node.component_name(node))
+      names -> is_map_key(names, Node.component_name(node))
     end
   end
 
@@ -2774,13 +2789,21 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   defp label_for(_absent), do: gettext("component")
 
-  # The names of every component that renders its own content closed, read off the palette once.
+  # The names of every component that renders its own content closed, read off the palette once,
+  # each with whether it is sealed: whether `Containment` would refuse anything dropped into it.
   defp conceals(components) do
     for entry <- components || [],
         Map.get(entry, :concealed?, false),
-        into: MapSet.new(),
-        do: entry.name
+        into: %{},
+        do: {entry.name, sealed_entry?(entry)}
   end
+
+  defp sealed_entry?(%{name: name} = entry),
+    do:
+      not Containment.holds_children?(
+        Node.new(:component, tag: ".component", attrs: [{"component_name", {:string, name}}]),
+        components: [entry]
+      )
 
   # And where every component's content lands, by name: for one whose content lands in a table's own
   # element — a kit row's in its `<tr>`, a kit table's in its `<tbody>` — that element and the one its

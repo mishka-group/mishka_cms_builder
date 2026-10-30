@@ -395,6 +395,50 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
       refute has_element?(canvas, "[data-pb-live]")
     end
 
+    # A DRAWER THAT DECLARES NO SLOT TAKES NOTHING, so its empty box does not ask for a drop: the
+    # core would refuse it. The sealed overlay gets the other sentence.
+    test "and an empty overlay that takes nothing does not ask for a drop", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        name: "live-switcher",
+        site_id: site.id,
+        stateful: true,
+        template: ~s(<div id={@id} {@rest} role="dialog" class="hidden"><ul></ul></div>),
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}]
+      )
+
+      create_component!(
+        name: "live-dialog",
+        site_id: site.id,
+        stateful: true,
+        template:
+          ~S|<div id={@id} {@rest} role="dialog" class="hidden">{render_slot(@inner_block)}</div>|,
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+        slots: [%{"name" => "inner_block", "opts" => %{}}]
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<.component component_name="live-switcher" site="localhost" id="s1" />) <>
+              ~s(<.component component_name="live-dialog" site="localhost" id="d2"></.component>)
+        )
+
+      {canvas, html} = canvas(conn, open_builder(conn, page))
+
+      assert has_element?(
+               canvas,
+               ~s(div[data-component="live-switcher"][data-pb-hollow][data-pb-sealed])
+             )
+
+      assert has_element?(canvas, ~s(div[data-component="live-dialog"][data-pb-hollow]))
+      refute has_element?(canvas, ~s(div[data-component="live-dialog"][data-pb-sealed]))
+      assert html =~ "draws its own content; nothing goes in here"
+    end
+
     # NOT ON A STAMPED ROOT. A parent that joins what is immediately inside it gets the component's
     # own root stamped with the node's markers, so `data-stateful` lands on the component's element —
     # and a `position` and a pseudo-element put there would land inside its layout.
