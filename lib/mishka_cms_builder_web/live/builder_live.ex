@@ -6657,7 +6657,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       socket
       |> collect_history(stage, editor, record, heex)
       |> assign_written(record)
-      |> forget_spent_draft(stage)
+      |> forget_spent_draft()
       |> assign(:stage, next_stage(stage))
       |> assign(:applied, {stage, editor.revision})
       |> assign(:applied_stage, stage)
@@ -6894,10 +6894,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp going_live(_draft), do: %{}
 
   # A PUBLISH FROM THE DRAFT TAKES THE DRAFT'S SETTINGS WITH IT, in the same write as the markup.
-  defp written_with(socket, :published),
-    do: socket |> drafted_settings() |> Map.merge(going_live(:published))
-
-  defp written_with(_socket, stage), do: going_live(stage)
+  # Asked of every stage rather than matched on one: a publish is the only way into `write/3` — the
+  # draft is written by `autosave/1` — and a clause for any other stage could never be reached.
+  defp written_with(socket, stage), do: Map.merge(drafted_settings(socket), going_live(stage))
 
   # THE DRAFT'S SETTINGS, WHEN THEY ARE THE ONES THE EDITOR SHOWS. In Draft mode the settings dialog
   # and the canvas's layout are the draft's (`settings_draft/2`), and the publish that follows deletes
@@ -6929,9 +6928,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   # THE DRAFT A PUBLISH SPENT IS GONE, and so is what pointed at it: its shareable link, whose token
   # now answers 404, and the settings dialog, which went on loading a row that no longer exists. The
-  # next change makes the next draft, and both come back with it.
-  defp forget_spent_draft(socket, :published), do: assign(socket, :draft, nil)
-  defp forget_spent_draft(socket, _stage), do: socket
+  # next change makes the next draft, and both come back with it. Only a publish reaches `write/3`.
+  defp forget_spent_draft(socket), do: assign(socket, :draft, nil)
 
   defp persist(socket, heex, extra) do
     %{editor: editor} = socket.assigns
