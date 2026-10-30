@@ -35,6 +35,7 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
+  alias MishkaCmsBuilder.EditorSession
   alias MishkaCmsBuilder.PaletteEntry
   alias MishkaCmsCore.Runtime.Authoring.Containment
   alias MishkaCmsCore.Runtime.States.SiteState
@@ -243,6 +244,7 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
           site_id: site.id,
           template: """
           <div class="box"><.component component_name="cell-cell" site="localhost">Lost</.component></div>
+          <.component component_name="plain-group" site="localhost"><.component component_name="cell-cell" site="localhost">In a box</.component></.component>
           <.component component_name="cell-row" site="localhost"><.component component_name="cell-cell" site="localhost">In a lost row</.component></.component>
           <.component component_name="cell-table" site="localhost"><.component component_name="cell-row" site="localhost"><.component component_name="cell-cell" site="localhost">Kept</.component></.component></.component>
           """
@@ -250,12 +252,30 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
 
       html = canvas_html(conn, page)
 
-      assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-cell"/, html)) == 2,
+      assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-cell"/, html)) == 3,
              "a cell in a row lying loose on the page is lost with the row"
 
       assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-row"/, html)) == 1
       assert html =~ ~r/<td[^>]*\sdata-component="cell-cell"/, "a cell in a row is still stamped"
       assert html =~ ~r/<tr[^>]*\sdata-component="cell-row"/, "a row in a table is still stamped"
+    end
+  end
+
+  # A TABLE THE PALETTE DOES NOT CARRY IS STILL A TABLE. The palette is read in pages and has been
+  # short of components before; a kit table missing from it said nothing about where its rows land,
+  # and reading that silence as "not a table" boxed every row and cell of the site's pricing table,
+  # which the parser then threw out of it.
+  describe "a table the palette does not carry" do
+    test "keeps its rows and cells stamped, as before", %{conn: conn, page: page} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+      _settled = render_async(view)
+      {:ok, _session} = EditorSession.put_components(token(view), [])
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert html =~ ~r/<td[^>]*\sdata-component="cell-cell"/
+      assert html =~ ~r/<tr[^>]*\sdata-component="cell-row"/
     end
   end
 

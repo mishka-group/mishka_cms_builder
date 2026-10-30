@@ -2560,7 +2560,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # Whether the node's parent puts its children where this part may sit, and that parent is itself
   # where it may sit, up to the table: a cell inside a row that is lying loose on a page is lost with
-  # the row. A parent whose content cannot be read — a slot — is let through, as it always was.
+  # the row. A parent whose content cannot be read — a slot, or a component the palette does not
+  # carry — is let through, as it always was.
   defp table_home?(%{node: node, tree: tree} = assigns, tag),
     do: at_home?(tree, assigns[:holders] || %{}, node, tag)
 
@@ -2579,7 +2580,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   defp holds?(%Node{kind: :component} = parent, tree, holders, homes) do
     case Map.get(holders, Node.component_name(parent)) do
       {root, content} -> content in homes and at_home?(tree, holders, parent, root)
-      nil -> false
+      :elsewhere -> false
+      nil -> true
     end
   end
 
@@ -2780,21 +2782,27 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         do: entry.name
   end
 
-  # And of every component whose content lands in a table's own element — a kit row's in its `<tr>`,
-  # a kit table's in its `<tbody>` — by name, with the element it opens with, so a cell inside one is
-  # stamped and a cell anywhere else keeps its box. Only a template that writes one of those tags is
-  # parsed.
+  # And where every component's content lands, by name: for one whose content lands in a table's own
+  # element — a kit row's in its `<tr>`, a kit table's in its `<tbody>` — that element and the one its
+  # markup opens with, so a cell inside one is stamped; `:elsewhere` for every other component, so a
+  # cell inside one keeps its box. A component the palette does not carry is not in it at all, and is
+  # read as it always was. Only a template that writes one of those tags is parsed.
   @table_tags ~w(<table <thead <tbody <tfoot <tr <colgroup)
 
   defp holders(components) do
-    for %{name: name, template: template} = entry <- components || [],
-        is_binary(name) and is_binary(template),
-        String.contains?(template, @table_tags),
-        {_root, content} = held = holder(entry),
-        is_binary(content),
-        into: %{},
-        do: {name, held}
+    for %{name: name} = entry <- components || [], is_binary(name), into: %{} do
+      {name, holder_of(entry)}
+    end
   end
+
+  defp holder_of(%{template: template} = entry) when is_binary(template) do
+    case String.contains?(template, @table_tags) and holder(entry) do
+      {_root, content} = held when is_binary(content) -> held
+      _no_table_part -> :elsewhere
+    end
+  end
+
+  defp holder_of(_entry), do: :elsewhere
 
   # The element the component's markup opens with, and the one it renders its content in.
   defp holder(%{name: name} = entry) do
