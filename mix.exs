@@ -5,7 +5,7 @@
 defmodule MishkaCmsBuilder.MixProject do
   use Mix.Project
 
-  @version "0.0.1"
+  @version "0.0.1-alpha.1"
   @source_url "https://github.com/mishka-group/mishka_cms_builder"
 
   def project do
