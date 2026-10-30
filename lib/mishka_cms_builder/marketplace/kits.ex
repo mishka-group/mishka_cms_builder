@@ -26,6 +26,7 @@ defmodule MishkaCmsBuilder.Marketplace.Kits do
 
   @behaviour MishkaCmsBuilder.Marketplace
 
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Install.UiKitCatalog
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
@@ -218,10 +219,11 @@ defmodule MishkaCmsBuilder.Marketplace.Kits do
       &if(site_id, do: Ash.Query.filter(&1, site_id == ^site_id or is_nil(site_id)), else: &1)
     )
     |> Ash.Query.select([:name])
-    |> Ash.read(page: [limit: 1000])
+    # EVERY PAGE. 1000 at once came back as the 250 the read takes a page, and the components past
+    # them were offered again as though the site had never installed them.
+    |> EveryPage.read()
     |> case do
-      {:ok, %{results: rows}} -> MapSet.new(rows, & &1.name)
-      {:ok, rows} when is_list(rows) -> MapSet.new(rows, & &1.name)
+      {:ok, rows} -> MapSet.new(rows, & &1.name)
       {:error, _reason} -> MapSet.new()
     end
   end

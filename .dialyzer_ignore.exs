@@ -10,7 +10,7 @@
   {"lib/mishka_cms_builder/editor_session.ex", :call_with_opaque, 2222},
   {"lib/mishka_cms_builder/editor_session.ex", :call_with_opaque, 2225},
   {"lib/mishka_cms_builder/history.ex", :call_without_opaque, 427},
-  {"lib/mishka_cms_builder/marketplace/kits.ex", :call_without_opaque, 61},
+  {"lib/mishka_cms_builder/marketplace/kits.ex", :call_without_opaque, 62},
   {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4328},
   {"lib/mishka_cms_builder_web/live/panels.ex", :call_without_opaque, 4373},
 
@@ -30,7 +30,7 @@
   {"lib/mishka_cms_builder/editor_session.ex", :unused_fun, 1903},
   {"lib/mishka_cms_builder/editor_session.ex", :unused_fun, 1905},
   {"lib/mishka_cms_builder/editor_session.ex", :unused_fun, 1907},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 1126},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 1127},
   {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 5981},
   {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 7426},
 

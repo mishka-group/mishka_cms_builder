@@ -536,8 +536,7 @@ defmodule MishkaCmsBuilder.LiveCase do
     MishkaCmsCore.Runtime.Component
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(site_id == ^site_id)
-    |> Ash.read!(page: [limit: 500])
-    |> Map.fetch!(:results)
+    |> MishkaCmsCore.EveryPage.read!()
     |> Enum.map(& &1.name)
   end
 

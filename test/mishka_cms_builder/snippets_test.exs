@@ -126,6 +126,17 @@ defmodule MishkaCmsBuilder.SnippetsTest do
       assert Enum.map(listed(site, docs[2]), & &1.name) == ["Anywhere"]
     end
 
+    # THE READ TAKES 200 A PAGE, and one page was the whole list: the snippets past it were never
+    # offered.
+    test "past one page of the read, every snippet is offered", %{site: site} do
+      rows =
+        for n <- 1..260, do: %{name: "Bulk #{n}", source: @source, section: :page, scope: :shared}
+
+      create_many!(MishkaCmsBuilder.Snippet, rows, site.id)
+
+      assert length(listed(site)) == 260
+    end
+
     # A layout's header markup is rarely what an error page wants.
     test "another editor's snippets are not offered", %{site: site} do
       {:ok, _layout} = save(name: "Layout bit", section: :layout, site_id: site.id)

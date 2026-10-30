@@ -2879,6 +2879,89 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
     end
   end
 
+  # THE PALETTE IS EVERY COMPONENT THE SITE HAS. It asked for 1000 at once and the read takes 250 a
+  # page, so a site past that (the localhost dev site has 275) lost the rest without a word, the kit's
+  # `chelekom-table` among them, and a kit's table cell dropped on a page could not find its table.
+  describe "a site with more components than one page of the palette read" do
+    @table_kit ~w(chelekom-table chelekom-tr chelekom-td)
+    @fillers 260
+
+    # The kit's own rows, helpers and all, so the palette reads the table's real markup.
+    setup do
+      MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.fetch!("components")
+      |> Enum.filter(&(&1["name"] in @table_kit))
+      |> Enum.map(&Map.take(&1, ~w(name template attrs slots helpers format)))
+      |> then(&create_many!(MishkaCmsCore.Runtime.Component, &1))
+
+      create_many!(
+        MishkaCmsCore.Runtime.Component,
+        for(n <- 1..@fillers, do: %{name: "filler-#{n}", template: "<div>filler</div>"})
+      )
+
+      :ok
+    end
+
+    defp named(view, name),
+      do:
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.filter(&(Node.component_name(&1) == name))
+
+    defp parent_name(view, %Node{parent_id: parent}) do
+      node = view |> editor() |> Map.fetch!(:tree) |> Tree.get(parent)
+      node && (Node.component_name(node) || node.tag)
+    end
+
+    test "holds every one of them", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      names = MapSet.new(editor(view).components, & &1.name)
+
+      assert Enum.count(1..@fillers, &MapSet.member?(names, "filler-#{&1}")) == @fillers
+      assert Enum.all?(@table_kit, &MapSet.member?(names, &1))
+    end
+
+    test "a kit's cell dropped on the page arrives in the kit's own row and table", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" =>
+          ~s(<.component component_name="chelekom-td" site="Global">Cell</.component>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      assert [cell] = named(view, "chelekom-td")
+      assert parent_name(view, cell) == "chelekom-tr"
+      assert [row] = named(view, "chelekom-tr")
+      assert parent_name(view, row) == "chelekom-table"
+      assert [table] = named(view, "chelekom-table")
+      assert table.parent_id == section.id
+    end
+
+    test "a plain cell still arrives in plain table tags", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "drop", %{
+        "template" => "<td>one</td>",
+        "parent_id" => node_with_tag(view, "section").id,
+        "index" => "0"
+      })
+
+      assert editor_html(view) =~ "<table><tbody><tr><td>one</td></tr></tbody></table>"
+      assert named(view, "chelekom-table") == []
+    end
+  end
+
   describe "the palette" do
     setup %{site: site} do
       %{component: create_component!(site_id: site.id, name: "hero-card")}

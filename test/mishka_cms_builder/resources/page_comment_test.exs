@@ -340,6 +340,17 @@ defmodule MishkaCmsBuilder.Resources.PageCommentTest do
       assert site |> scope(page) |> Review.list() |> length() == 2
     end
 
+    # The read takes 200 a page, and the notes past them were not in the list.
+    test "past one page of the read, is every note", %{site: site, page: page} do
+      rows =
+        for n <- 1..260,
+            do: %{body: "note #{n}", type: :information, section: :page, document_id: page.id}
+
+      create_many!(PageComment, rows, site.id)
+
+      assert site |> scope(page) |> Review.list() |> length() == 260
+    end
+
     test "is newest first", %{site: site, page: page} do
       _first = note!(site, %{document_id: page.id, body: "one"})
       _second = note!(site, %{document_id: page.id, body: "two"})

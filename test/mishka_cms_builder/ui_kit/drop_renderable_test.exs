@@ -83,8 +83,7 @@ defmodule MishkaCmsBuilder.UiKit.DropRenderableTest do
       :ui_kit_label,
       :form_meta
     ])
-    |> Ash.read!(authorize?: false, page: [limit: 1000])
-    |> Map.fetch!(:results)
+    |> MishkaCmsCore.EveryPage.read!(authorize?: false)
     |> Enum.sort_by(& &1.name)
   end
 

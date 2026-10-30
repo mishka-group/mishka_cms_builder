@@ -27,6 +27,7 @@ defmodule MishkaCmsBuilder.Review do
   instead of selecting nil and every caller behaves the same way.
   """
 
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsBuilder.PageComment
@@ -66,10 +67,10 @@ defmodule MishkaCmsBuilder.Review do
     # The replies come with the note they answer. `:for_editor` returns top-level notes only, so a
     # caller reading the thread without this sees the questions and none of the answers.
     |> Ash.Query.load([:author, :resolved_by, replies: [:author, :resolved_by]])
-    |> Ash.read(actor: scope[:actor], authorize?: false)
+    # EVERY PAGE: the read takes 200 a page, and the notes past them were not in the list.
+    |> EveryPage.read(actor: scope[:actor], authorize?: false)
     |> case do
-      {:ok, %{results: results}} -> results
-      {:ok, results} when is_list(results) -> results
+      {:ok, results} -> results
       _unavailable -> []
     end
   end
@@ -226,6 +227,5 @@ defmodule MishkaCmsBuilder.Review do
       actor: scope[:actor],
       authorize?: false
     )
-    |> Ash.Query.page(limit: opts[:limit] || 200)
   end
 end

@@ -135,6 +135,21 @@ defmodule MishkaCmsBuilder.MentionsTest do
       assert Mentions.candidates(%{site_id: nil, actor: %{}}, "") == []
     end
 
+    # THE FIRST 200 BY ADDRESS WERE THE WHOLE AUDIENCE: past them nobody could be picked, and a note
+    # naming somebody there by hand reached nobody.
+    test "past one page of people, the last of them is offered", %{site: site} do
+      Ash.Seed.seed!(
+        MishkaCmsCore.Accounts.User,
+        for(n <- 1..260, do: %{email: "crowd#{n}@mine.test", site_id: site.id})
+      )
+
+      create_user!(site_id: site.id, email: "zed@mine.test")
+
+      assert %{site_id: site.id} |> Mentions.candidates("zed") |> Enum.map(& &1.handle) == [
+               "zed@mine.test"
+             ]
+    end
+
     test "typing narrows the list", %{site: site} do
       create_user!(site_id: site.id, email: "sara@mine.test")
       create_user!(site_id: site.id, email: "sam@mine.test")

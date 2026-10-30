@@ -32,6 +32,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsBuilder.Collection
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.Events
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsBuilder.PaletteEntry
   alias MishkaCmsCore.Localized
   alias MishkaCmsBuilder.CardPreview
@@ -1730,13 +1731,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> narrow_media(action, site_id)
     |> Ash.Query.load(:media_count)
     |> Ash.Query.sort(name: :asc)
-    # A LIMIT RATHER THAN `page: false`: pagination is `required?: true` on the master read, and
-    # asking it to skip paging raises rather than returning everything. A folder rail that needs
-    # more than 200 entries has a different problem.
-    |> Ash.read(page: [limit: 200])
+    # EVERY PAGE. Pagination is `required?: true` on the master read, so `page: false` is refused,
+    # and it takes 100 a page: the 200 this asked for came back as 100, and the rest of a master's
+    # folders were not on the rail.
+    |> EveryPage.read()
     |> case do
-      {:ok, %{results: categories}} -> categories
-      {:ok, categories} when is_list(categories) -> categories
+      {:ok, categories} -> categories
       _error -> []
     end
   end
@@ -1884,12 +1884,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       :ui_kit_label,
       :form_meta
     ])
-    |> Ash.read(page: [limit: 1000])
+    # EVERY PAGE. This asked for 1000 at once, and the read takes 250 a page: a site whose own
+    # components and the kits' came to more lost the rest from the palette without a word, the
+    # kit's `chelekom-table` among them.
+    |> EveryPage.read()
     |> case do
-      {:ok, %{results: components}} ->
-        {:ok, components |> collect_palette() |> without_self(editor)}
-
-      {:ok, components} when is_list(components) ->
+      {:ok, components} ->
         {:ok, components |> collect_palette() |> without_self(editor)}
 
       # A FAILED READ IS NOT AN EMPTY SITE. This used to answer `collect_palette([])`, which drew a

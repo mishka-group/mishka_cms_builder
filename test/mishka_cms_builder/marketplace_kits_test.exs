@@ -41,6 +41,22 @@ defmodule MishkaCmsBuilder.MarketplaceKitsTest do
       refute first.id in Enum.map(Kits.packages(%{site_id: site.id}), & &1.id)
     end
 
+    # WHAT IS HERE IS EVERY ROW, NOT THE FIRST PAGE. This asked for 1000 at once, the read takes 250 a
+    # page, and the kit's components past them were offered again as though they were not installed.
+    test "past one page of installed components, none of them is offered again", %{site: site} do
+      offered = Enum.map(Kits.packages(%{site_id: site.id}), & &1.id)
+      assert offered != []
+
+      fillers = for n <- 1..260, do: "filler-#{n}"
+
+      create_many!(
+        MishkaCmsCore.Runtime.Component,
+        Enum.map(offered ++ fillers, &%{name: &1, template: "<div>installed</div>"})
+      )
+
+      assert Enum.filter(Kits.packages(%{site_id: site.id}), &(&1.id in offered)) == []
+    end
+
     test "a package says which kit it came from and what it will bring with it", %{site: site} do
       card = Enum.find(Kits.packages(%{site_id: site.id}), &(&1.id == "chelekom-card"))
 
@@ -164,8 +180,7 @@ defmodule MishkaCmsBuilder.MarketplaceKitsTest do
     MishkaCmsCore.Runtime.Component
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(site_id == ^site_id)
-    |> Ash.read!(page: [limit: 500])
-    |> Map.fetch!(:results)
+    |> MishkaCmsCore.EveryPage.read!()
     |> Enum.map(& &1.name)
   end
 end

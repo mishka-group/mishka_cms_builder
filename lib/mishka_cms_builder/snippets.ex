@@ -17,6 +17,7 @@ defmodule MishkaCmsBuilder.Snippets do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.Authoring.Tree
@@ -46,10 +47,10 @@ defmodule MishkaCmsBuilder.Snippets do
       %{site_id: uuid(opts[:site_id]), section: section, document_id: document_id},
       actor: opts[:actor]
     )
-    |> Ash.read(page: [limit: 200])
+    # EVERY PAGE: the read takes 200 a page, and the snippets past them were not offered.
+    |> EveryPage.read()
     |> case do
-      {:ok, %{results: rows}} -> rows
-      {:ok, rows} when is_list(rows) -> rows
+      {:ok, rows} -> rows
       {:error, _reason} -> []
     end
     |> Enum.filter(&keep?(&1, opts[:filter]))

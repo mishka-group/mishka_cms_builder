@@ -46,6 +46,7 @@ defmodule MishkaCmsBuilder.Mentions do
 
   alias MishkaCmsBuilderWeb.Paths
   alias MishkaCmsCore.Accounts.User
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Notify
 
   require Ash.Query
@@ -361,10 +362,11 @@ defmodule MishkaCmsBuilder.Mentions do
     |> Ash.Query.for_read(:users, %{}, authorize?: false)
     |> reachable(Map.get(scope, :site_id), Map.get(scope, :actor))
     |> Ash.Query.sort(email: :asc)
-    |> Ash.read(authorize?: false, page: [limit: 200])
+    # EVERY PAGE. The first 200 by address was the whole audience: past them nobody could be picked,
+    # and a note naming somebody there by hand reached nobody.
+    |> EveryPage.read(authorize?: false)
     |> case do
-      {:ok, %{results: results}} -> results
-      {:ok, results} when is_list(results) -> results
+      {:ok, results} -> results
       _unavailable -> []
     end
   end

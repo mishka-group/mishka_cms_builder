@@ -693,6 +693,27 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     end
   end
 
+  # THE RAIL IS EVERY FOLDER. It asked a master's read for 200, the read takes 100 a page, and the
+  # folders past the hundredth were not on the rail.
+  describe "the Assets sheet's folder rail" do
+    test "holds every folder of the site, past one page of them", %{conn: conn, site: site} do
+      create_many!(
+        MishkaCmsCore.Runtime.MediaCategory,
+        for(n <- 1..260, do: %{name: "Folder #{n}"}),
+        site.id
+      )
+
+      {view, _page} = open(conn, :page, site)
+      render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      render_async(view)
+
+      names = Enum.map(live_assigns(view).media_categories.result, & &1.name)
+
+      assert Enum.count(names, &String.starts_with?(&1, "folder-")) == 260
+    end
+  end
+
   # ---- the document's own root ------------------------------------------------------------------
 
   # A LAYOUT'S ROOT IS `<body>`, AND A DOCUMENT HOLDS ONE. Wrapping it wrote
