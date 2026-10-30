@@ -152,7 +152,8 @@ describe("words open for editing", () => {
   });
 
   // The template's newline and indentation ride along in `textContent`. Whether they are on screen
-  // is the element's to say, and the server keeps them only when they are.
+  // is the element's to say, and the server keeps them only when they are. Asked before the words
+  // open: Chrome draws an open `plaintext-only` run `pre-wrap`.
   it("say whether their element keeps its line breaks", () => {
     // On the run itself: jsdom does not inherit `white-space` from the parent, a browser does.
     const ctx = canvas(
@@ -171,6 +172,22 @@ describe("words open for editing", () => {
       ["set_text", { id: "t2", text: "one\n  two", pre: true }],
       ["set_text", { id: "t1", text: "Heading", pre: false }],
     ]);
+  });
+
+  it("as the element was drawn before they opened", () => {
+    const ctx = canvas(PAGE);
+
+    const drawn = window.getComputedStyle;
+    vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
+      const style = drawn.call(window, el, pseudo);
+      if (!el.hasAttribute?.("contenteditable")) return style;
+      return { ...style, whiteSpace: "pre-wrap", whiteSpaceCollapse: "preserve" };
+    });
+
+    doubleClick($("#words"));
+    $("#words").dispatchEvent(new FocusEvent("blur"));
+
+    expect(ctx.pushed.at(-1)).toEqual(["set_text", { id: "t1", text: "Heading", pre: false }]);
   });
 
   it("take ⌘A as their own words and nothing around them", () => {
@@ -212,6 +229,143 @@ describe("words open for editing", () => {
     const selection = document.getSelection();
     expect(selection.anchorNode).toBe($("#words").firstChild);
     expect(selection.anchorOffset).toBe(4);
+  });
+
+  // An e2e run double-clicked "Build", pressed ⌘End and typed: the browser had not moved the caret,
+  // and the words went in after "Bui". The ends of the run are answered by the editor itself.
+  describe("go to the ends of their own words", () => {
+    // Written on its own line of the template, as a hero's heading is: a newline and indentation on
+    // each side of the words, which the page does not draw.
+    const WORDS = "\n      Build the site\n    ";
+    const FIRST = 7;
+    const LAST = 21;
+
+    const LONG =
+      '<p data-node-id="p0" data-kind="tag">Before</p>' +
+      '<h1 data-node-id="h1" data-kind="tag">' +
+      `<span id="words" data-node-id="t1" data-kind="text">${WORDS}</span></h1>` +
+      '<p data-node-id="p2" data-kind="tag">After</p>';
+
+    const caretIn = (offset) => {
+      const range = document.createRange();
+      range.setStart($("#words").firstChild, offset);
+      range.collapse(true);
+      document.getSelection().removeAllRanges();
+      document.getSelection().addRange(range);
+    };
+
+    const at = () => {
+      const selection = document.getSelection();
+
+      return {
+        node: selection.focusNode,
+        offset: selection.focusOffset,
+        collapsed: selection.isCollapsed,
+        text: String(selection),
+      };
+    };
+
+    for (const [name, init, offset] of [
+      ["⌘↓", { key: "ArrowDown", code: "ArrowDown", metaKey: true }, LAST],
+      ["⌘End", { key: "End", code: "End", metaKey: true }, LAST],
+      ["Ctrl+End", { key: "End", code: "End", ctrlKey: true }, LAST],
+      ["⌘↑", { key: "ArrowUp", code: "ArrowUp", metaKey: true }, FIRST],
+      ["⌘Home", { key: "Home", code: "Home", metaKey: true }, FIRST],
+      ["Ctrl+Home", { key: "Home", code: "Home", ctrlKey: true }, FIRST],
+    ]) {
+      it(`${name} goes to the ${offset === LAST ? "last" : "first"} word`, () => {
+        canvas(LONG);
+        doubleClick($("#words"));
+        caretIn(10);
+
+        const event = key($("#words"), init);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(at()).toEqual({
+          node: $("#words").firstChild,
+          offset,
+          collapsed: true,
+          text: "",
+        });
+        expect(shortcuts(posted)).toEqual([]);
+      });
+    }
+
+    // Chrome draws an open `plaintext-only` run `pre-wrap`; the page does not.
+    it("as the page draws them, not as the open run is drawn", () => {
+      const drawn = window.getComputedStyle;
+      vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
+        const style = drawn.call(window, el, pseudo);
+        if (!el.hasAttribute?.("contenteditable")) return style;
+        return { ...style, whiteSpace: "pre-wrap", whiteSpaceCollapse: "preserve" };
+      });
+
+      canvas(LONG);
+      doubleClick($("#words"));
+      caretIn(10);
+
+      key($("#words"), { key: "End", code: "End", metaKey: true });
+      expect(at().offset).toBe(LAST);
+    });
+
+    it("and Shift carries the selection with it", () => {
+      canvas(LONG);
+      doubleClick($("#words"));
+      caretIn(13);
+
+      key($("#words"), { key: "End", code: "End", metaKey: true, shiftKey: true });
+      expect(at().text).toBe("the site");
+
+      caretIn(12);
+      key($("#words"), { key: "ArrowUp", code: "ArrowUp", metaKey: true, shiftKey: true });
+      expect(at().text).toBe("Build");
+    });
+
+    // A `<pre>`'s line breaks are on screen, so they are part of its words.
+    it("which, where line breaks show, are the run's own ends", () => {
+      canvas(
+        '<pre data-node-id="p1" data-kind="tag">' +
+          '<span id="words" data-node-id="t1" data-kind="text" style="white-space:pre">' +
+          "one\n  two\n</span></pre>",
+      );
+      doubleClick($("#words"));
+      caretIn(2);
+
+      key($("#words"), { key: "End", code: "End", metaKey: true });
+      expect(at().offset).toBe(10);
+    });
+
+    // The line's own ends, a word at a time and a paragraph at a time stay the browser's.
+    it("and leaves End, ⌥↓ and Ctrl+↓ to the browser", () => {
+      canvas(LONG);
+      doubleClick($("#words"));
+
+      for (const init of [
+        { key: "End", code: "End" },
+        { key: "ArrowDown", code: "ArrowDown", altKey: true },
+        { key: "ArrowDown", code: "ArrowDown", ctrlKey: true },
+      ]) {
+        expect(key($("#words"), init).defaultPrevented).toBe(false);
+      }
+    });
+  });
+
+  // Chrome stops answering once the words are open: every point inside the canvas's unselectable
+  // run then reads as its first position, and an e2e run's words went in ahead of the heading.
+  it("asking where the pointer was before the words are open", () => {
+    canvas(PAGE);
+
+    document.caretRangeFromPoint = () => {
+      const range = document.createRange();
+      const open = $("#words").hasAttribute("contenteditable");
+      range.setStart($("#words").firstChild, open ? 0 : 4);
+      range.collapse(true);
+      return range;
+    };
+
+    doubleClick($("#words"));
+
+    expect(document.getSelection().anchorOffset).toBe(4);
   });
 
   it("and at the end when the browser cannot say where the pointer was", () => {

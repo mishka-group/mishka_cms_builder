@@ -781,12 +781,81 @@ function selectContents(node) {
   selection.addRange(range);
 }
 
+// THE ENDS OF THE WORDS BEING TYPED, which is what "the end of the document" means inside them: ⌘↓ and
+// ⌘↑ on a Mac, ⌘ or Ctrl with End and Home anywhere, Shift to carry the selection along. The browser
+// does not always answer them — on a Mac it reaches for the system's key bindings, which a key event
+// from automation or an embedded browser never passes through, and Chrome's own table there holds
+// only the plain End, the end of the visual line — so an e2e run's ⌘End did nothing and the words
+// it typed next landed where the double click had put the caret, inside "Build". Answered here they
+// work the same everywhere, and cannot reach past the words into the page around them.
+const runEdge = (event) => {
+  const mod = event.metaKey || event.ctrlKey;
+
+  if (mod && !event.altKey && event.key === "End") return "end";
+  if (mod && !event.altKey && event.key === "Home") return "start";
+
+  // Ctrl+↓ and Ctrl+↑ are a paragraph's on Windows and Linux, and the system's on a Mac.
+  if (!event.metaKey || event.ctrlKey || event.altKey) return null;
+  if (event.key === "ArrowDown") return "end";
+  if (event.key === "ArrowUp") return "start";
+
+  return null;
+};
+
+function caretToEdge(node, edge, extend, shown) {
+  const doc = node.ownerDocument;
+  const selection = doc.getSelection();
+  const [container, offset] = edgeOf(node, edge, shown);
+
+  if (extend && selection.rangeCount && node.contains(selection.anchorNode)) {
+    return selection.extend(container, offset);
+  }
+
+  const range = doc.createRange();
+  range.setStart(container, offset);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+// THE FIRST AND LAST WORD, not the template's indentation around them. A run written on its own line
+// of the source starts with a newline and ends with the next line's indentation; on screen they are
+// nothing, but a caret put after them made "!" typed at the end arrive as "today !". Where the
+// element shows its line breaks (`shown`) they are words like any other, and the ends are the run's
+// own.
+function edgeOf(node, edge, shown) {
+  const walker = node.ownerDocument.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+  const texts = [];
+  while (walker.nextNode()) texts.push(walker.currentNode);
+
+  if (edge === "end") {
+    for (const text of texts.reverse()) {
+      const at = shown ? text.data.length : text.data.replace(/[ \t\n\r\f]+$/, "").length;
+      if (at > 0) return [text, at];
+    }
+
+    return [node, node.childNodes.length];
+  }
+
+  for (const text of texts) {
+    const at = shown ? 0 : text.data.search(/[^ \t\n\r\f]/);
+    if (at >= 0 && text.data.length > 0) return [text, at];
+  }
+
+  return [node, 0];
+}
+
 // WHERE THE CARET GOES WHEN WORDS OPEN FOR EDITING. `focus()` on an editing host puts it at the
 // start, so the first thing typed went in front of the old words — "Mishka Studio" typed over
 // "Northwind" came out "Mishka StudioNorthwind". A word the double click already selected inside
 // the node is kept, as every text field does; otherwise the caret goes where the pointer was, and
 // to the end when the browser cannot say where that is.
-function caretAt(node, event) {
+//
+// `aim` is where the pointer was, asked BEFORE the words were opened (`pointRange`): once the run is
+// `contenteditable`, Chrome answers every point inside the canvas's unselectable words with their
+// very first position, so the caret opened in front of "Build" whichever word was double-clicked,
+// and what the author typed went in ahead of the heading.
+function caretAt(node, aim) {
   const doc = node.ownerDocument;
   const selection = doc.getSelection();
   if (!selection) return;
@@ -794,7 +863,7 @@ function caretAt(node, event) {
   const current = selection.rangeCount ? selection.getRangeAt(0) : null;
   if (current && !current.collapsed && node.contains(current.commonAncestorContainer)) return;
 
-  const range = pointRange(doc, event) || doc.createRange();
+  const range = aim || doc.createRange();
   if (!node.contains(range.startContainer)) {
     range.selectNodeContents(node);
     range.collapse(false);
@@ -809,6 +878,9 @@ function caretAt(node, event) {
 // are one space, and the server stores them as one (`CanvasLive`'s `unwrapped/2`). Only the browser
 // knows which an element is — a `<pre>`, a `whitespace-pre-line` class, a kit's own stylesheet — so
 // the hook reads it off the element and says so with the words.
+//
+// Read BEFORE the words open: Chrome draws a `plaintext-only` editing host `white-space: pre-wrap`,
+// so asked while they are open, every element answers that it shows its line breaks.
 export function keepsBreaks(node) {
   const view = node.ownerDocument.defaultView;
   const style = view && view.getComputedStyle(node);
@@ -1151,6 +1223,11 @@ const PbCanvas = {
       // patch writes onto the element while the words are open.
       const id = node.dataset.nodeId;
 
+      // Where the pointer was, while the browser can still say — see `caretAt` — and whether the
+      // element shows its line breaks, while it is still drawn as the page draws it.
+      const aim = pointRange(node.ownerDocument, event);
+      const shown = keepsBreaks(node);
+
       node.setAttribute("contenteditable", "plaintext-only");
 
       // LIVEVIEW MUST NOT REDRAW WORDS SOMEBODY IS TYPING. Any patch that re-renders this node —
@@ -1164,7 +1241,7 @@ const PbCanvas = {
       // leaves the children alone, and only `data-*` is merged. Removed again in `finish`.
       node.setAttribute("phx-update", "ignore");
       node.focus();
-      caretAt(node, event);
+      caretAt(node, aim);
       this.editing = node;
 
       // COMMITTING IS A KEYSTROKE, not only a click somewhere else. Escape leaves, ⌘/Ctrl+Enter
@@ -1179,10 +1256,19 @@ const PbCanvas = {
       // whenever the caret is not where the browser thinks the editing host is — the e2e run's
       // "Mishka StudioNorthwind" was select-all failing and the new title typed in front of the old
       // one — so it is answered here, from the node itself.
+      //
+      // ⌘↓ AND ⌘END GO TO THE END OF THESE WORDS, ⌘↑ AND ⌘HOME TO THE START, for the same reason. See
+      // `runEdge`.
       const onKey = (ev) => {
         if (selectsAll(ev)) {
           ev.preventDefault();
           return selectContents(node);
+        }
+
+        const edge = runEdge(ev);
+        if (edge) {
+          ev.preventDefault();
+          return caretToEdge(node, edge, ev.shiftKey, shown);
         }
 
         if (ev.key === "Escape") {
@@ -1204,7 +1290,7 @@ const PbCanvas = {
         node.removeAttribute("phx-update");
         node.removeAttribute("contenteditable");
         if (this.editing === node) this.editing = null;
-        this.pushEvent("set_text", { id, text: node.textContent, pre: keepsBreaks(node) });
+        this.pushEvent("set_text", { id, text: node.textContent, pre: shown });
       };
 
       node.addEventListener("blur", finish, { once: true });
