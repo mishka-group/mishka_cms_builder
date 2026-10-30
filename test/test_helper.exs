@@ -50,10 +50,6 @@ if Mix.Project.config()[:app] == :mishka_cms_builder do
   # second failed that wait while a second suite shared the machine.
   ExUnit.configure(assert_receive_timeout: :timer.seconds(30))
 
-  # The `:performance` tests time the ETS states against a wall-clock limit, which a shared CI
-  # machine misses now and then. They run on demand: `mix test --include performance`.
-  ExUnit.configure(exclude: [:performance | ExUnit.configuration()[:exclude] || []])
-
   ExUnit.start()
   Ecto.Adapters.SQL.Sandbox.mode(MishkaCmsBuilder.Repo, :manual)
 end
