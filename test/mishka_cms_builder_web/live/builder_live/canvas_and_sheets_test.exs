@@ -2154,6 +2154,22 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert render(view) =~ "brochure"
     end
 
+    # THE SHEET'S SORT IS THE SHEET'S. `Runtime.Media`'s table writes its sort, filters and page
+    # into the address on its own admin page; mounted inside the editor it wrote them into the
+    # EDITOR's — opening Assets turned the builder's URL into `…?sort=inserted_at%3Adesc` before the
+    # reader had touched anything.
+    test "opening Assets leaves the editor's address alone", %{conn: conn, page: page, site: site} do
+      create_media!(site_id: site.id, name: "brochure")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      assert render(view) =~ "brochure"
+
+      assert_raise ArgumentError, ~r/to patch, but got none/, fn -> assert_patch(view, 100) end
+    end
+
     # The dropzone, the accept list, the size limit, the progress bar and the write all belong to
     # Gervaz's `uploads do … style :dropzone … end` block on the resource. Registering a second
     # uploader for the same name here would be a second media system.

@@ -67,7 +67,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsBuilder.Examples
   alias MishkaCmsBuilder.EditorSession
   alias MishkaCmsBuilder.Review
-  alias MishkaGervaz.Table.Web.UrlSync
   alias MishkaCmsBuilder.States.EditorSessionState
   alias MishkaCmsCore.Runtime.Authoring.Icons
   alias MishkaCmsCore.Runtime.Authoring.Inspector
@@ -964,9 +963,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:frame_zoom, fn -> 30 end)
     |> assign_new(:frame_row, fn -> true end)
     |> assign_new(:code_open, fn -> false end)
-    # The top bar's Code. `nil` rather than `false` for the error so an empty string can mean
-    # "there is a message and it is blank" without being mistaken for "no message".
-    |> assign_new(:url_state, fn -> nil end)
     # COUNTED ONCE, THEN MAINTAINED. It used to be recomputed at the end of `assign_editor/2`,
     # which meant a `SELECT count(*)` on every selection, every breakpoint switch and every undo — in
     # both LiveViews — for a number only four things can change. All four already say so:
@@ -2178,20 +2174,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # `inspect` — unless the author is using the palette there (`follow_selection/1`). Only a CANVAS
   # selection does this: selecting from the tree is navigation, and swapping the panel out from
   # under someone who is browsing the tree loses their place.
-  # THE BUILDER READS ITS OWN PARAMS IN MOUNT and has never needed `handle_params`. It needs one now
-  # because the Assets sheet mounts a Gervaz table, and `Runtime.Media`'s table declares
-  # `url_sync do mode :bidirectional end` — it pushes a patch whenever its filters, sort or page
-  # change. Without a `handle_params` that patch raises; with one that ignores it, the patch would
-  # still rewrite the builder's URL to `/`, because a table with no `url_state` has no base path.
-  #
-  # Decoding it properly is what makes both true: the patch stays on the builder's own URL, and the
-  # gallery's filters survive a reload the way they do on the Media page.
-  @impl true
-  def handle_params(params, uri, socket) do
-    {:noreply,
-     assign(socket, :url_state, UrlSync.decode(params, uri, MishkaCmsCore.Runtime.Media))}
-  end
-
   # THE FORM ANNOUNCES; THIS PAGE ACTS. The essentials step is the resource's own Gervaz form, so it
   # creates through the resource's own action and says so exactly as every list page hears it — the
   # editor's only job is to reopen on what was just made, and to leave if the reader backs out.

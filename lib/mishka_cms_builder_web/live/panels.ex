@@ -14434,6 +14434,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-[18px] pb-[18px] pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <%!-- `url_sync={false}` BECAUSE THIS TABLE IS NOT THE PAGE. `Runtime.Media`'s table writes
+                its sort, filters and page into the address on the Media page; here that address
+                is the editor's, and opening the sheet turned it into `…?sort=inserted_at%3Adesc`.
+                The gallery keeps them in its own state, as the Translations sheet's table does. --%>
           <.live_component
             module={MishkaGervaz.Table.Web.Live}
             id="pb-assets-gallery"
@@ -14444,7 +14448,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               MishkaCmsBuilderWeb.Templates.AssetsGrid,
               MishkaCmsBuilderWeb.Templates.AssetsList
             ]}
-            url_state={media_url_state(assigns)}
+            url_state={%{path_params: media_scope_params(assigns)}}
+            url_sync={false}
           />
         </div>
       </div>
@@ -15081,9 +15086,6 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # Keys are ATOMS. Gervaz builds path params from the route pattern with `to_existing_atom`, and
   # the filter step tests membership against `Ash.Resource.Info.attributes/1`, whose names are atoms
   # — a string key matches nothing and is silently ignored.
-  defp media_url_state(assigns),
-    do: (assigns[:url_state] || %{}) |> Map.put(:path_params, media_scope_params(assigns))
-
   @doc """
   What the Assets gallery is scoped by: the site, the chosen folder, and — while something is waiting
   for a file — which node asked and what it can accept.
