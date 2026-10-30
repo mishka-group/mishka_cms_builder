@@ -338,6 +338,25 @@ describe("what the rail says while something is being dragged", () => {
     expect(payload.parent_id).toBe("nmain0000");
     expect(payload.index).toBe(9999);
   });
+
+  // Before the verdict, "inside" is the markup's guess. A row the server then refuses is a drop
+  // beside it, in front from its top half, so the drop says which half the pointer was in and the
+  // server's fallback lands there (`Placement.beside/4`).
+  it("says which half of the row it was let go over, for a refusal to fall back on", () => {
+    const bar = rail();
+    const ctx = mount(hooks.PbLayers, bar.el);
+
+    for (const [clientY, before] of [
+      [8, true],
+      [12, false],
+    ]) {
+      ctx.onDrop(dragEvent("drop", bar.nmain0000, transfer({ [NODE_MIME]: "nx" }), { clientY }));
+
+      const [, payload] = ctx.pushed.at(-1);
+      expect(payload).toMatchObject({ parent_id: "nmain0000", index: 9999 });
+      expect(payload.fallback_before, `let go at ${clientY}`).toBe(before);
+    }
+  });
 });
 
 describe("the end of the page", () => {

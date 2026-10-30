@@ -145,28 +145,44 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormsTest do
           "index" => "0"
         })
 
-    test "a form dropped into a column of another form's card is refused", %{
+    # Not inside it: every box in a form refuses another form, and the drop climbs out of the whole
+    # form to land after it, where the canvas line sits once the drag's verdict is in.
+    test "a form dropped into a column of another form's card lands after that form", %{
       conn: conn,
       site: site
     } do
       renamed_forms!(site)
       page = create_page!(site_id: site.id, template: @deep_forms)
       {:ok, view, _html} = open_builder(conn, page)
-      before = node_count(view)
+
+      outers = %{"contact-col" => "contact-form", "signup-col" => "signup-form"}
+      kept = Map.new(outers, fn {_column, outer} -> {outer, inside(view, outer)} end)
 
       for column <- ~w(contact-col signup-col),
           template <- [
             ~s(<.component component_name="acme-simple" site="localhost" for={%{}}></.component>),
             Elements.get("el-form").template
           ] do
+        before = with_dom_id(view, "root").children
         drop_into(view, column, template)
 
         assert flashes(view) =~ "inside another form", "#{template} into #{column}"
+        assert flashes(view) =~ "Placed after"
         clear_flashes(view)
+
+        children = with_dom_id(view, "root").children
+        outer = with_dom_id(view, outers[column])
+
+        assert [landed] = children -- before, "#{template} into #{column} landed beside the forms"
+        assert Enum.at(children, Tree.index_of(editor(view).tree, outer.id) + 1) == landed
       end
 
-      assert node_count(view) == before
+      for {outer, ids} <- kept,
+          do: assert(inside(view, outer) == ids, "#{outer} is left as it was")
     end
+
+    defp inside(view, id),
+      do: Tree.descendant_ids(editor(view).tree, with_dom_id(view, id).id)
 
     test "a field dropped into either form's column joins that form", %{conn: conn, site: site} do
       renamed_forms!(site)

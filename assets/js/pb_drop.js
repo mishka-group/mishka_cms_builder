@@ -61,7 +61,7 @@ const INSIDE_TO = 0.67;
  *   - `accepts(id)` → may this parent take the node at all
  *   - `nests(el)` → may this element hold children
  * @returns {{parent_id: string, index: number, rect: object|null, axis: string,
- *            anchor_id?: string, anchor_before?: boolean,
+ *            anchor_id?: string, anchor_before?: boolean, fallback_before?: boolean,
  *            inside?: boolean, before?: boolean, redirected?: boolean, label?: string|null}}
  */
 export function resolveDrop(point, node, lookup) {
@@ -82,6 +82,12 @@ export function resolveDrop(point, node, lookup) {
       axis: flow.axis,
       inside: true,
       label: labelOf(current),
+      // WHICH HALF IT WAS OVER, for a box the server turns out to refuse. Before the drag's verdict
+      // arrives `nests` is a guess, and once it does a box that refuses is a drop beside it: in front
+      // from its first half, after from its second, counted the way `anchor_before` is. A drop let
+      // go in between is placed by the server's fallback (`Placement.beside/4`), which reads this
+      // to land where that line would have been.
+      fallback_before: flow.reversed ? ratio >= 0.5 : ratio < 0.5,
     };
   }
 

@@ -179,6 +179,33 @@ describe("resolveDrop into a container", () => {
     const at = resolveDrop({ x: 150, y: 150 }, root.children[1], lookup);
     expect(at.inside).toBeUndefined();
   });
+
+  // "INSIDE" BEFORE THE VERDICT IS A GUESS. Until the server's hints arrive every box is taken to
+  // hold the drop, and once they do a box that refuses it is a drop BESIDE it: in front from its
+  // first half, after from its second. A drop let go in between says which half it was over, so the
+  // server's fallback (`Placement.beside/4`) lands where that line would have been.
+  it("says which half of the box it was over, for a refusal to fall back on", () => {
+    const { root, lookup } = stack();
+    root.children[1].nests = true;
+
+    expect(resolveDrop({ x: 150, y: 140 }, root.children[1], lookup)).toMatchObject({
+      inside: true,
+      fallback_before: true,
+    });
+    expect(resolveDrop({ x: 150, y: 160 }, root.children[1], lookup)).toMatchObject({
+      inside: true,
+      fallback_before: false,
+    });
+  });
+
+  // The way `anchor_before` counts: in a `-reverse` row the visually-first half is the later index.
+  it("and in a reversed row the half on the leading side is the later place", () => {
+    const { root, lookup } = row("row-reverse");
+    root.children[1].nests = true;
+
+    expect(resolveDrop({ x: 140, y: 100 }, root.children[1], lookup).fallback_before).toBe(false);
+    expect(resolveDrop({ x: 160, y: 100 }, root.children[1], lookup).fallback_before).toBe(true);
+  });
 });
 
 describe("resolveDrop when the parent refuses", () => {

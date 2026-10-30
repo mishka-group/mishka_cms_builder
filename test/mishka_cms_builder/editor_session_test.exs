@@ -2795,19 +2795,35 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
       |> Enum.map(&Node.attr_text(Tree.get(session.tree, &1.node_id), "id"))
     end
 
-    test "a form dropped in a column of another form's card is refused, and nothing changes" do
+    # NOT INSIDE IT, AND NOT NOWHERE. Every box inside a form refuses another form, so once the drag's
+    # verdict is in the canvas line climbs out of the whole form and sits after it. A drop let go
+    # before the verdict arrived went one level out, met the form's own card, and was refused, so
+    # the gesture did nothing; it now lands where that line would have been, and says so.
+    test "a form dropped in a column of another form's card lands after that form, untouched" do
       form =
         ~s(<.form :let={h} id="quote-form" as={:quote} for={assigns[:quote_form]} phx-change="quote_validate" phx-submit="quote_submit"></.form>)
 
-      for col <- ~w(contact-col news-col) do
+      for {col, outer, name} <- [
+            {"contact-col", "contact-form", "Contact"},
+            {"news-col", "news-form", "News"}
+          ] do
         session = deep()
-        before = html(session)
+        root = by_id(session, "root").id
+        outer_id = by_id(session, outer).id
+        inside = Tree.descendant_ids(session.tree, outer_id)
 
-        assert {:error, message} = drop(session, form, by_id(session, col).id)
+        {:ok, hints} = EditorSession.drop_hints(session.token, %{"template" => form})
+        refute Enum.any?([outer_id | inside], &hints[&1]), "the line climbs out of #{outer}"
+        assert hints[root]
+
+        assert {:relocated, dropped, message} = drop(session, form, by_id(session, col).id)
         assert message =~ "cannot go inside another form"
+        assert message =~ "Placed after the #{name} form instead."
 
-        {:ok, after_refusal} = EditorSession.fetch(session.token)
-        assert html(after_refusal) == before
+        quote = by_id(dropped, "quote-form")
+        assert quote.parent_id == root
+        assert Tree.index_of(dropped.tree, quote.id) == Tree.index_of(dropped.tree, outer_id) + 1
+        assert Tree.descendant_ids(dropped.tree, outer_id) == inside, "#{outer} is left as it was"
       end
     end
 

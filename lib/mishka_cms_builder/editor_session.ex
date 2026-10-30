@@ -1056,9 +1056,15 @@ defmodule MishkaCmsBuilder.EditorSession do
   "immediately after the thing you aimed at" is the answer they would pick themselves — a `<span>`
   that cannot hold a section still tells us which section the new one belongs next to.
 
+  Beside means where the canvas draws its line once the drag's hints are in: after the nearest of
+  the target and its ancestors whose own parent takes the node, however far up that is, or in front
+  of the target when `fallback_before` says the drop pointed at its first half
+  (`Placement.beside/4`). A drop let go before the hints arrived is the usual way here, and it can
+  name a box several levels inside anything that would take it.
+
   Returns `{:ok, session}`, `{:relocated, session, sentence}` where the sentence says what happened
-  and is meant to be shown, or `{:error, reason}` when there is no room beside the target either. It
-  retries **once**: a second refusal is a real one.
+  and is meant to be shown, or `{:error, reason}` when nothing on the way up takes it. It retries
+  **once**: a refusal of the spot the climb found is a real one.
   """
   @spec apply_drop(String.t(), map()) ::
           {:ok, t()} | {:relocated, t(), String.t()} | {:error, term()}
@@ -1320,30 +1326,48 @@ defmodule MishkaCmsBuilder.EditorSession do
 
   defp to_index(_index), do: nil
 
-  # What a drop retried beside its target calls a target that is not a form.
+  # AS FAR UP AS IT TAKES, where the line goes once the drag's hints are in (`Placement.beside/4`).
+  # One level out was not always enough: a drop let go before the hints arrived names whatever box
+  # was under the pointer, and a section dropped on a link inside a paragraph was refused by the
+  # paragraph as well, so nothing happened at all.
+  #
+  # Counted like any move (`settled_index/2`): a node climbing out to after a later sibling of its own
+  # went one slot too far.
   defp beside(token, %{"parent_id" => parent_id} = params, reason) when is_binary(parent_id) do
     with {:ok, session} <- fetch_session(token),
-         %Node{} = target <- Tree.get(session.tree, parent_id),
-         at when is_integer(at) <- Placement.index_after(session.tree, target),
-         retry = Map.merge(params, %{"parent_id" => target.parent_id, "index" => at}),
-         {:ok, session} <- apply_op(token, retry) do
+         {:ok, dragged, dragged_tree} <- subject(session, params),
+         {parent, index, target, side} <-
+           Placement.beside(session.tree, dragged, parent_id,
+             components: session.components,
+             dragged_tree: dragged_tree,
+             locked: session.locked,
+             before?: params["fallback_before"] in [true, "true"]
+           ),
+         spot = %{"parent_id" => wire_parent(parent), "index" => index},
+         {:ok, session} <- apply_op(token, settled_index(session.tree, Map.merge(params, spot))) do
       where =
         Placement.spoken(target,
           components: session.components,
           other: gettext("the element you dropped it on")
         )
 
-      {:relocated, session,
-       gettext("%{reason} Placed after %{where} instead.",
-         reason: sentence(reason),
-         where: where
-       )}
+      {:relocated, session, placed_instead(side, sentence(reason), where)}
     else
       _refused -> {:error, reason}
     end
   end
 
   defp beside(_token, _params, reason), do: {:error, reason}
+
+  defp placed_instead(:before, reason, where),
+    do: gettext("%{reason} Placed before %{where} instead.", reason: reason, where: where)
+
+  defp placed_instead(:after, reason, where),
+    do: gettext("%{reason} Placed after %{where} instead.", reason: reason, where: where)
+
+  # The top of the document as a drop names it, which is what `settled_index/2` compares against.
+  defp wire_parent(:root), do: "root"
+  defp wire_parent(parent), do: parent
 
   defp sentence(reason) when is_binary(reason), do: reason
   defp sentence(_reason), do: gettext("That element could not go there.")

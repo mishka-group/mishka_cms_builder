@@ -309,6 +309,114 @@ defmodule MishkaCmsBuilder.PlacementTest do
       assert newest(session, dropped).parent_id == parent_of(session, span)
     end
 
+    # LET GO BEFORE THE VERDICT ARRIVED. Until `pb:drop-hints` lands the canvas guesses that every
+    # box will take the drop, so the payload names a box several levels inside anything that would.
+    # The retry went one level out and gave up: a section dropped on a link inside a paragraph was
+    # refused by the paragraph too, and nothing happened. The line drawn once the verdict arrives
+    # climbs until a parent takes it (`resolveDrop` in `pb_drop.js`), and the drop goes there.
+    test "climbs as far as it takes to a parent that will hold it" do
+      session =
+        open(~s(<div id="root"><p>Read <a href="/x"><b>this</b></a> now</p><h2>Next</h2></div>))
+
+      root = id(session, "div")
+
+      for {target, payload} <- [
+            {"a", %{"parent_id" => id(session, "a"), "index" => 9999}},
+            {"b", %{"parent_id" => id(session, "b"), "index" => 9999}},
+            {"b's edge",
+             %{"parent_id" => id(session, "a"), "anchor_id" => id(session, "b"), "index" => 0}}
+          ] do
+        result =
+          EditorSession.apply_drop(
+            session.token,
+            Map.put(payload, "template", "<section>New</section>")
+          )
+
+        assert {:relocated, dropped, sentence} = result, "dropped on #{target}"
+        assert sentence =~ "Placed after"
+
+        new = newest(session, dropped)
+        assert new.parent_id == root, "dropped on #{target}"
+        assert Tree.child_ids(dropped.tree, root) == [id(session, "p"), new.id, id(session, "h2")]
+
+        {:ok, _undone} = EditorSession.undo(session.token)
+      end
+    end
+
+    # A drop in the middle of a box that will not take it is, once the verdict is in, a drop beside
+    # that box: in front of it from its first half (`fallback_before`), after it from its second.
+    test "lands in front of the box it was dropped in when the drop pointed at its first half" do
+      session = open(~s(<div id="root"><p>one</p><img src="a.png" /><p>two</p></div>))
+      root = id(session, "div")
+      image = id(session, "img")
+
+      for {before?, at} <- [{true, 1}, {false, 2}] do
+        {:relocated, dropped, sentence} =
+          EditorSession.apply_drop(session.token, %{
+            "template" => "<h2>Title</h2>",
+            "parent_id" => image,
+            "index" => 9999,
+            "fallback_before" => before?
+          })
+
+        new = newest(session, dropped)
+        assert new.parent_id == root
+        assert Enum.at(Tree.child_ids(dropped.tree, root), at) == new.id
+        assert sentence =~ if(before?, do: "Placed before", else: "Placed after")
+
+        {:ok, _undone} = EditorSession.undo(session.token)
+      end
+    end
+
+    # The retry is counted against the tree with the moving node still in it, like every move:
+    # `Tree.move/4` reads the index with the node taken out, so a node climbing out to after a
+    # later sibling went one slot too far.
+    test "a moved node climbing out lands right after the branch it could not enter" do
+      session =
+        open(~s(<div id="root"><h2>Mover</h2><p>Read <a href="/x">this</a></p><p>Last</p></div>))
+
+      root = id(session, "div")
+      [mover, first, last] = Tree.child_ids(session.tree, root)
+
+      {:relocated, moved, _sentence} =
+        EditorSession.apply_drop(session.token, %{
+          "node_id" => mover,
+          "parent_id" => id(session, "a"),
+          "index" => 9999
+        })
+
+      assert Tree.child_ids(moved.tree, root) == [first, mover, last]
+    end
+
+    # Into its own child is nowhere: the climb reaches the node itself, which is where it already is.
+    test "a node dropped inside itself is still refused" do
+      session = open(~s(<div id="root"><section><p>Inner</p></section></div>))
+      section = id(session, "section")
+
+      assert {:error, _reason} =
+               EditorSession.apply_drop(session.token, %{
+                 "node_id" => section,
+                 "parent_id" => id(session, "p"),
+                 "index" => 9999
+               })
+    end
+
+    # A locked box takes nothing, so the climb goes past it as the line does.
+    test "climbs past a locked parent" do
+      session = open(~s(<div id="root"><article><p>Read <b>this</b></p></article></div>))
+      article = id(session, "article")
+      {:ok, _locked} = EditorSession.toggle_lock(session.token, article)
+
+      {:relocated, dropped, _sentence} =
+        EditorSession.apply_drop(session.token, %{
+          "template" => "<h2>Title</h2>",
+          "parent_id" => id(session, "b"),
+          "index" => 9999
+        })
+
+      assert newest(session, dropped).parent_id == id(session, "div")
+    end
+
     # No parent named means the document itself, which is what a drop onto empty canvas is.
     test "and a drop naming no parent lands at the top level" do
       session = open(~s(<div id="root"></div>))

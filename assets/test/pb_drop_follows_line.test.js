@@ -226,3 +226,28 @@ describe("the server's verdict arriving while the pointer is still", () => {
     expect(inside(ctx)).toBe(false);
   });
 });
+
+describe("a drop let go before the server's verdict", () => {
+  // The line was the optimistic "inside", and the server may refuse the box. Once the verdict is in
+  // the line goes beside a box that refuses, in front of it from its first half, so the drop tells
+  // the server which half it was let go over and the fallback lands where that line would have been.
+  it("tells the server which half of the box it was let go over", () => {
+    const { el, first } = canvas();
+    const ctx = mount(el);
+    const dt = transfer({ [TEMPLATE_MIME]: "<section></section>" });
+
+    for (const [y, before] of [
+      [240, true],
+      [260, false],
+    ]) {
+      ctx.onDragOver(at("dragover", first, dt, y));
+      expect(inside(ctx)).toBe(true);
+
+      ctx.onDrop(at("drop", first, dt, y));
+
+      const [, payload] = ctx.pushed.at(-1);
+      expect(payload).toMatchObject({ parent_id: "nfirst000", index: 9999 });
+      expect(payload.fallback_before, `let go at ${y}`).toBe(before);
+    }
+  });
+});

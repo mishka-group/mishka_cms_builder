@@ -235,18 +235,54 @@ defmodule MishkaCmsBuilder.Placement do
     do: {node.parent_id || :root, (Tree.index_of(tree, node.id) || 0) + 1}
 
   @doc """
-  The index immediately after `target` among its siblings, or `nil` when it has no place there.
+  Where a drop the tree refused lands instead: `{parent_id, index, beside, side}`, or `nil` when
+  nothing on the way up will take `dragged`.
 
-  Separate from `after_node/2` because the caller that retries a refused drop needs the index on its
-  own, to merge into a payload that already names the parent.
+  `refused_id` is the parent the drop named. The drop lands beside the nearest of that node and its
+  ancestors whose own parent takes `dragged` and is not locked — `beside` — and `side` says which
+  way: `:after`, or `:before` when `beside` is the refused node itself and `:before?` says the drop
+  pointed at that node's first half.
+
+  WHERE THE LINE GOES ONCE THE VERDICT IS IN. Until the drag's `hints/3` reach the canvas it guesses
+  that every box will take the drop, so a drop let go that early can name a box several levels
+  inside anything that would. Once they arrive the line climbs exactly like this (`resolveDrop` in
+  `pb_drop.js`), and the drop goes where it would have been drawn. A node dropped inside itself
+  climbs to itself, which is nowhere.
+
+  `opts` are `target/4`'s, plus `:locked` and `:before?`.
   """
-  @spec index_after(Tree.t(), Node.t()) :: non_neg_integer() | nil
-  def index_after(%Tree{} = tree, %Node{} = target) do
-    tree
-    |> Tree.child_ids(target.parent_id || :root)
-    |> Enum.find_index(&(&1 == target.id))
-    |> then(&(&1 && &1 + 1))
+  @spec beside(Tree.t(), Node.t(), String.t(), keyword()) ::
+          {String.t() | :root, non_neg_integer(), Node.t(), :before | :after} | nil
+  def beside(%Tree{} = tree, %Node{} = dragged, refused_id, opts \\ []) do
+    with %Node{} = refused <- Tree.get(tree, refused_id),
+         %Node{} = node <-
+           Enum.find(
+             [refused | Tree.ancestors(tree, refused.id)],
+             &takes?(tree, dragged, &1, opts)
+           ),
+         false <- node.id == dragged.id,
+         at when is_integer(at) <- Tree.index_of(tree, node.id) do
+      case side(node, refused, opts) do
+        :before -> {node.parent_id || :root, at, node, :before}
+        :after -> {node.parent_id || :root, at + 1, node, :after}
+      end
+    else
+      _nowhere -> nil
+    end
   end
+
+  defp takes?(tree, dragged, %Node{parent_id: parent} = node, opts) do
+    locked = Keyword.get(opts, :locked, MapSet.new())
+
+    !MapSet.member?(locked, parent) and parent_accepts?(tree, dragged, node, opts)
+  end
+
+  # In front of the refused node itself only: anything further up is a branch the drop could not
+  # enter, and the line lands after that.
+  defp side(%Node{id: id}, %Node{id: id}, opts),
+    do: if(opts[:before?] == true, do: :before, else: :after)
+
+  defp side(_node, _refused, _opts), do: :after
 
   @doc """
   A sentence for a landing place the selection ring does not explain on its own, or `nil` when it

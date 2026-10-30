@@ -1930,6 +1930,9 @@ const PbCanvas = {
         payload.anchor_before = target.anchor_before;
       }
 
+      // Where a box the server refuses puts it instead — see `resolveDrop`.
+      if (target.inside) payload.fallback_before = target.fallback_before;
+
       // A node dragged from inside the canvas is a move, and so is one dragged in from the layers
       // rail — that one begins in the parent document, so its id arrives on the dataTransfer rather
       // than on this hook. Anything else is the palette's template.
@@ -3128,9 +3131,13 @@ const PbLayers = {
     // something". Beside is still reachable at eight pixels a side, which is the band every other
     // tree editor gives it, and the outer quarters are where the pointer naturally lands when the
     // intent really is "between these two".
-    const zoneOf = (row, event) => {
+    const offsetIn = (row, event) => {
       const box = row.getBoundingClientRect();
-      const offset = (event.clientY - box.top) / box.height;
+      return (event.clientY - box.top) / box.height;
+    };
+
+    const zoneOf = (row, event) => {
+      const offset = offsetIn(row, event);
       if (offset < 0.25) return "before";
       if (offset > 0.75) return "after";
 
@@ -3280,6 +3287,11 @@ const PbLayers = {
 
       const { row, zone } = end ? {} : resolve(over, event);
       const landing = end ? { parent_id: "root", index: 9999 } : landingFor(row, zone);
+
+      // BEFORE THE VERDICT, "inside" is the markup's guess. A row the server then refuses is a drop
+      // beside it, in front from its top half, as `zoneOf` splits a row that cannot be entered — so
+      // the server's fallback is told which half (`Placement.beside/4`).
+      if (zone === "inside") landing.fallback_before = offsetIn(row, event) < 0.5;
 
       event.preventDefault();
       this.pushEvent("drop", node ? { node_id: node, ...landing } : { template, ...landing });
