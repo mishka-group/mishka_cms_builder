@@ -19,6 +19,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ClosingTest do
   """
   use MishkaCmsBuilder.LiveCase
 
+  alias MishkaCmsBuilderWeb.Live.BuilderLive
+
   # The LiveView is linked to this process through the test's client, and both ways out below end it
   # with a reason that is not `:normal`.
   setup do
@@ -165,6 +167,19 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ClosingTest do
       close(view)
 
       assert Drafts.list("page", page, recorded) == [], "publish mode writes nothing but the page"
+    end
+  end
+
+  # A SOCKET THAT DROPS AND COMES BACK is the same tab: LiveView mounts it again with `_mounts` past
+  # zero. It carries on in the session it had — its draft, its stage, its edits — rather than being
+  # treated as a visit that lands on the live page.
+  describe "a rejoin" do
+    test "is told apart from a visit by the mount count" do
+      assert BuilderLive.rejoined?(%{"_mounts" => 1})
+      assert BuilderLive.rejoined?(%{"_mounts" => 3})
+      refute BuilderLive.rejoined?(%{"_mounts" => 0})
+      refute BuilderLive.rejoined?(%{})
+      refute BuilderLive.rejoined?(nil)
     end
   end
 end

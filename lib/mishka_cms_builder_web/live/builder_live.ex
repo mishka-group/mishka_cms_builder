@@ -386,7 +386,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp heard?(_bundle, _actor), do: false
 
-  # A STORED TEMPLATE THE TOKENIZER REFUSES USED TO BE A CRASH LOOP. `resume_or_open/5` answers
+  # A STORED TEMPLATE THE TOKENIZER REFUSES USED TO BE A CRASH LOOP. `resume_or_open/6` answers
   # `{:error, %{line:, column:, message:}}` when the document will not parse, and `{opened, editor}`
   # MATCHES that — it is a two-tuple — so the error map became the editor and the mount died on
   # `editor.token` with a `KeyError`. The page could not then be opened to fix the thing that broke
@@ -398,7 +398,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp mount_section(socket, section, params, record) do
     actor = socket.assigns[:current_user]
 
-    case resume_or_open(section, params, record, actor, connected?(socket)) do
+    rejoined? = rejoined?(connected?(socket) && get_connect_params(socket))
+
+    case resume_or_open(section, params, record, actor, connected?(socket), rejoined?) do
       {:error, %{} = fault} -> mount_recovery(socket, section, params, record, fault)
       {opened, editor} -> mount_editor(socket, section, params, record, actor, opened, editor)
     end
@@ -506,6 +508,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     # colleague can open from a chat, not a path that only means something on this tab.
     |> assign(:origin, origin(socket.host_uri))
     |> assign(:editors, Presence.others(editor.token, actor))
+    |> keep_stage(opened, editor)
     |> assign_offers(section, params, record, actor, editor, opened, connected?(socket))
     |> assign_session_draft(section, record, actor, editor, connected?(socket))
     |> assign(:drafts_enabled?, Drafts.supported?(section) and not is_nil(record))
@@ -593,6 +596,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # A named draft therefore takes the carry-on bar and empties the other one: the resume bar's
   # sentence ("you are looking at the live page", never published) is about work nobody asked for,
   # and its Discard DELETES — neither belongs over a draft that was just deliberately chosen.
+  #
+  # A REJOIN HAS NOTHING TO OFFER. The tab never left, so the document it was editing is the one it
+  # is in, and both bars would be asking a question about a visit that did not happen.
+  defp assign_offers(socket, _section, _params, _record, _actor, _editor, :rejoined, _connected?),
+    do: socket |> assign(:resumable, nil) |> assign(:inherited_draft, nil)
+
   defp assign_offers(socket, section, params, record, actor, editor, opened, connected?) do
     case chosen_draft(connected?, section, record, actor, params["draft_id"]) do
       # ALREADY THERE. A URL naming the draft the session is ALREADY in has asked for nothing —
@@ -654,20 +663,38 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp inherited_draft(_opened, _editor, nil), do: nil
 
+  # THE STAGE IS THE SESSION'S ON A REJOIN, set before the session is first assigned. Every other way
+  # in opens on Draft; a tab that was in publish mode before its socket dropped is still in it, and
+  # the first assign is what starts an autosave — on Draft, it would write the unpublished work into
+  # a draft nobody asked for.
+  defp keep_stage(socket, :rejoined, %{stage: stage}), do: assign(socket, :stage, stage)
+  defp keep_stage(socket, _opened, _editor), do: socket
+
   # `?session=<token>` JOINS an open session instead of starting a fresh one. That is what makes
   # co-editing real: without it two admins on the same URL each get their own private tree, presence
   # shows nobody, and the avatars would be decoration. A token that has expired or names a different
   # document falls back to opening normally rather than erroring.
-  defp resume_or_open(section, params, record, actor, connected?) do
+  defp resume_or_open(section, params, record, actor, connected?, rejoined?) do
     with token when is_binary(token) <- params["session"],
          {:ok, editor} <- EditorSession.fetch(token),
          true <- editor.resource_id == params["id"],
          true <- joinable_status?(editor, section, record, params) do
       {:ok, editor}
     else
-      _fresh -> own_session_or_open(section, params, record, actor, connected?)
+      _fresh -> own_session_or_open(section, params, record, actor, connected?, rejoined?)
     end
   end
+
+  @doc """
+  Whether a mount is the same tab coming back after its socket dropped, from its connect params.
+
+  LiveView counts the mounts of one page in `"_mounts"`: 0 on the first, and one more on every
+  reconnect. A rejoin carries on in the session the tab had — its draft, its stage and its edits —
+  where a visit lands on the live page.
+  """
+  @spec rejoined?(map() | nil | false) :: boolean()
+  def rejoined?(%{"_mounts" => mounts}) when is_integer(mounts) and mounts > 0, do: true
+  def rejoined?(_connect_params), do: false
 
   # AN ADDRESS THAT NAMES BOTH ANSWERS ITSELF. `?session=` says "the canvas I am on" and `?status=`
   # says "the entry I want"; an error page has one template per status, so when the two disagree
@@ -689,13 +716,21 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   #
   # Scoped to this actor, so it resumes YOUR session and never silently joins someone else's; that is
   # what `?session=` is for, deliberately and by invitation.
-  defp own_session_or_open(section, params, record, actor, true = connected?) do
+  defp own_session_or_open(section, params, record, actor, true = connected?, rejoined?) do
     case EditorSessionState.find(
            Section.to_underscored(section),
            params["id"],
            actor && actor.id,
            Section.editing_status(section, record, status: params["status"])
          ) do
+      # A REJOIN IS NOT A VISIT. A socket that dropped and came back is the tab that never left, and
+      # everything below is about walking back in. Answered like a visit, a dropped connection put an
+      # author mid-sentence on the live page — and in publish mode opened a fresh session over the
+      # one holding every unpublished edit, which nothing had written, so the reconnect itself was
+      # the loss. It carries on in the session exactly as it was.
+      {:ok, editor} when rejoined? ->
+        {:rejoined, editor}
+
       # PUBLISH-MODE WORK IS NOT PICKED BACK UP. Nothing was written for it — that is what publish
       # mode means — so resuming would show edits with nowhere to go, and the reload that was
       # supposed to bring back the original would bring back a ghost of them instead.
@@ -718,7 +753,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  defp own_session_or_open(section, params, record, actor, connected?),
+  defp own_session_or_open(section, params, record, actor, connected?, _rejoined?),
     do: open_session(section, params, record, actor, connected?)
 
   # Back to what the live record says, with the draft's name kept only long enough for the bar to
@@ -814,7 +849,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   It names the status as well, for the one section that has several. The token answers which entry
   is open only while the session lives, and a link pasted into a chat is followed later — without
   the status that reader lands on the 404 when the invitation was written on the 500. The two agree
-  by construction, which is what `resume_or_open/5` asks of an address naming both.
+  by construction, which is what `resume_or_open/6` asks of an address naming both.
   """
   @spec share_url(map()) :: String.t()
   def share_url(%{section: section, record: record, token: token} = assigns)
