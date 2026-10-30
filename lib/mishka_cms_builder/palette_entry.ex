@@ -334,21 +334,40 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   defp seed?(attr, entry, reads) do
     opts = attr_opts(attr)
 
-    (identity?(attr_name(attr)) or not defaulted?(opts)) and
+    (identity?(attr) or not defaulted?(opts)) and
       attr_type(attr) not in ["global", "struct"] and
       (truthy?(field(opts, "required")) or read_without_default?(attr_name(attr), reads) or
          control_value?(attr_name(attr), entry))
   end
 
   # AN ID IS THE ONE ATTRIBUTE A DECLARED `nil` DEFAULT DOES NOT SETTLE, and it is the same reason
-  # `string_seed/2` mints one whatever the style: a component builds its own handlers out of it —
+  # `seed_value/4` mints one whatever the style: a component builds its own handlers out of it —
   # `chelekom-banner`'s dismiss is `JS.push(…) |> hide_banner("##{@id}")` — and `nil` there makes the
   # selector `"#"`, which matches nothing. The component renders, and its one control does nothing,
   # silently. So an id seeds even where the kit declares `default: nil`, which is where all of them
   # declare it.
-  defp identity?("id"), do: true
-  defp identity?(name) when is_binary(name), do: String.ends_with?(name, "_id")
-  defp identity?(_name), do: false
+  #
+  # THE NAME SAYS WHERE TO LOOK; THE TYPE SAYS WHAT IT HOLDS. An `_id` suffix alone made
+  # `chelekom-headless-table`'s `row_id` an id, and it is "a function of the row returning its DOM
+  # id": minted a random string, the table raised `BadFunctionError` on its first row, which on a
+  # fresh drop is the first one the author adds in the Inspector. So an id is a `string`, or an `any`
+  # whose doc says it holds one — Chelekom declares four of its `id`s `any`, documented "A unique
+  # identifier". A function, an atom, a list or a map is never one, and neither is an `any` whose
+  # doc describes a function.
+  defp identity?(attr), do: id_name?(attr_name(attr)) and holds_id?(attr_type(attr), attr)
+
+  defp id_name?("id"), do: true
+  defp id_name?(name) when is_binary(name), do: String.ends_with?(name, "_id")
+  defp id_name?(_name), do: false
+
+  defp holds_id?("string", _attr), do: true
+  defp holds_id?("any", attr), do: attr |> attr_opts() |> field("doc") |> id_doc?()
+  defp holds_id?(_type, _attr), do: false
+
+  defp id_doc?(doc) when is_binary(doc),
+    do: Regex.match?(~r/\b(id|identifier)\b/i, doc) and not Regex.match?(~r/\bfunction\b/i, doc)
+
+  defp id_doc?(_doc), do: false
 
   # `default: nil` IS A DEFAULT. Asking `is_nil(opts["default"])` cannot tell an attribute DECLARED
   # with a nil default from one that declares no default at all, and the kit is mostly the first
@@ -690,9 +709,10 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   # `for` straight on to `chelekom-form-wrapper` through an `{assigns}` splat, so its own template
   # never mentions a form at all.
   defp seed_value(attr, entry, style, components) do
-    case attr_name(attr) == "for" and Fields.wrapper?(entry, components) do
-      true -> "{%{}}"
-      false -> scalar_seed(attr, style, Map.get(entry, :ordinal, 0))
+    cond do
+      identity?(attr) -> ~s("#{Phoenix.LiveView.Utils.random_id()}")
+      attr_name(attr) == "for" and Fields.wrapper?(entry, components) -> "{%{}}"
+      true -> scalar_seed(attr, style, Map.get(entry, :ordinal, 0))
     end
   end
 
@@ -805,18 +825,16 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   # is no placeholder at all: the editor reads a blank required value as "still missing" and draws
   # "needs src" instead of the component — which is what `chelekom-image` and `chelekom-card-media`
   # showed in the wizard. Each of these gives the component something it can actually use.
-  # An id is minted whatever the style: `""` is not a neutral placeholder but a broken component,
-  # because components build their own handlers as `hide("##{@id}")` and `"#"` matches nothing.
+  # An id never reaches here: `seed_value/4` mints it whatever the style, because `""` is not a
+  # neutral placeholder but a broken component — components build their own handlers as
+  # `hide("##{@id}")` and `"#"` matches nothing.
   @media_names ~w(src image poster)
   @text_names ~w(alt title label text name)
 
   defp string_seed(name, style, ordinal \\ 0)
 
-  defp string_seed("id", _style, _ordinal), do: Phoenix.LiveView.Utils.random_id()
-
   defp string_seed(name, style, ordinal) when is_binary(name) do
     cond do
-      String.ends_with?(name, "_id") -> Phoenix.LiveView.Utils.random_id()
       style == :blank -> ""
       name in @media_names -> media_seed(style)
       name in ~w(href navigate patch link url) -> "#"

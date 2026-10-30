@@ -416,6 +416,146 @@ defmodule MishkaCmsBuilder.PaletteEntryTest do
     end
   end
 
+  # A COPY OF CHELEKOM'S HEADLESS TABLE, as the kit ships it (`chelekom_headless.json` at
+  # mishka_chelekom 51c329c2). Its `row_id` is "a function of the row returning its DOM id", declared
+  # `any` with a nil default, and the table calls it on every row: `id={@row_id && @row_id.(row)}`.
+  @headless Path.expand("../fixtures/chelekom_headless_furnished.json", __DIR__)
+
+  defp headless(name) do
+    row =
+      @headless
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.fetch!("components")
+      |> Enum.find(&(&1["name"] == name))
+
+    PaletteEntry.new!(%{
+      name: row["name"],
+      template: row["template"],
+      attrs: row["attrs"],
+      slots: row["slots"],
+      helpers: row["helpers"],
+      furnishing: row["extra"]["furnishing"]
+    })
+  end
+
+  defp attr(name, type, opts), do: %{"name" => name, "type" => type, "opts" => opts}
+
+  describe "what an id is" do
+    # THE REPORTED DEFECT. `row_id` ends in `_id`, so it was minted a random string, and the table
+    # raised `BadFunctionError` on its first row: the furnished one has none, so the drop survived and
+    # the first row the author added in the Inspector took the canvas down.
+    test "a function of the row is not an id, whatever it is called" do
+      template = PaletteEntry.template(headless("chelekom-headless-table"), "Global")
+
+      assert template =~ ~r/ id="phx-[^"]+"/
+      refute template =~ "row_id=", "the table calls row_id on every row: #{template}"
+    end
+
+    # The styled kit's table declares the same function, documented "the function for generating the
+    # row id". The two tables' `row_id` are the only id-named attributes in either Chelekom bundle the
+    # rule tells apart from an id; the other 229 hold one.
+    test "and neither is the styled table's" do
+      row =
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.fetch!("components")
+        |> Enum.find(&(&1["name"] == "chelekom-table"))
+
+      entry =
+        PaletteEntry.new!(%{
+          name: row["name"],
+          template: row["template"],
+          attrs: row["attrs"],
+          slots: row["slots"],
+          helpers: row["helpers"]
+        })
+
+      refute PaletteEntry.template(entry, "Global") =~ "row_id="
+    end
+
+    test "an attribute the kit types as a string is an id by its name, suffix and all" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-editor",
+          template: ~S(<div id={@id} aria-labelledby={@label_id}></div>),
+          attrs: [
+            attr("id", "string", %{"required" => true}),
+            attr("label_id", "string", %{
+              "default" => nil,
+              "doc" => "id of the element labelling the surface"
+            })
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "Global")
+
+      assert template =~ ~r/ id="phx-[^"]+"/
+      assert template =~ ~r/ label_id="phx-[^"]+"/
+    end
+
+    # `chelekom-input`, `chelekom-combobox`, `chelekom-checkbox-field` and `chelekom-group-checkbox`
+    # declare their `id` as `any`, documented "A unique identifier is used to manage state and
+    # interaction". The doc is what says it holds an id.
+    test "an attribute declared any is an id when its doc says it holds one" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-input",
+          template: ~S(<input id={@id} />),
+          attrs: [
+            attr("id", "any", %{
+              "default" => nil,
+              "doc" => "A unique identifier is used to manage state and interaction"
+            })
+          ]
+        })
+
+      assert PaletteEntry.template(entry, "Global") =~ ~r/ id="phx-[^"]+"/
+    end
+
+    test "and is left to its default when its doc says nothing of the kind" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-table",
+          template: ~S|<tr :for={row <- @rows} id={@row_id && @row_id.(row)} />|,
+          attrs: [
+            attr("rows", "list", %{"default" => []}),
+            attr("row_id", "any", %{
+              "default" => nil,
+              "doc" => "the function for generating the row id"
+            }),
+            attr("owner_id", "any", %{"default" => nil})
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "Global")
+
+      refute template =~ "row_id="
+      refute template =~ "owner_id="
+    end
+
+    test "a function, an atom, a list or a map is never minted an id" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "probe",
+          attrs: [
+            attr("row_id", "fun", %{"required" => true}),
+            attr("kind_id", "atom", %{"required" => true}),
+            attr("item_id", "list", %{"required" => true}),
+            attr("map_id", "map", %{"required" => true})
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "Global")
+
+      refute template =~ "phx-", "only an id is minted: #{template}"
+      assert template =~ "kind_id={nil}"
+      assert template =~ "item_id={[]}"
+      assert template =~ "map_id={%{}}"
+    end
+  end
+
   describe "the serialization whitelist" do
     setup do
       entries = [
