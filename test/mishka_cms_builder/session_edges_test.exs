@@ -16,14 +16,21 @@ defmodule MishkaCmsBuilder.SessionEdgesTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsBuilder.EditorSession
+  alias MishkaCmsCore.Runtime.Authoring.Strict
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
 
   @moduletag :unit
 
   defp open(template \\ ~s(<div id="root"><p>hello</p></div>), attrs \\ %{}) do
     {:ok, session} = EditorSession.open(Map.merge(%{section: "page", template: template}, attrs))
     session
+  end
+
+  defp markup(tree) do
+    {:ok, heex} = Serializer.to_heex(tree)
+    heex
   end
 
   # `at` is what the queue sorts by, so an entry without one cannot be drained.
@@ -64,6 +71,36 @@ defmodule MishkaCmsBuilder.SessionEdgesTest do
 
       refute editing.dirty?
       assert editing.selection == nil
+    end
+
+    # THE UNDO STACK IS PATCHES, each one relative to the document after it. Opening a draft put a
+    # freshly parsed document under the stack with no step of its own, so the next undo laid the top
+    # patch over a document it was never taken from: the nodes of the old one came back beside the
+    # draft's, which no root reached, and the strict check took the editor down on every Ctrl+Z.
+    test "undo after opening it goes back to the document it replaced, and redo returns" do
+      session = open()
+      {:ok, edited} = EditorSession.replace_text(session.token, "hello", "goodbye")
+
+      {:ok, editing} =
+        EditorSession.edit_draft(
+          edited.token,
+          %{id: "draft-1", label: "A draft"},
+          ~s(<div id="root"><h2>from the draft</h2></div>)
+        )
+
+      assert {:ok, undone} = EditorSession.undo(editing.token)
+      assert :ok = Strict.inspect_tree(undone.tree)
+      assert markup(undone.tree) == markup(edited.tree)
+      assert undone.draft_id == "draft-1", "undo moved the session off the draft it is editing"
+
+      assert {:ok, before_edit} = EditorSession.undo(editing.token)
+      assert :ok = Strict.inspect_tree(before_edit.tree)
+      assert markup(before_edit.tree) == markup(session.tree)
+
+      {:ok, _again} = EditorSession.redo(editing.token)
+      assert {:ok, redone} = EditorSession.redo(editing.token)
+      assert :ok = Strict.inspect_tree(redone.tree)
+      assert markup(redone.tree) == markup(editing.tree)
     end
 
     test "a draft that will not parse is reported rather than half-applied" do

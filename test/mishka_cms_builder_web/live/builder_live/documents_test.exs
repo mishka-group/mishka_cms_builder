@@ -8,6 +8,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
   """
   use MishkaCmsBuilder.LiveCase
 
+  alias MishkaCmsCore.Runtime.Authoring.Strict
+
   # §1 — THE TWO FIELDS A DOCUMENT IS MOST LIKELY TO HAVE WRONG on a first draft, changeable from
   # the one screen the author is actually on. Everything past the click is the resource's own Gervaz
   # form, so what is pinned here is which fields survive, that a save reaches the record, and that
@@ -2197,6 +2199,32 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       refute has_element?(again, "#pb-inherited-bar")
       assert editor(again).draft_id == draft_id
+    end
+
+    # CTRL+Z AFTER CARRYING ON. Carrying on puts the draft's document under the undo stack, and the
+    # stack is patches, each relative to the document after it. With no step of its own for the swap,
+    # the first undo laid the reload's patch over the draft, the strict check raised and took the
+    # editor down, and every push to it timed out: the key, the menu's Undo and the redo after them.
+    test "undo and redo answer after carrying on, and walk back across it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      draft_id = autosave!(first)
+
+      again = reopen(first, conn, page)
+      again |> element("#pb-inherited-continue") |> render_click()
+      refute node_with_tag(again, "h1"), "the draft deletes the h1"
+
+      undo!(again)
+      assert Process.alive?(again.pid), "undo took the editor down"
+      assert :ok = Strict.inspect_tree(editor(again).tree)
+      assert node_with_tag(again, "h1"), "undo did not go back to the page the draft replaced"
+      assert editor(again).draft_id == draft_id, "undo moved the session off its draft"
+
+      redo!(again)
+      assert :ok = Strict.inspect_tree(editor(again).tree)
+      refute node_with_tag(again, "h1"), "redo did not bring the draft back"
     end
 
     # THE BAR ASKS "WHICH DOCUMENT DO YOU WANT?", and opening any draft answers it — however it was

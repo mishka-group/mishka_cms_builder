@@ -2749,41 +2749,63 @@ defmodule MishkaCmsBuilder.EditorSession do
   # `ErrorPageDraft` keeps `error_pages` and has no such key, so this clause matched nothing at all
   # for the one section it mattered to — opening an error page's draft raised rather than opening it.
   # `MishkaCmsCore.Runtime.Authoring.Section.template/3` is what knows, and the caller asks it.
+  #
+  # AND THE SWAP IS A STEP OF ITS OWN. Undo walks back by patches, each relative to the document
+  # after it, so a document put under the stack with no step for it had the top patch laid over a
+  # tree it was never taken from: the replaced document's nodes came back beside the draft's, no root
+  # reached them, and the strict check raised on every Ctrl+Z — the editor went down and each push
+  # to it timed out. Recorded like any whole-document replacement, the first undo goes back to the
+  # document the draft replaced and redo brings the draft back. It stays off the timeline: loading a
+  # draft is how the document arrives, not a change to it.
   @spec edit_draft(String.t(), map(), String.t()) :: {:ok, t()} | {:error, term()}
   def edit_draft(token, %{id: id, label: label}, template) do
-    with {:ok, tree} <- Tree.parse(template) do
-      commit(token, fn session ->
-        next = %{
-          session
-          | tree: backfill_ids(tree, session.components),
-            draft_id: id,
-            draft_label: label,
-            # OPENING A DRAFT *IS* BEING IN THE DRAFT STAGE, and the caller used to say so in a
-            # second call. Two calls meant two ETS reads of the session — each one copying the whole
-            # tree out — two writes, and two broadcasts to every canvas frame for one click, on the
-            # one path already reported as slow. It also left a window in between where the session
-            # held a draft's document under the published stage, which is a state nothing should be
-            # able to observe.
-            stage: :draft,
-            selection: nil,
-            dirty?: false,
-            # THE DOCUMENT MOVED, AND THE COUNTER HAS TO SAY SO. `revision` is how anything
-            # downstream tells one document from the next, and replacing the whole tree is the
-            # largest move there is — yet this was the one route that changed the tree without
-            # counting it.
-            #
-            # The canvas publishes the revision it has painted and the editor's frame overlay waits
-            # for it. With the number unchanged the canvas had nothing to announce, so the overlay
-            # was never told the swap had landed and sat until its own fifteen-second failsafe gave
-            # up. That is the fifteen seconds — a timeout, not a render: the canvas had repainted
-            # long before, and every measured stage of this path is under a second.
-            revision: session.revision + 1,
-            saved_at: DateTime.utc_now()
-        }
+    with {:ok, parsed} <- Tree.parse(template) do
+      step = make_ref()
 
-        {:store, next, {:draft, :opened}}
-      end)
+      commit(
+        token,
+        &opened_draft(&1, backfill_ids(parsed, &1.components), id, label, step),
+        steps: [step]
+      )
     end
+  end
+
+  defp opened_draft(session, tree, id, label, step) do
+    entry = Journal.replacement_entry(session, tree, :draft, step)
+
+    next = %{
+      session
+      | tree: tree,
+        past: Journal.trim_history([entry | session.past], session.token),
+        future: [],
+        last_entry: nil,
+        step_run: nil,
+        draft_id: id,
+        draft_label: label,
+        # OPENING A DRAFT *IS* BEING IN THE DRAFT STAGE, and the caller used to say so in a
+        # second call. Two calls meant two ETS reads of the session — each one copying the whole
+        # tree out — two writes, and two broadcasts to every canvas frame for one click, on the
+        # one path already reported as slow. It also left a window in between where the session
+        # held a draft's document under the published stage, which is a state nothing should be
+        # able to observe.
+        stage: :draft,
+        selection: nil,
+        dirty?: false,
+        # THE DOCUMENT MOVED, AND THE COUNTER HAS TO SAY SO. `revision` is how anything
+        # downstream tells one document from the next, and replacing the whole tree is the
+        # largest move there is — yet this was the one route that changed the tree without
+        # counting it.
+        #
+        # The canvas publishes the revision it has painted and the editor's frame overlay waits
+        # for it. With the number unchanged the canvas had nothing to announce, so the overlay
+        # was never told the swap had landed and sat until its own fifteen-second failsafe gave
+        # up. That is the fifteen seconds — a timeout, not a render: the canvas had repainted
+        # long before, and every measured stage of this path is under a second.
+        revision: session.revision + 1,
+        saved_at: DateTime.utc_now()
+    }
+
+    {:store, next, {:draft, :opened}}
   end
 
   @doc "Replaces the palette metadata containment consults — re-read when a component is installed."

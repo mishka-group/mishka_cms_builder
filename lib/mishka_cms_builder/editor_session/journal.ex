@@ -509,6 +509,9 @@ defmodule MishkaCmsBuilder.EditorSession.Journal do
   defp replacement_words(:interaction),
     do: {gettext("Changed an interaction"), :set_attr, gettext("the whole document, rewritten")}
 
+  defp replacement_words(:draft),
+    do: {gettext("Draft"), :replace, gettext("the whole document, replaced")}
+
   defp replacement_words(:js_hook),
     do: {gettext("Changed a script hook"), :set_attr, gettext("the whole document, rewritten")}
 
