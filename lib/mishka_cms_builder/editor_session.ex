@@ -1139,20 +1139,18 @@ defmodule MishkaCmsBuilder.EditorSession do
     end
   end
 
+  # A REFUSED DROP IS DECIDED AGAIN WHERE IT CLIMBS TO. The form a field needs depends on where it
+  # lands: aimed into a form it joins that form, anywhere else it starts one. The retry beside the
+  # target used to carry the answer for the spot it was aimed at, so a field refused by a locked
+  # form climbed out to after it still bound to that form's `f`, with no form around it.
   defp dropped_insert(token, session, params) do
-    {params, outcome} = formed(session, params)
+    {placed, outcome} = formed(session, params)
 
-    case apply_op(token, params) do
+    case apply_op(token, placed) do
       {:ok, session} -> landed(session, outcome)
-      {:error, reason} -> token |> beside(params, reason) |> announced(outcome)
+      {:error, reason} -> beside(token, placed, reason, &formed(&1, Map.merge(params, &2)))
     end
   end
-
-  # A form made by the retry beside the target is announced too.
-  defp announced({:relocated, session, note}, outcome),
-    do: {:relocated, announce_created(session, outcome), note}
-
-  defp announced(refused, _outcome), do: refused
 
   # A field dragged into another form, or out of every form, is moved and rebound as one step.
   defp dropped_move(token, session, params) do
@@ -1167,8 +1165,11 @@ defmodule MishkaCmsBuilder.EditorSession do
 
   defp plain_move(token, params) do
     case apply_op(token, params) do
-      {:ok, session} -> {:ok, session}
-      {:error, reason} -> beside(token, params, reason)
+      {:ok, session} ->
+        {:ok, session}
+
+      {:error, reason} ->
+        beside(token, params, reason, fn _session, spot -> {Map.merge(params, spot), :none} end)
     end
   end
 
@@ -1385,7 +1386,11 @@ defmodule MishkaCmsBuilder.EditorSession do
   #
   # Counted like any move (`settled_index/2`): a node climbing out to after a later sibling of its own
   # went one slot too far.
-  defp beside(token, %{"parent_id" => parent_id} = params, reason) when is_binary(parent_id) do
+  #
+  # The climb is asked about what was refused; what lands is `again`'s answer for the spot the climb
+  # found — the params to apply there and what was done about forms.
+  defp beside(token, %{"parent_id" => parent_id} = params, reason, again)
+       when is_binary(parent_id) do
     with {:ok, session} <- fetch_session(token),
          {:ok, dragged, dragged_tree} <- subject(session, params),
          {parent, index, target, side} <-
@@ -1395,21 +1400,25 @@ defmodule MishkaCmsBuilder.EditorSession do
              locked: session.locked,
              before?: params["fallback_before"] in [true, "true"]
            ),
-         spot = %{"parent_id" => wire_parent(parent), "index" => index},
-         {:ok, session} <- apply_op(token, settled_index(session.tree, Map.merge(params, spot))) do
+         {retry, outcome} =
+           again.(session, %{"parent_id" => wire_parent(parent), "index" => index}),
+         {:ok, session} <- apply_op(token, settled_index(session.tree, retry)) do
       where =
         Placement.spoken(target,
           components: session.components,
           other: gettext("the element you dropped it on")
         )
 
-      {:relocated, session, placed_instead(side, sentence(reason), where)}
+      {:relocated, announce_created(session, outcome),
+       joined([placed_instead(side, sentence(reason), where), FormPlacement.told(outcome)])}
     else
       _refused -> {:error, reason}
     end
   end
 
-  defp beside(_token, _params, reason), do: {:error, reason}
+  defp beside(_token, _params, reason, _again), do: {:error, reason}
+
+  defp joined(sentences), do: sentences |> Enum.reject(&is_nil/1) |> Enum.join(" ")
 
   defp placed_instead(:before, reason, where),
     do: gettext("%{reason} Placed before %{where} instead.", reason: reason, where: where)

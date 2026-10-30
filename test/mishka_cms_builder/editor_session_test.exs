@@ -2932,6 +2932,40 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
       end
     end
 
+    # THE WRAP IS DECIDED WHERE THE FIELD LANDS. A field aimed at a locked form is refused there and
+    # climbs out to after it, outside every form. Its form used to be decided against the spot it
+    # was aimed at, so it arrived bound to the locked form's `f` with no form around it: a field
+    # that submits nowhere, written in a variable nothing binds.
+    test "a field that climbs out of a form it was aimed at starts a form of its own there" do
+      session = deep()
+      contact = by_id(session, "contact-form")
+      {:ok, session} = EditorSession.toggle_lock(session.token, contact.id)
+
+      assert {:relocated, dropped, message} =
+               drop(session, ~s(<input type="text" name="field" />), contact.id)
+
+      assert message =~ "That element is locked."
+      assert message =~ "Placed after the Contact form instead."
+      assert message =~ "Started a new form with a Send button."
+
+      root = by_id(dropped, "root")
+
+      landed =
+        Tree.get(
+          dropped.tree,
+          Enum.at(root.children, Tree.index_of(dropped.tree, contact.id) + 1)
+        )
+
+      assert PageForms.form?(landed), "the field arrives inside a form of its own"
+
+      assert Enum.any?(
+               Tree.descendant_ids(dropped.tree, landed.id),
+               &(Node.attr_text(Tree.get(dropped.tree, &1), "type") == "text")
+             )
+
+      assert keys_of(deep_specs(dropped)["contact"]) == [:email]
+    end
+
     test "a duplicated deep form gets its own name and token, and keeps its fields' keys" do
       for {id, seed, token} <- [
             {"contact-form", "contact", "k7m2q"},
