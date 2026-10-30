@@ -4,7 +4,7 @@
 
 defmodule MishkaCmsBuilderWeb.Live.BuilderLive.IconOrTextTest do
   @moduledoc """
-  A label that is an icon or words.
+  A label that is an icon or words, and the labels that show only behind a switch.
 
   `chelekom-pagination` declares `previous_label`, `next_label`, `first_label`, `last_label` and
   `separator` as maps, each defaulting to `%{type: :icon, value: "hero-chevron-right"}` and each
@@ -12,6 +12,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.IconOrTextTest do
   the icon control alone, and its box writes what is typed as the icon's name: the palette sweep
   typed `E2E-4` into `next_label`, the canvas lost the next arrow, and the console logged
   `chelekom-icon's body did not apply: no match of right hand side value: %{name: "E2E-4", ...}`.
+
+  The sweep also found `first_label` and `first_label_class` changing nothing on the canvas. The
+  component draws its first and last buttons only under `:if={@rest[:show_edges]}`, so they cannot
+  until Show edges is on, and the Inspector says so beside them.
 
   The component is a copy of the styled kit's own row from the committed bundle.
   """
@@ -122,6 +126,34 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.IconOrTextTest do
       |> render_change(%{"value" => ""})
 
       assert held(view, "next_label") == nil
+    end
+  end
+
+  describe "a property drawn only behind a switch" do
+    test "says which switch", %{conn: conn, pager: page} do
+      {view, node} = pager(conn, page)
+
+      for name <- ~w(first_label first_label_class last_label last_label_class) do
+        note = "#pb-attr-#{node.id}-#{name} [data-role=pb-attr-shown-when]"
+
+        assert has_element?(view, note, "Show edges"), "#{name} does not say it needs Show edges"
+      end
+
+      refute has_element?(view, "#pb-attr-#{node.id}-next_label [data-role=pb-attr-shown-when]")
+    end
+
+    test "and stops saying it once the switch is on", %{conn: conn, pager: page} do
+      {view, node} = pager(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => node.id,
+        "name" => "show_edges",
+        "value" => "true",
+        "value_kind" => "expr"
+      })
+
+      refute has_element?(view, "#pb-attr-#{node.id}-first_label [data-role=pb-attr-shown-when]")
     end
   end
 end

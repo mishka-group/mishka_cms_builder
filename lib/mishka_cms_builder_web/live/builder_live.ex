@@ -91,6 +91,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsCore.Runtime.Authoring.Visibility
   alias MishkaCmsBuilder.Wizard
   alias MishkaCmsBuilder.Tokens
+  alias MishkaCmsBuilder.ShownWhen
   alias MishkaCmsBuilder.Snippets
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
@@ -2121,6 +2122,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       # reason and from the same template, so a click aimed at this component compiles to the
       # component's own command instead of the editor's guess at one.
       opens: PaletteEntry.opens(component),
+      # Which properties it draws only while one of its switches is on — see
+      # `MishkaCmsBuilder.ShownWhen`. Read here from the template for the same reason, and the
+      # Inspector says it beside each of them.
+      shown_when: ShownWhen.switches(component),
       form: component.form_meta,
       # WHOSE MARKUP THIS IS, in about twenty bytes. The Custom CSS panel names the kit and version
       # when a rule reaches inside a component. `extra`, where the two live, is exactly the column

@@ -29,6 +29,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsBuilder.PaletteEntry
+  alias MishkaCmsBuilder.ShownWhen
   alias Phoenix.LiveView.JS
   alias MishkaCmsCore.Localized
   alias MishkaCmsBuilder.AiBackend
@@ -3807,6 +3808,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         assigns.entry |> extra_attr_rows(assigns.node) |> without(assigns.hidden)
       )
       |> assign(:state_words?, state_words?(assigns.entry))
+      |> assign(:shown_when, PaletteEntry.optional(assigns.entry, :shown_when) || %{})
 
     ~H"""
     <%!-- Each group folds, and only the two an author actually came for start open: the words on the
@@ -3854,6 +3856,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           icon_variant={@icon_variant}
           icon_library={@icon_library}
           widget={Inspector.widget(attr, @entry.features, @entry)}
+          waiting_on={waiting_on(@shown_when, attr, @node, @entry)}
         />
       </div>
     </section>
@@ -4240,6 +4243,17 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp without(rows, hidden),
     do: Enum.reject(rows, fn {name, _kind, _value} -> name in hidden end)
 
+  # The switch this property waits for, by its label, while that switch is off on this node — see
+  # `MishkaCmsBuilder.ShownWhen`. `nil` for a property that shows without one, or whose switch is on.
+  defp waiting_on(shown_when, attr, node, entry) do
+    with switch when is_binary(switch) <- Map.get(shown_when, Inspector.name(attr)),
+         false <- ShownWhen.on?(node, switch, entry) do
+      Inspector.label(%{"name" => switch})
+    else
+      _shown -> nil
+    end
+  end
+
   # A live component with words of its own for states the canvas does not draw.
   defp state_words?(entry) do
     PaletteEntry.optional(entry, :stateful?) == true and
@@ -4415,6 +4429,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:icon_variant, :string, default: "")
   attr(:icon_library, :string, default: nil)
 
+  attr(:waiting_on, :string,
+    default: nil,
+    doc: "the switch this property shows behind, while off"
+  )
+
   # One property control, chosen by `MishkaCmsCore.Runtime.Authoring.Inspector.widget/2`.
   #
   # An attribute the author has not set renders the component's own default and serializes nothing —
@@ -4557,6 +4576,16 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         class="mt-1.5 text-[10px] font-medium text-[#a8a5a0]"
       >
         {gettext("Using the component's default.")}
+      </p>
+      <%!-- BY DESIGN, SAID BESIDE THE PROPERTY. The component draws this only while one of its own
+            switches is on, so until then what is typed here changes nothing on the canvas; without
+            this an author concludes the field is broken. --%>
+      <p
+        :if={@waiting_on}
+        data-role="pb-attr-shown-when"
+        class="mt-1.5 text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+      >
+        {gettext("Shows only when %{switch} is on.", switch: @waiting_on)}
       </p>
     </div>
     """
