@@ -185,6 +185,88 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
                editor(view).tree |> Tree.children(box) |> Enum.reject(&(&1.kind == :text))
     end
 
+    # "OR DROP A COMPONENT STRAIGHT ONTO THE PAGE", AS THE CHOOSER SAYS. The chooser is no node, so a
+    # card let go over it is a drop on open canvas, which landed after the container the page was
+    # born with; the container stayed on the published page as an empty `py-12` band, 96px of nothing
+    # above the component. Aimed into the container's well, the component got its width and padding.
+    test "a component dropped straight onto a page born blank takes the born container's place",
+         %{
+           conn: conn,
+           site: site
+         } do
+      create_component!(
+        name: "site-navbar",
+        site_id: site.id,
+        template: ~s(<nav class="flex justify-between" {@rest}>Brand</nav>),
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}]
+      )
+
+      for aim <- [:open_canvas, :born_container] do
+        empty = create_page!(site_id: site.id, template: PageStarter.blank())
+        {:ok, view, _html} = open_builder(conn, empty)
+        render_change(view, "palette_query", %{"value" => "site-navbar"})
+
+        [template] =
+          view
+          |> element("#pb-comp-site-navbar")
+          |> render()
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.attribute("data-template")
+
+        {:ok, canvas, _html} =
+          live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+        assert has_element?(canvas, "#pb-page-starter")
+        [born] = editor(view).tree.roots
+
+        # What the canvas hook pushes for each: the chooser is no node, the container's well is.
+        parent = if aim == :open_canvas, do: "root", else: born
+
+        render_click(canvas, "drop", %{
+          "template" => template,
+          "parent_id" => parent,
+          "index" => 9999
+        })
+
+        tree = editor(view).tree
+
+        assert [%Node{kind: :component} = bar] = Enum.map(tree.roots, &Tree.get(tree, &1)),
+               "#{aim}: #{Serializer.serialize(tree)}"
+
+        assert Node.component_name(bar) == "site-navbar"
+        refute Serializer.serialize(tree) =~ "py-12", "#{aim}: the born container is gone"
+        refute has_element?(canvas, "#pb-page-starter")
+        assert editor(view).selection == bar.id
+
+        # One step: undone, the page is the one it was born as and the chooser is back.
+        render_click(view, "undo", %{})
+
+        assert [undone] = editor(view).tree.roots
+        assert PageStarter.empty?(editor(view).tree), "#{aim}: #{undone}"
+        assert has_element?(canvas, "#pb-page-starter")
+      end
+    end
+
+    # The palette's click is the other door: a card armed, then the born container's well clicked.
+    test "a card clicked in on a page born blank takes the born container's place", %{
+      conn: conn,
+      site: site
+    } do
+      empty = create_page!(site_id: site.id, template: PageStarter.blank())
+      {:ok, view, _html} = open_builder(conn, empty)
+      [born] = editor(view).tree.roots
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      render_click(view, "pick_block", %{"block" => "el-section"})
+      render_click(canvas, "select", %{"id" => born})
+
+      tree = editor(view).tree
+      assert [%Node{tag: "section"}] = Enum.map(tree.roots, &Tree.get(tree, &1))
+      refute Serializer.serialize(tree) =~ "py-12"
+    end
+
     test "an unknown structure is a no-op, not a crash", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 

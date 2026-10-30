@@ -90,6 +90,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   alias MishkaCmsBuilder.Sequence
   alias MishkaCmsBuilder.Starter
   alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
   alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
   alias MishkaCmsBuilder.Ids
   alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
@@ -359,8 +360,9 @@ defmodule MishkaCmsBuilder.EditorSession do
         with {:ok, built} <- Op.build(params),
              {:ok, op} <- Events.before_node(built.kind, built, node_meta(session)),
              :ok <- authorize(session, op),
-             :ok <- check_containment(session, op),
-             {:ok, tree, focus} <- run(op, session.tree) do
+             {base, op} = first_landing(session.tree, op),
+             :ok <- check_containment(%{session | tree: base}, op),
+             {:ok, tree, focus} <- run(op, base) do
           next =
             session
             |> Journal.record(op, settled(tree, op, focus, session, session.tree), step)
@@ -374,6 +376,18 @@ defmodule MishkaCmsBuilder.EditorSession do
       [steps: [step]] ++ opts
     )
   end
+
+  # THE FIRST THING PLACED ON A PAGE BORN BLANK TAKES THE BORN CONTAINER'S PLACE
+  # (`PageStarter.landing/3`), from every door a person places through: a drop, a click, the layers
+  # rail, a paste. Beside it, the container stayed on the published page as an empty `py-12` band
+  # above what was placed; inside it, what was placed got a width and padding nobody chose. Undo
+  # brings the container back, since the step records the tree it started from.
+  defp first_landing(tree, %{kind: :insert, parent_id: parent, index: index} = op) do
+    {base, parent, index} = PageStarter.landing(tree, parent, index)
+    {base, %{op | parent_id: parent, index: index}}
+  end
+
+  defp first_landing(tree, op), do: {tree, op}
 
   # AN ID SET OUTLIVES THE NODE IT NAMES. The selection, the marks, the locks and the hidden flags
   # are ids held BESIDE the tree, and an op that removes an element removes it from the tree and from
