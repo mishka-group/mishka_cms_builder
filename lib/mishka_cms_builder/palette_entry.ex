@@ -247,8 +247,12 @@ defmodule MishkaCmsBuilder.PaletteEntry do
   # a couple of them, or it drops as an empty box. `Starter` owns the copy; this owns the markup, so
   # a sample entry still gets its slot's own required attributes seeded exactly as an empty one does.
   defp sample_slots(entry, style) do
-    Enum.map_join(Starter.slot_samples(entry), fn {name, attrs, body} ->
+    entry
+    |> Starter.slot_samples()
+    |> numbered()
+    |> Enum.map_join(fn {{name, attrs, body}, position} ->
       declared = Enum.find(slots_of(entry), &(attr_name(&1) == name))
+      attrs = Map.merge(sample_value(declared, position), attrs)
       written = Enum.map_join(attrs, fn {key, value} -> ~s( #{key}="#{value}") end)
 
       seeded =
@@ -256,6 +260,41 @@ defmodule MishkaCmsBuilder.PaletteEntry do
 
       ~s(<:#{name}#{written}#{seeded}>#{body}</:#{name}>)
     end)
+  end
+
+  # Each sample with its place among the samples of the same slot, from 1: a tab strip's two `<:tab>`
+  # entries are 1 and 2, and so are the two `<:panel>` entries beside them.
+  defp numbered(samples) do
+    samples
+    |> Enum.map_reduce(%{}, fn {name, _attrs, _body} = sample, seen ->
+      position = Map.get(seen, name, 0) + 1
+      {{sample, position}, Map.put(seen, name, position)}
+    end)
+    |> elem(0)
+  end
+
+  # TWO SAMPLE ENTRIES ARE TWO THINGS. A required `value` seeds blank, which is right for ONE entry
+  # the author still has to fill — but a list's samples are siblings, and blank twice is the same
+  # value twice. `chelekom-headless-checkbox-group` builds each item's id out of its value
+  # (`id={"#{@id}-#{item.value}"}`), so its two sample items shared one id and the canvas logged
+  # "Multiple IDs detected" the moment the group was dropped. Each sample gets its own word instead,
+  # the ones an `<:option>` sample already carries; a value the sample brings itself wins.
+  @sample_values ~w(one two three four five six)
+
+  defp sample_value(declared, position) do
+    case requires_value?(declared) do
+      true -> %{"value" => Enum.at(@sample_values, position - 1, "item-#{position}")}
+      false -> %{}
+    end
+  end
+
+  defp requires_value?(nil), do: false
+
+  defp requires_value?(declared) do
+    declared
+    |> field("attrs")
+    |> List.wrap()
+    |> Enum.any?(&(attr_name(&1) == "value" and truthy?(field(attr_opts(&1), "required"))))
   end
 
   defp furnished_names(entry) do

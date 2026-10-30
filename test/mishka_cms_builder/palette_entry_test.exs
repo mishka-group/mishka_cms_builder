@@ -181,6 +181,59 @@ defmodule MishkaCmsBuilder.PaletteEntryTest do
       assert template =~ "</.component>"
     end
 
+    # TWO SAMPLE ENTRIES ARE TWO THINGS. A group's `<:item>` requires a `value`, and the component
+    # builds each item's id out of it — `chelekom-headless-checkbox-group` writes
+    # `id={"#{@id}-#{item.value}"}`. Seeded blank on both sample entries, the two items shared one
+    # id, and the canvas logged "Multiple IDs detected" the moment the group was dropped.
+    test "the sample entries of a list are told apart by the value they require" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "chelekom-headless-checkbox-group",
+          slots: [
+            %{
+              "name" => "item",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}},
+                %{"name" => "checked", "type" => "boolean", "opts" => %{}}
+              ]
+            }
+          ]
+        })
+
+      values =
+        ~r/<:item[^>]*\svalue="([^"]*)"/
+        |> Regex.scan(PaletteEntry.template(entry, "acme"), capture: :all_but_first)
+        |> List.flatten()
+
+      assert length(values) == 2, "the group is meant to arrive with two sample items"
+      assert Enum.uniq(values) == values, "two items share one value, and so one id"
+      refute "" in values, "an item without a value is a choice that cannot be chosen"
+    end
+
+    # A sample that brings its own value keeps it: an `<:option>` is already "one", "two", "three".
+    test "a sample's own value is not replaced" do
+      entry =
+        PaletteEntry.new!(%{
+          name: "acme-select",
+          slots: [
+            %{
+              "name" => "option",
+              "opts" => %{"required" => true},
+              "attrs" => [
+                %{"name" => "value", "type" => "string", "opts" => %{"required" => true}}
+              ]
+            }
+          ]
+        })
+
+      template = PaletteEntry.template(entry, "acme")
+
+      assert template =~ ~s(<:option value="one">)
+      assert template =~ ~s(<:option value="two">)
+      refute template =~ ~s(value="one" value=)
+    end
+
     test "a component with nothing to seed stays self-closing" do
       entry = PaletteEntry.new!(%{name: "chelekom-card", attrs: [], slots: []})
 
