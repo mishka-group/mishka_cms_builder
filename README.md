@@ -79,7 +79,7 @@ Mishka CMS Builder is installed with [Mishka CMS](https://github.com/mishka-grou
 Add it from Hex:
 
 ```elixir
-{:mishka_cms_builder, "~> 0.0.1-alpha.2"}
+{:mishka_cms_builder, "~> 0.0.1-alpha.3"}
 ```
 
 [Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_cms_builder` instead when that folder exists.
