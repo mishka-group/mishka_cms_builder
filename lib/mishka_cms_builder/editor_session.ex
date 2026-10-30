@@ -97,6 +97,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   alias MishkaCmsBuilder.Presets
   alias MishkaCmsCore.Runtime.Authoring.Strict
   alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsBuilder.ControlNames
   alias MishkaCmsBuilder.EditorSession.Journal
   alias MishkaCmsBuilder.PartPlacement
   alias MishkaCmsBuilder.Placement
@@ -529,6 +530,7 @@ defmodule MishkaCmsBuilder.EditorSession do
     tree
     |> with_id(op, focus, session)
     |> deduped(op, session.tree, start)
+    |> renamed(op, session)
     |> unfurnished(op, session)
     |> sequenced(op, focus, session)
     |> filed(op, focus, session)
@@ -694,6 +696,14 @@ defmodule MishkaCmsBuilder.EditorSession do
     do: rekeyed(tree, id, form_around(previous, id) == form_around(tree, id))
 
   defp deduped(tree, _op, _previous, _start), do: tree
+
+  # ONE CONTROL NAME PER DROP, the way `deduped/4` gives one id: a second segmented control arrived
+  # answering to the first one's `name="period"`, and the browser made the two one radio group. A
+  # field's name is the form's, and `FormPlacement` binds it; see `MishkaCmsBuilder.ControlNames`.
+  defp renamed(tree, %{kind: kind}, session) when kind in @naming_kinds,
+    do: ControlNames.dedupe(tree, arrived(tree, session.tree), session.components)
+
+  defp renamed(tree, _op, _session), do: tree
 
   defp rekeyed(tree, _id, true = _same_form?), do: tree
   defp rekeyed(tree, id, false), do: Naming.rekey(tree, [id | Tree.descendant_ids(tree, id)])

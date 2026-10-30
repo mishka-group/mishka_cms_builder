@@ -2811,6 +2811,66 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
   # Table cell card used to leave a layers row with nothing on the canvas and a raw `<td>` on the
   # published page; now it arrives in the smallest table its landing place takes, the way a field
   # arrives in a form.
+  # TWO DROPS ARE TWO CONTROLS. `chelekom-headless-segmented-control` arrives furnished as
+  # `name="period"`, and its segments are radio buttons, which the browser groups by name: two
+  # dropped controls were one group, and only one of them ever showed a selection.
+  describe "a form control's name, dropped twice" do
+    @segmented "../fixtures/chelekom_headless_furnished.json"
+               |> Path.expand(__DIR__)
+               |> File.read!()
+               |> Jason.decode!()
+               |> Map.fetch!("components")
+               |> Enum.find(&(&1["name"] == "chelekom-headless-segmented-control"))
+               |> then(
+                 &%{
+                   name: &1["name"],
+                   attrs: &1["attrs"],
+                   slots: &1["slots"],
+                   template: &1["template"],
+                   furnishing: &1["extra"]["furnishing"],
+                   global?: true
+                 }
+               )
+
+    defp control_names(session) do
+      for node <- Tree.walk(session.tree),
+          Node.component_name(node) == "chelekom-headless-segmented-control",
+          do: Node.attr_text(node, "name")
+    end
+
+    defp drop_segmented(session) do
+      template = MishkaCmsBuilder.PaletteEntry.template(@segmented, "Global")
+      root = Enum.find(Tree.walk(session.tree), &(Node.attr_text(&1, "id") == "root"))
+
+      {:ok, session} =
+        EditorSession.apply_drop(session.token, %{
+          "template" => template,
+          "parent_id" => root.id,
+          "index" => "#{length(root.children)}"
+        })
+
+      session
+    end
+
+    test "is two names, and the first drop keeps the one it came with" do
+      session = open(~s(<div id="root"></div>), %{components: [@segmented]})
+
+      session = session |> drop_segmented() |> drop_segmented()
+
+      assert control_names(session) == ["period", "period_2"]
+    end
+
+    test "and so is a copy of one" do
+      session = open(~s(<div id="root"></div>), %{components: [@segmented]}) |> drop_segmented()
+      [placed] = Enum.filter(Tree.walk(session.tree), &(&1.kind == :component))
+
+      {:ok, session} =
+        EditorSession.apply_op(session.token, %{kind: :duplicate, node_id: placed.id})
+
+      assert control_names(session) == ["period", "period_2"]
+    end
+  end
+
   describe "a table part dropped where no table holds it" do
     setup do
       %{kit: Factory.chelekom_rows(~w(chelekom-table chelekom-tr chelekom-td chelekom-th))}
