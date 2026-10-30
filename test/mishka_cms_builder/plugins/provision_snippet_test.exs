@@ -87,6 +87,41 @@ defmodule MishkaCmsBuilder.Plugins.ProvisionSnippetTest do
       assert [%{source: ~s(<div id="kit"></div>)}] = saved(site.id)
     end
 
+    # `Snippet`'s `unique_name_per_scope` is `[:name, :site_id, :section, :document_id]` with
+    # `nils_distinct? false`, so a snippet an author saved out of ONE page's editor under this name
+    # holds a different key entirely: the shared one the extension ships is still free. Counting it
+    # would leave the site with nothing to drop into its other pages and report `snippets: []` as
+    # though it had it.
+    test "is still created beside one an author saved under the same name on a page",
+         %{bundle_path: bundle_path, site: site} do
+      page = create_page!(site_id: site.id, path: "/keeper", template: ~S(<div>mine</div>))
+
+      Snippet
+      |> Ash.Changeset.for_create(
+        :master_create,
+        %{
+          name: "Kit",
+          source: ~S(<div>mine</div>),
+          section: :page,
+          scope: :page,
+          document_id: page.id,
+          site_id: site.id
+        },
+        authorize?: false
+      )
+      |> Ash.create!()
+
+      assert %{snippets: ["Kit"]} = ExtensionProvision.ensure!(manifest(bundle_path), site.id)
+      assert %{snippets: []} = ExtensionProvision.ensure!(manifest(bundle_path), site.id)
+
+      document_id = page.id
+
+      assert [
+               %{scope: :page, document_id: ^document_id, source: ~S(<div>mine</div>)},
+               %{scope: :shared, document_id: nil, source: ~s(<div id="kit"></div>)}
+             ] = Enum.sort_by(saved(site.id), &is_nil(&1.document_id))
+    end
+
     test "a refused write raises the run with its reason", %{bundle_path: bundle_path, site: site} do
       assert_raise RuntimeError, ~r/the snippet Kit could not be saved/, fn ->
         ExtensionProvision.ensure!(manifest(bundle_path, ""), site.id)
