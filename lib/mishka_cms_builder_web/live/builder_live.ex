@@ -66,6 +66,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsBuilder.History
   alias MishkaCmsBuilder.Examples
   alias MishkaCmsBuilder.EditorSession
+  alias MishkaCmsBuilder.EditorSession.Keeper
   alias MishkaCmsBuilder.Review
   alias MishkaCmsBuilder.States.EditorSessionState
   alias MishkaCmsCore.Runtime.Authoring.Icons
@@ -707,7 +708,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       # `inherited_draft/2` reads the draft off this same session to build that offer, so nothing is
       # forgotten by detaching here.
       {:ok, %{draft_id: id} = editor} when is_binary(id) ->
-        {:resumed, detach_draft(editor, section, record, params)}
+        {:resumed, detach_draft(editor, section, record, params, actor)}
 
       {:ok, editor} ->
         {:resumed, editor}
@@ -728,8 +729,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # row, and the bar offers it by name — and the CSS typed beside it has no row anywhere, so dropping
   # it here would make an ordinary reload the one gesture that deletes an author's work outright. The
   # publish prunes it against the markup that is actually being written, so holding it costs nothing.
-  defp detach_draft(editor, section, record, params) do
+  #
+  # AND NOTHING IS LEFT THAT NO ROW HOLDS. The tree this replaces is the session's, and the session
+  # can hold an edit its draft does not: the editor that made it went before its write landed — a
+  # tab closed straight after a drop, a crash, a write that kept failing. Detaching then threw that
+  # edit away with the tree, and the draft the bar offered back did not have it. So the session is
+  # written into its draft first, and a session that cannot be written stays in its draft.
+  defp detach_draft(editor, section, record, params, actor) do
     with false <- is_nil(record),
+         :ok <- written(editor.token, section, record, actor),
          {:ok, tree} <- Tree.parse(Section.template(section, record, status: params["status"])),
          {:ok, _editor} <-
            EditorSession.put_tree(editor.token, tree, reason: :restore, dirty?: false),
@@ -738,6 +746,21 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       %{detached | draft_id: editor.draft_id, draft_label: editor.draft_label}
     else
       _unavailable -> editor
+    end
+  end
+
+  # BOUNDED, because the mount and the way out both wait on it and neither can wait for ever. A write
+  # still running past the bound goes on without its caller; the reopen then leaves the session in
+  # its draft, and the way out leaves the write to finish.
+  @keep_patience :timer.seconds(5)
+
+  defp written(token, section, record, actor) do
+    write = &write_draft(&1, section, record, actor, nil, actor && actor.id)
+
+    case Keeper.keep(token, write, @keep_patience) do
+      {:ok, _draft, _session} -> :ok
+      {:clean, _session} -> :ok
+      unsaved -> unsaved
     end
   end
 
@@ -1106,7 +1129,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:draft_opened?, fn -> false end)
     |> assign_new(:history_tab, fn -> :history end)
     |> assign_new(:autosaving?, fn -> false end)
-    |> assign_new(:autosaving_revision, fn -> nil end)
     |> assign_new(:draft_again?, fn -> false end)
     # The publish-mode bar is down while the draft it asked for is being written. It is the bar's
     # own flag and not the session's `dirty?`, because clearing that is what stops the write.
@@ -2799,56 +2821,75 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # over it — three passes over the whole document, on the LiveView process, while the editor could
   # not answer a click. Only the database write was handed away.
   #
-  # It all goes to the task now. The closure captured the whole `editor` struct already — `draft_id`
-  # is read from it — so carrying the tree there costs nothing it was not already paying, and the
-  # failure it can raise is reported by the same `handle_async` clause that reports a failed write.
+  # It all goes to the task now, and from the task to `Keeper`, which writes the session as stored
+  # when its turn comes — so the failure serializing can raise is reported by the same
+  # `handle_async` clause that reports a failed write.
+  #
+  # THE WRITE IS THE SESSION'S, NOT THIS LIVEVIEW'S. It used to run in the `start_async` task and be
+  # recorded by `autosaved/2`, so a tab closed, a page left or a socket dropped while it ran took
+  # both with the LiveView, and the reopened editor then detached from a draft that did not have
+  # the edit. `Keeper` runs it in a process the LiveView's exit does not stop, records the draft and
+  # the revision on the session itself, and lets one write of a session run at a time.
   defp autosave(socket) do
     %{section: section, record: record, editor: editor} = socket.assigns
     actor = socket.assigns.current_user
-    label = editor.draft_label || socket.assigns.draft_label
+
+    # THE SITTING'S NAME may not be assigned yet: the mount assigns the session before its defaults,
+    # and a session resumed with an edit no write carried is written by that first assign.
+    label = Map.get_lazy(socket.assigns, :draft_label, &session_draft_label/0)
     who = actor_id(socket)
 
     socket
     |> assign(:autosaving?, true)
-    # WHICH DOCUMENT THIS WRITE IS OF. The canvas stays live for the whole round trip, so by the
-    # time it answers the author may have moved on — and `autosaved/2` has no other way to tell.
-    |> assign(:autosaving_revision, editor.revision)
     |> assign(:draft_again?, false)
     |> MishkaGervaz.Messages.start_async(:autosave, fn ->
-      case Serializer.to_heex(editor.tree) do
-        {:ok, heex} -> gated_autosave(section, record, heex, actor, editor, label, who)
-        _unserializable -> {:error, :unserializable}
-      end
+      Keeper.keep(editor.token, &write_draft(&1, section, record, actor, label, who))
     end)
   end
 
-  # ONLY THE DOCUMENT THAT WAS WRITTEN IS CALLED SAVED. `as_of` is the revision the task carried off;
-  # an edit made while it was away leaves the session past that number and keeps it dirty, so the
-  # publish bar comes back for work no draft holds instead of the editor falling silent over it.
+  # THE SESSION AS STORED, handed in by `Keeper` when this write's turn comes: its tree, the draft it
+  # writes to and the name that draft has, which a write that ran before this one may have just
+  # given it. `label` names the sitting's first row and nothing after.
+  defp write_draft(editor, section, record, actor, label, who) do
+    case Serializer.to_heex(editor.tree) do
+      {:ok, heex} ->
+        gated_autosave(section, record, heex, actor, editor, editor.draft_label || label, who)
+
+      _unserializable ->
+        {:error, :unserializable}
+    end
+  end
+
+  # ONLY THE DOCUMENT THAT WAS WRITTEN IS CALLED SAVED. `Keeper` marks the session saved as of the
+  # revision it serialized; an edit made while it was away leaves the session past that number and
+  # keeps it dirty, so the publish bar comes back for work no draft holds instead of the editor
+  # falling silent over it.
   #
-  # AND THE ROW IT MADE IS ADOPTED HERE, not waited for. `mark_saved/2` puts `draft_id` on the
-  # session, but the socket's copy of the editor is the one the next write reads — left stale, a
-  # retry saw no draft to update and made a second row for the same sitting.
+  # AND THE ROW IT MADE IS ADOPTED HERE, not waited for. The session already carries `draft_id`, but
+  # the socket's copy of the editor is the one the next write reads — left stale, a retry saw no
+  # draft to update and made a second row for the same sitting.
   #
   # SO IS WHAT THE WRITE SETTLED. `dirty?` and `saved_at` come from the session this write stored,
   # in the same answer that takes `keeping_draft?` down. Left to the session's broadcast, which
   # arrives a message later, a render in between read a document still dirty with no write holding
   # the publish bar back — and "Keep as a draft" put the bar back up over work it had just kept.
-  defp autosaved(socket, {:ok, draft}) do
-    {:ok, editor} =
-      EditorSession.mark_saved(socket.assigns.editor.token,
-        stage: :draft,
-        draft_id: draft.id,
-        draft_label: draft.label,
-        as_of: socket.assigns.autosaving_revision
-      )
-
+  defp autosaved(socket, {:ok, draft, editor}) do
     socket
     |> adopt_history(draft)
     |> assign(:editor, editor)
     |> assign(:dirty?, editor.dirty?)
     |> assign(:saved_at, editor.saved_at)
     |> assign(:draft, draft)
+    |> assign(:autosave_failed?, false)
+  end
+
+  # NOTHING LEFT TO WRITE by the time this write's turn came: another writer of the session — a
+  # second editor on it, or one on its way out — carried it already.
+  defp autosaved(socket, {:clean, editor}) do
+    socket
+    |> assign(:editor, editor)
+    |> assign(:dirty?, editor.dirty?)
+    |> assign(:saved_at, editor.saved_at)
     |> assign(:autosave_failed?, false)
   end
 
@@ -2939,10 +2980,37 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   @impl true
   def terminate(_reason, socket) do
     case socket.assigns[:editor] do
-      nil -> :ok
-      editor -> Events.session_closed(editor)
+      nil ->
+        :ok
+
+      editor ->
+        keep_on_the_way_out(socket)
+        Events.session_closed(editor)
     end
   end
+
+  # THE LAST EDIT IS WRITTEN ON THE WAY OUT. A tab closed, a page left and a dropped socket all end
+  # here, and the session can hold an edit no write has carried: the chrome writes only when the
+  # session's broadcast reaches it, and an edit made while a write runs waits for that write's
+  # answer — both of which this LiveView will now never get. `Keeper` waits for a write still
+  # running and writes only what it did not carry.
+  #
+  # Draft mode only, like every write here: publish mode keeps nothing but the page.
+  defp keep_on_the_way_out(
+         %{assigns: %{drafts_enabled?: true, stage: :draft, token: token} = assigns} = socket
+       )
+       when is_binary(token) do
+    %{section: section, record: record, current_user: actor} = assigns
+    label = Map.get_lazy(assigns, :draft_label, &session_draft_label/0)
+    write = &write_draft(&1, section, record, actor, label, actor_id(socket))
+
+    case Keeper.keep(token, write, @keep_patience) do
+      {:ok, draft, _session} -> adopt_history(socket, draft)
+      _nothing_written -> socket
+    end
+  end
+
+  defp keep_on_the_way_out(socket), do: socket
 
   @impl true
   def handle_event("set_left_tab", %{"tab" => tab}, socket) do
