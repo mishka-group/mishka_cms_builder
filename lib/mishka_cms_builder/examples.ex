@@ -95,6 +95,9 @@ defmodule MishkaCmsBuilder.Examples do
     MishkaCmsCore.Runtime.Component
     |> Ash.Query.for_read(:for_tenant_with_globals, args, authorize?: false)
     |> Ash.Query.filter(name == ^name)
+    |> shared_when_siteless(site_id)
+    # The site's own copy before a shared one of the same name, as the palette offers it.
+    |> Ash.Query.sort(site_id: :asc_nils_last)
     |> Ash.Query.select([:id, :name, :extra])
     |> Ash.read(page: [limit: 1])
     |> case do
@@ -103,6 +106,11 @@ defmodule MishkaCmsBuilder.Examples do
       _none -> []
     end
   end
+
+  # A DOCUMENT WITH NO SITE places the shared components alone, and a read as the system naming no
+  # site answers every site's rows: another site's copy of the name could be the one read.
+  defp shared_when_siteless(query, nil), do: Ash.Query.filter(query, is_nil(site_id))
+  defp shared_when_siteless(query, _site_id), do: query
 
   @doc """
   The examples the modal offers for one component: `for_name/2`, as a plugin answering

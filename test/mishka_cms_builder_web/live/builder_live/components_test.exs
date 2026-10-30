@@ -2962,6 +2962,59 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
     end
   end
 
+  # A MASTER HAS NO SITE, AND THE PALETTE READ NAMED NONE: a page opened from its list carries no
+  # `?site_id=`, so the read answered every site's rows, and with two sites holding a component of
+  # the same name the page could be offered the other site's copy and lose its own.
+  describe "the palette is the document's site and the shared components" do
+    setup %{site: site} do
+      other = create_site!()
+
+      %{
+        mine: create_component!(site_id: site.id, name: "twin-card"),
+        theirs: create_component!(site_id: other.id, name: "twin-card"),
+        elsewhere: create_component!(site_id: other.id, name: "elsewhere-card"),
+        shared: create_component!(name: "shared-card")
+      }
+    end
+
+    defp palette_named(view, name), do: Enum.filter(editor(view).components, &(&1.name == name))
+
+    test "a master's page is offered its own site's copy and none of another site's", %{
+      conn: conn,
+      page: page,
+      mine: mine
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert [%{id: id}] = palette_named(view, "twin-card")
+      assert id == mine.id
+      assert palette_named(view, "elsewhere-card") == []
+      assert [_shared] = palette_named(view, "shared-card")
+    end
+
+    test "a site's own copy is offered over a shared one of the same name", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(name: "own-card")
+      own = create_component!(site_id: site.id, name: "own-card")
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert [%{id: id}] = palette_named(view, "own-card")
+      assert id == own.id
+    end
+
+    test "a document with no site is offered the shared components alone", %{conn: conn} do
+      {:ok, view} = open_component_builder(conn, create_component!(name: "shared-host"))
+
+      assert palette_named(view, "twin-card") == []
+      assert palette_named(view, "elsewhere-card") == []
+      assert [_shared] = palette_named(view, "shared-card")
+    end
+  end
+
   describe "the palette" do
     setup %{site: site} do
       %{component: create_component!(site_id: site.id, name: "hero-card")}

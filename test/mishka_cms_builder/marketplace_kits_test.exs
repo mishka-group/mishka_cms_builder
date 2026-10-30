@@ -57,6 +57,16 @@ defmodule MishkaCmsBuilder.MarketplaceKitsTest do
       assert Enum.filter(Kits.packages(%{site_id: site.id}), &(&1.id in offered)) == []
     end
 
+    # NO SITE IS THE SHARED ROWS, where an install with no site writes. Read as every site's rows,
+    # another site's copy hid a package a shared document could not place.
+    test "with no site, a component only another site has is still offered", %{site: site} do
+      [first | _rest] = Kits.packages(%{site_id: nil})
+
+      create_component!(site_id: site.id, name: first.id)
+
+      assert first.id in Enum.map(Kits.packages(%{site_id: nil}), & &1.id)
+    end
+
     test "a package says which kit it came from and what it will bring with it", %{site: site} do
       card = Enum.find(Kits.packages(%{site_id: site.id}), &(&1.id == "chelekom-card"))
 

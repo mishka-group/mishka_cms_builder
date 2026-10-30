@@ -215,9 +215,7 @@ defmodule MishkaCmsBuilder.Marketplace.Kits do
   defp installed_names(site_id) do
     Component
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> then(
-      &if(site_id, do: Ash.Query.filter(&1, site_id == ^site_id or is_nil(site_id)), else: &1)
-    )
+    |> on_site(site_id)
     |> Ash.Query.select([:name])
     # EVERY PAGE. 1000 at once came back as the 250 the read takes a page, and the components past
     # them were offered again as though the site had never installed them.
@@ -227,6 +225,13 @@ defmodule MishkaCmsBuilder.Marketplace.Kits do
       {:error, _reason} -> MapSet.new()
     end
   end
+
+  # NO SITE IS THE SHARED ROWS, where an install with no site writes, and not every site's: another
+  # site's copy of a component is not one a document with no site can place.
+  defp on_site(query, nil), do: Ash.Query.filter(query, is_nil(site_id))
+
+  defp on_site(query, site_id),
+    do: Ash.Query.filter(query, site_id == ^site_id or is_nil(site_id))
 
   defp to_token(%Token{} = token), do: token
   defp to_token(token), do: Token.new!(token)

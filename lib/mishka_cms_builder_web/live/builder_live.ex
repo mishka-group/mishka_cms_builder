@@ -426,7 +426,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       subscribe_asset_builds(editor)
     end
 
-    socket = load_palette_async(socket, editor, actor, params)
+    socket = load_palette_async(socket, editor, actor)
     socket = warm_components(socket, editor)
 
     socket
@@ -691,9 +691,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # not appear in it until a reload. Re-reading it here is what makes Install mean "you can place
   # this now".
   defp reload_palette(socket) do
-    params = %{"site_id" => socket.assigns.editor.site_id}
-
-    case palette_components(socket.assigns[:current_user], params, socket.assigns.editor) do
+    case palette_components(socket.assigns[:current_user], socket.assigns.editor) do
       {:ok, components} ->
         {:ok, _editor} = EditorSession.put_components(socket.assigns.token, components)
         sync_session(socket, socket.assigns.token)
@@ -1788,9 +1786,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # rather than a hand-rolled boolean. The read also writes the palette into the SESSION, because the
   # canvas binds each component to a site from that list — the assign is for this socket's panel, the
   # session is for the frame.
-  defp load_palette_async(socket, editor, actor, params) do
+  defp load_palette_async(socket, editor, actor) do
     MishkaGervaz.Messages.assign_async(socket, :palette, fn ->
-      with {:ok, components} <- palette_components(actor, params, editor),
+      with {:ok, components} <- palette_components(actor, editor),
            {:ok, _editor} <- EditorSession.put_components(editor.token, components) do
         {:ok, %{palette: components}}
       end
@@ -1846,11 +1844,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp component_names(tree),
     do: tree |> component_refs() |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
 
-  defp palette_components(actor, params, editor) do
-    {args, tenant} = palette_scope(actor, params)
+  defp palette_components(actor, editor) do
+    {args, tenant} = palette_scope(actor, editor)
 
     MishkaCmsCore.Runtime.Component
     |> Ash.Query.for_read(:for_tenant_with_globals, args, actor: actor, tenant: tenant)
+    |> shared_only(editor)
+    # THE SITE'S OWN COPY BEFORE A SHARED ONE OF THE SAME NAME: the registry keeps the first entry
+    # under a name (`Events.collect/2`), and the site's copy is the one its pages draw.
+    |> Ash.Query.sort(site_id: :asc_nils_last)
     # `helpers` is selected because the property panel's option lists live in its `discriminators`,
     # not in the attributes — see `MishkaCmsCore.Runtime.Authoring.Inspector.features/1`. The old
     # palette payload omitted it, which is why a variant dropdown was never possible.
@@ -1955,11 +1957,21 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # seeing the global components. Reaching for `:master_read` here was the trap the comment above
   # `media_scope/2` describes — a master opening `?site_id=…` handed a tenant to a bypass action, the
   # read errored, and the palette came back empty.
-  defp palette_scope(%{site_id: nil}, params), do: {site_arg(params["site_id"]), nil}
-  defp palette_scope(%{site_id: site_id}, _params) when is_binary(site_id), do: {%{}, site_id}
+  #
+  # THE DOCUMENT'S SITE, NEVER THE READER'S AND NEVER EVERY SITE. A master has no site, and the mount
+  # passed the address's `?site_id=` alone, which a page opened from its list does not carry, so the
+  # read went on to every site's rows: a localhost page offered `site-a`'s copy of a component in
+  # place of its own. `editor.site_id` is the address's site or else the document's.
+  defp palette_scope(%{site_id: nil}, %{site_id: site_id}) when is_binary(site_id),
+    do: {%{site_id: site_id}, nil}
 
-  defp site_arg(site_id) when is_binary(site_id), do: %{site_id: site_id}
-  defp site_arg(_site_id), do: %{}
+  defp palette_scope(%{site_id: nil}, _shared_document), do: {%{}, nil}
+  defp palette_scope(%{site_id: site_id}, _editor) when is_binary(site_id), do: {%{}, site_id}
+
+  # A DOCUMENT WITH NO SITE IS DRAWN ON EVERY SITE, so it may place only what every site has. A
+  # master's read naming no site answers every site's rows, so the shared ones are asked for here.
+  defp shared_only(query, %{site_id: nil}), do: Ash.Query.filter(query, is_nil(site_id))
+  defp shared_only(query, _editor), do: query
 
   # `form:` carries which attribute a binding goes on, when the kit says so.
   # `MishkaCmsCore.Builder.FormRole` reads it and `MishkaCmsCore.Runtime.Authoring.Fields` infers
@@ -3826,10 +3838,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # transient — a connection dropped under load — so trying again is the whole remedy, and doing it
   # without a page reload keeps the document, the history and the selection intact.
   def handle_event("retry_palette", _params, socket) do
-    editor = socket.assigns.editor
-    params = %{"site_id" => editor.site_id}
-
-    {:noreply, load_palette_async(socket, editor, socket.assigns[:current_user], params)}
+    {:noreply, load_palette_async(socket, socket.assigns.editor, socket.assigns[:current_user])}
   end
 
   # CLICKING THE OPEN ONE CLOSES IT, which needs the already-open case to match rather than be
