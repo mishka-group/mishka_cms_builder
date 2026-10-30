@@ -10,7 +10,7 @@ defmodule MishkaCmsBuilder.LiveCase do
   that makes this suite survive a restyle. The React editor had no test of this kind at any level,
   which is how it shipped with a save endpoint that was never routed.
 
-  The tests live in `test/mishka_cms_core_web/live/builder_live/`, one module per topic, so a
+  The tests live in `test/mishka_cms_builder_web/live/builder_live/`, one module per topic, so a
   partitioned run spreads them. `use MishkaCmsBuilder.LiveCase` gives each of them
   `MishkaCmsCore.ConnCase`, the shared imports, aliases and module attributes, and
   `MishkaCmsCore.Test.Admin.serve_localhost!/1` as its setup: `boss@example.com` signed in as a `*`
