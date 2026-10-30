@@ -521,6 +521,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     |> assign_new(:media_attrs, fn -> media_attrs(session.components) end)
     |> assign_new(:conceals, fn -> conceals(session.components) end)
     |> assign_new(:shapers, fn -> shapers(session.components) end)
+    |> assign_new(:holders, fn -> holders(session.components) end)
     |> assign_new(:icon_defaults, fn -> icons_defaulted_by(session.components) end)
     |> assign(:components, session.components)
     |> assign(:tree, session.tree)
@@ -821,6 +822,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         |> assign(:media_attrs, media_attrs(session.components))
         |> assign(:conceals, conceals(session.components))
         |> assign(:shapers, shapers(session.components))
+        |> assign(:holders, holders(session.components))
         |> assign(:form_memo, %{})
         |> assign(:icon_defaults, icons_defaulted_by(session.components))
         |> sync_selection(socket.assigns[:selection], session)
@@ -1696,6 +1698,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         media_attrs={@media_attrs}
         conceals={@conceals}
         shapers={@shapers}
+        holders={@holders}
         form_marks={assigns[:form_marks]}
       />
       {raw(elem(@layout_shell, 1))}
@@ -2104,6 +2107,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   attr :media_attrs, :map, default: %{}
   attr :conceals, :any, default: nil
   attr :shapers, :any, default: nil
+  attr :holders, :map, default: %{}
   attr :form_marks, :any, default: nil
 
   defp pb_node(assigns) do
@@ -2310,6 +2314,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         media_attrs={@media_attrs}
         conceals={@conceals}
         shapers={@shapers}
+        holders={@holders}
         form_marks={@form_marks}
       />
     </div>
@@ -2368,6 +2373,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         media_attrs={@media_attrs}
         conceals={@conceals}
         shapers={@shapers}
+        holders={@holders}
         form_marks={@form_marks}
       />
     </.dynamic_tag>
@@ -2502,9 +2508,45 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # aimed from the wrapper DOWN at the component's own root — `data-pb-overlay` on the one, the
   # `hidden` on the other. Stamped, both would be the same element and the rule would reach past
   # what it means to open. The wrapper is doing real work there and stays.
+  #
+  # AND A TABLE PART IS STAMPED ONLY WHERE A TABLE HOLDS IT. Outside a table a parser ignores a
+  # `<td>` start tag and keeps its words, so a stamped cell on a page — written before the editor
+  # refused one there, or in the code tab — left a layers row and nothing on the canvas to click.
+  # There the box is the right answer: the parser drops the stray tag inside it and keeps the words,
+  # and the box keeps the node selectable so the author can move it into a row or delete it.
   defp stampable?(assigns, html) do
-    not conceals?(assigns, assigns.node) and
-      (Containment.parent_restricted?(first_tag(html)) or shaped_by_parent?(assigns))
+    tag = first_tag(html)
+
+    not conceals?(assigns, assigns.node) and table_home?(assigns, tag) and
+      (Containment.parent_restricted?(tag) or shaped_by_parent?(assigns))
+  end
+
+  # Whether the node's parent puts its children where this part may sit. A parent whose content
+  # cannot be read — a slot — is let through, as it always was.
+  defp table_home?(assigns, tag) do
+    case Containment.table_homes(tag) do
+      nil -> true
+      homes -> assigns |> parent_content() |> at_home?(homes)
+    end
+  end
+
+  defp at_home?(:unread, _homes), do: true
+  defp at_home?(content, homes), do: content in homes
+
+  defp parent_content(%{node: %Node{parent_id: parent_id}, tree: tree} = assigns) do
+    case Tree.get(tree, parent_id) do
+      nil ->
+        nil
+
+      %Node{kind: :tag} = parent ->
+        Containment.content_element(parent)
+
+      %Node{kind: :component} = parent ->
+        Map.get(assigns[:holders] || %{}, Node.component_name(parent))
+
+      _slot ->
+        :unread
+    end
   end
 
   defp shaped_by_parent?(%{node: node, tree: tree} = assigns),
@@ -2697,6 +2739,27 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         Map.get(entry, :concealed?, false),
         into: MapSet.new(),
         do: entry.name
+  end
+
+  # And of every component whose content lands in a table's own element — a kit row's in its `<tr>`,
+  # a kit table's in its `<tbody>` — by name, so a cell inside one is stamped and a cell anywhere
+  # else keeps its box. Only a template that writes one of those tags is parsed.
+  @table_tags ~w(<table <thead <tbody <tfoot <tr <colgroup)
+
+  defp holders(components) do
+    for %{name: name, template: template} = entry <- components || [],
+        is_binary(name) and is_binary(template),
+        String.contains?(template, @table_tags),
+        content = holder_content(entry),
+        is_binary(content),
+        into: %{},
+        do: {name, content}
+  end
+
+  defp holder_content(%{name: name} = entry) do
+    :component
+    |> Node.new(tag: ".component", attrs: [{"component_name", {:string, name}}])
+    |> Containment.content_element(components: [entry])
   end
 
   # And of every component that reaches for the elements an author puts inside it, read off the same
@@ -3878,6 +3941,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       media_attrs: assigns[:media_attrs] || %{},
       conceals: assigns[:conceals],
       shapers: assigns[:shapers],
+      holders: assigns[:holders] || %{},
       form_marks: assigns[:form_marks]
     }
 
@@ -3895,6 +3959,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       media_attrs={@media_attrs}
       conceals={@conceals}
       shapers={@shapers}
+      holders={@holders}
       form_marks={@form_marks}
     />
     """

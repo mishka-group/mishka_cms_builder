@@ -232,6 +232,31 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
     end
   end
 
+  # AND A CELL WITH NO ROW AROUND IT KEEPS ITS BOX. A parser ignores a `<td>` start tag outside a
+  # table and keeps the words, so a stamped cell on a page — saved before the editor refused one
+  # there, or written in the code tab — had nothing left on the canvas to click. The box survives
+  # the parser and keeps the node selectable, so it can be moved into a row or deleted.
+  describe "a table part where no table holds it" do
+    test "is drawn in the editor's box, so it can still be selected", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: """
+          <div class="box"><.component component_name="cell-cell" site="localhost">Lost</.component></div>
+          <.component component_name="cell-row" site="localhost">Row</.component>
+          <.component component_name="cell-table" site="localhost"><.component component_name="cell-row" site="localhost"><.component component_name="cell-cell" site="localhost">Kept</.component></.component></.component>
+          """
+        )
+
+      html = canvas_html(conn, page)
+
+      assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-cell"/, html)) == 1
+      assert length(Regex.scan(~r/<div[^>]*\sdata-component="cell-row"/, html)) == 1
+      assert html =~ ~r/<td[^>]*\sdata-component="cell-cell"/, "a cell in a row is still stamped"
+      assert html =~ ~r/<tr[^>]*\sdata-component="cell-row"/, "a row in a table is still stamped"
+    end
+  end
+
   # A PARENT THAT JOINS WHAT IS INSIDE IT. `chelekom-button-group` writes
   # `[&>*]:rounded-none [&>*]:border-0` — the element immediately inside, which was the editor's
   # wrapper and not the button. Three separately rounded buttons on the canvas, one joined control
