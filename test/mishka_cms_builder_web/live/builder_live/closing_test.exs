@@ -170,6 +170,38 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ClosingTest do
     end
   end
 
+  # THE WRITE IS THE SESSION'S, AND NOTHING THE AUTHOR PRESSES WAITS FOR IT. `Keeper` holds the
+  # session's lock for as long as a write runs, and the editor's own events never ask for it: undo
+  # and redo answer while a write is held open at its gate, and the write that follows carries the
+  # document they left.
+  describe "a draft write still running while the author works" do
+    test "holds up neither undo nor redo", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      _draft_id = autosave!(view)
+      {token, recorded} = {token(view), actor(view)}
+
+      pause_draft_writes()
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+      assert_receive {:draft_write_paused, writing}
+
+      undo!(view)
+      assert node_with_tag(view, "p"), "undo did not answer"
+      redo!(view)
+      refute node_with_tag(view, "p"), "redo did not answer"
+      undo!(view)
+      assert node_with_tag(view, "p"), "the second undo did not answer"
+      assert Process.alive?(writing), "the write was let go before undo and redo answered"
+
+      # The write held open carried the delete; the one queued behind it carries the last undo.
+      send(writing, :release)
+      assert_receive {:draft_write_paused, queued}
+      send(queued, :release)
+
+      refute settled(token).dirty?
+      assert the_draft(page, recorded).template =~ "<p", "the draft lost the last undo"
+    end
+  end
+
   # A SOCKET THAT DROPS AND COMES BACK is the same tab: LiveView mounts it again with `_mounts` past
   # zero. It carries on in the session it had — its draft, its stage, its edits — rather than being
   # treated as a visit that lands on the live page.
