@@ -3333,6 +3333,58 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert render(canvas) =~ "Fish &amp; Chips &lt;b&gt;bold&lt;/b&gt;"
       refute has_element?(canvas, ~s(span[data-kind="text"] b))
     end
+
+    # THE TEMPLATE'S LINE BREAKS ARE NOT THE AUTHOR'S. A heading written over two lines of the source
+    # hands its newline and indentation back inside `textContent`, and one word changed inline stored
+    # the run as "…pictured\n     today". The page draws that gap as one space; so does the source now.
+    test "typed words keep the template's line breaks out of the text", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: "<h1>\n  Build the site your team\n     pictured today\n</h1>"
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      text =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == :text))
+
+      render_click(canvas, "set_text", %{
+        "id" => text.id,
+        "text" => "\n  Build E2E the site\tyour team\n     pictured  today\n",
+        "pre" => false
+      })
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+
+      # Between the words, one space; around them, the indentation that puts them on their own line
+      # inside the heading; a tab or two spaces the page collapses anyway, left as they were.
+      assert Tree.get(tree, text.id).text == "\n  Build E2E the site\tyour team pictured  today\n"
+
+      assert Serializer.serialize(tree) =~
+               "<h1>\n  Build E2E the site\tyour team pictured  today\n</h1>"
+    end
+
+    # Where the element keeps its line breaks on screen, the hook says so and every one is the author's.
+    test "and an element that shows its line breaks keeps them", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: "<pre>one\n  two</pre>")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      text =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == :text))
+
+      render_click(canvas, "set_text", %{
+        "id" => text.id,
+        "text" => "one\n  two\n    three",
+        "pre" => true
+      })
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      assert Tree.get(tree, text.id).text == "one\n  two\n    three"
+    end
   end
 
   describe "the controls a node can actually take" do

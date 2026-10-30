@@ -965,11 +965,14 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # Escaping them here is what makes `plaintext-only` true all the way down: the run round-trips as
   # the characters typed, and `text_html/1` shows them again unchanged. The code drawer's own path
   # into `:set_text` is NOT this one — there the text is already source, and is left alone.
-  def handle_event("set_text", %{"id" => id, "text" => text}, socket) do
+  #
+  # `pre` is the hook's reading of the element: whether it keeps the line breaks in its words on
+  # screen. See `unwrapped/2`.
+  def handle_event("set_text", %{"id" => id, "text" => text} = params, socket) do
     EditorSession.apply_op(socket.assigns.token, %{
       kind: :set_text,
       node_id: id,
-      text: escape_typed(text)
+      text: text |> unwrapped(params["pre"]) |> escape_typed()
     })
 
     {:noreply, socket}
@@ -3458,6 +3461,29 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   defp escape_typed(_text), do: ""
+
+  # THE TEMPLATE'S LINE BREAKS ARE NOT THE AUTHOR'S. A heading written over two lines of the source
+  # holds a newline and the next line's indentation inside its words, `textContent` hands them back
+  # with whatever was typed, and one word changed inline stored the run as "…pictured\n     today".
+  # The page draws that gap as one space, so that is what the source keeps: each run of spacing with
+  # a line break in it, between the words, becomes a single space. The spacing around the words —
+  # the indentation that puts them on their own line inside their element — stays as it was, and so
+  # does a run of plain spaces, which the page collapses anyway.
+  #
+  # Where the element keeps its line breaks on screen (`<pre>`, `white-space: pre-line` and their
+  # kin, read by the hook off the element itself) every one of them is the author's, and the text is
+  # kept as typed. A `<br>` is an element of its own and never reaches this text.
+  @spacing_with_break ~r/[ \t\f]*(?:\r\n?|\n)[ \t\n\r\f]*/
+  @around_words ~r/\A([ \t\n\r\f]*)(.*?)([ \t\n\r\f]*)\z/s
+
+  defp unwrapped(text, true), do: text
+
+  defp unwrapped(text, _collapses) when is_binary(text) do
+    [_text, lead, words, trail] = Regex.run(@around_words, text)
+    lead <> String.replace(words, @spacing_with_break, " ") <> trail
+  end
+
+  defp unwrapped(text, _collapses), do: text
 
   # THE SAME QUESTION THE INSPECTOR ASKS, of the same node. Display, gap and the column shapes are
   # all classes, and a text run or an expression chip has nowhere to keep one — so on those the

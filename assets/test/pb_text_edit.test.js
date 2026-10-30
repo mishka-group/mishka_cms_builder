@@ -103,7 +103,7 @@ describe("words open for editing", () => {
     $("#words").dataset.nodeId = "somebody-else";
     $("#words").dispatchEvent(new FocusEvent("blur"));
 
-    expect(ctx.pushed.at(-1)).toEqual(["set_text", { id: "t1", text: "Pricing" }]);
+    expect(ctx.pushed.at(-1)).toEqual(["set_text", { id: "t1", text: "Pricing", pre: false }]);
     expect($("#words").hasAttribute("contenteditable")).toBe(false);
     expect($("#words").hasAttribute("phx-update")).toBe(false);
   });
@@ -147,7 +147,29 @@ describe("words open for editing", () => {
     $("#words").dispatchEvent(new FocusEvent("blur"));
 
     expect(ctx.pushed.filter(([name]) => name === "set_text")).toEqual([
-      ["set_text", { id: "t1", text: "Heading" }],
+      ["set_text", { id: "t1", text: "Heading", pre: false }],
+    ]);
+  });
+
+  // The template's newline and indentation ride along in `textContent`. Whether they are on screen
+  // is the element's to say, and the server keeps them only when they are.
+  it("say whether their element keeps its line breaks", () => {
+    // On the run itself: jsdom does not inherit `white-space` from the parent, a browser does.
+    const ctx = canvas(
+      '<div data-node-id="p1" data-kind="tag">' +
+        '<span id="pre-words" data-node-id="t2" data-kind="text" style="white-space:pre-line">' +
+        "one\n  two</span></div>" +
+        PAGE,
+    );
+
+    doubleClick($("#pre-words"));
+    $("#pre-words").dispatchEvent(new FocusEvent("blur"));
+    doubleClick($("#words"));
+    $("#words").dispatchEvent(new FocusEvent("blur"));
+
+    expect(ctx.pushed.filter(([name]) => name === "set_text")).toEqual([
+      ["set_text", { id: "t2", text: "one\n  two", pre: true }],
+      ["set_text", { id: "t1", text: "Heading", pre: false }],
     ]);
   });
 

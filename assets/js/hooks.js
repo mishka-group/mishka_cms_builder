@@ -804,6 +804,23 @@ function caretAt(node, event) {
   selection.addRange(range);
 }
 
+// WHETHER THE LINE BREAKS IN THESE WORDS ARE ON SCREEN. `textContent` carries the newline and the
+// indentation of the template the words were written in; on an element that collapses spacing they
+// are one space, and the server stores them as one (`CanvasLive`'s `unwrapped/2`). Only the browser
+// knows which an element is — a `<pre>`, a `whitespace-pre-line` class, a kit's own stylesheet — so
+// the hook reads it off the element and says so with the words.
+export function keepsBreaks(node) {
+  const view = node.ownerDocument.defaultView;
+  const style = view && view.getComputedStyle(node);
+  if (!style) return false;
+
+  // Either spelling: the longhand where the browser has it, the shorthand everywhere.
+  return (
+    ["preserve", "preserve-breaks", "break-spaces"].includes(style.whiteSpaceCollapse) ||
+    ["pre", "pre-wrap", "pre-line", "break-spaces"].includes(style.whiteSpace)
+  );
+}
+
 function pointRange(doc, event) {
   if (!event || typeof event.clientX !== "number") return null;
 
@@ -1187,7 +1204,7 @@ const PbCanvas = {
         node.removeAttribute("phx-update");
         node.removeAttribute("contenteditable");
         if (this.editing === node) this.editing = null;
-        this.pushEvent("set_text", { id, text: node.textContent });
+        this.pushEvent("set_text", { id, text: node.textContent, pre: keepsBreaks(node) });
       };
 
       node.addEventListener("blur", finish, { once: true });
