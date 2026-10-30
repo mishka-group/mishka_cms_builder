@@ -3318,12 +3318,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
 
     # NAMING SOMEBODY. The browser decides WHEN — it is the only thing that knows where the caret
     # is — so the search arrives as a hook push rather than a click.
+    # The writer is `boss@example.com`, who is never offered: naming yourself notifies nobody.
     test "typing @ offers the people who can be named", %{conn: conn, page: page} do
+      create_admin("bob.colleague@example.com")
       {:ok, view, _html} = open_builder(conn, page)
       render_click(view, "open_sheet", %{"sheet" => "review"})
 
-      assert render_hook(view, "mention_search", %{"q" => "bo"}) =~
-               ~s(data-handle="boss@example.com")
+      html = render_hook(view, "mention_search", %{"q" => "bo"})
+      assert html =~ ~s(data-handle="bob.colleague@example.com")
+      refute html =~ ~s(data-handle="boss@example.com")
 
       refute render_hook(view, "mention_search", %{"q" => "zz"}) =~ "pb-mention-list"
     end
@@ -3331,24 +3334,27 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
     # PICKING IS THE BROWSER'S — it owns the caret, the arrow keys and the highlight. What the server
     # has to put in the markup is what the hook reads: the handle, and a row that starts highlighted.
     test "the list carries what the keyboard picks with", %{conn: conn, page: page} do
+      create_admin("bob.colleague@example.com")
       {:ok, view, _html} = open_builder(conn, page)
       render_click(view, "open_sheet", %{"sheet" => "review"})
 
       html = render_hook(view, "mention_search", %{"q" => "bo"})
 
-      assert html =~ ~s(data-handle="boss@example.com")
+      assert html =~ ~s(data-handle="bob.colleague@example.com")
       assert html =~ ~s(data-index="0")
       assert html =~ ~s(data-active="true")
     end
 
     test "leaving the word closes the list", %{conn: conn, page: page} do
+      create_admin("bob.colleague@example.com")
       {:ok, view, _html} = open_builder(conn, page)
       render_click(view, "open_sheet", %{"sheet" => "review"})
 
       assert render_hook(view, "mention_search", %{"q" => ""}) =~
-               ~s(data-handle="boss@example.com")
+               ~s(data-handle="bob.colleague@example.com")
 
-      refute render_hook(view, "mention_close", %{}) =~ ~s(data-handle="boss@example.com")
+      refute render_hook(view, "mention_close", %{}) =~
+               ~s(data-handle="bob.colleague@example.com")
     end
 
     # BEING NAMED IS ADDRESSED TO YOU, so your own chip is the filled one. The handle is the email's

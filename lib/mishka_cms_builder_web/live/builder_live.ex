@@ -3569,9 +3569,16 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # tenancy question, and shipping every account to the browser to filter there would answer it in
   # the one place that cannot be trusted with it. The typing that drives it is the client's: the
   # `MentionBox` hook decides when a `@word` is being written and only then asks.
+  #
+  # The colleagues in this session lead the list (`Mentions.candidates/2`), and only this LiveView
+  # knows who they are: `@editors` is the session's Presence, without the writer.
   def handle_event("mention_search", %{"q" => query}, socket) do
-    {:noreply,
-     assign(socket, :mentions, Mentions.candidates(Panels.review_scope(socket.assigns), query))}
+    scope =
+      socket.assigns
+      |> Panels.review_scope()
+      |> Map.put(:editing, Enum.map(socket.assigns[:editors] || [], & &1.id))
+
+    {:noreply, assign(socket, :mentions, Mentions.candidates(scope, query))}
   end
 
   # PICKING IS THE BROWSER'S ENTIRELY — it owns the caret, the arrow keys and the list's highlight,

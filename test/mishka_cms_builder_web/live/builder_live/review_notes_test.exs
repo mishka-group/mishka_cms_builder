@@ -161,4 +161,37 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ReviewNotesTest do
     end
   end
 
+  describe "the @ list" do
+    test "offers the people on this page first and never the writer", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      # Addresses that sort before everyone involved, so alphabetical order alone would show them.
+      for n <- 1..6, do: create_admin("aaa.bystander#{n}@example.com")
+
+      {_author, author_conn} = signed_in("zz.author@example.com")
+      _note = heading_note!(author_conn, page, site, "An earlier note")
+
+      # boss@example.com is editing; the writer joins their session.
+      {:ok, first, _html} = open_builder(conn, page)
+      {_writer, writer_conn} = signed_in("zzz.writer@example.com")
+
+      {:ok, view, _html} =
+        live(
+          writer_conn,
+          "/admin/dashboard/runtime/builder/page/#{page.id}?session=#{token(first)}"
+        )
+
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      render_hook(view, "mention_search", %{"q" => ""})
+
+      offered = Enum.map(live_assigns(view).mentions, & &1.handle)
+
+      assert Enum.take(offered, 2) == ["boss@example.com", "zz.author@example.com"]
+      refute "zzz.writer@example.com" in offered, "naming yourself notifies nobody"
+      assert length(offered) == 6
+    end
+  end
+
 end

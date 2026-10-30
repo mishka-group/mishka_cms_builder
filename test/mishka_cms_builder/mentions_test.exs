@@ -119,11 +119,12 @@ defmodule MishkaCmsBuilder.MentionsTest do
     test "a master's note on something shared offers only the masters", %{site: site} do
       create_user!(site_id: site.id, email: "sara@mine.test")
       master = create_user!(email: "boss@master.test")
+      create_user!(email: "other.boss@master.test")
 
       handles =
         %{site_id: nil, actor: master} |> Mentions.candidates("") |> Enum.map(& &1.handle)
 
-      assert "boss@master.test" in handles
+      assert "other.boss@master.test" in handles
       refute "sara@mine.test" in handles
     end
 
@@ -192,35 +193,87 @@ defmodule MishkaCmsBuilder.MentionsTest do
     # draws when it shows a tenant "System" instead of who really made a change.
     test "a tenant is not offered the masters", %{site: site} do
       tenant = create_user!(site_id: site.id, email: "sara@mine.test")
+      create_user!(site_id: site.id, email: "sam@mine.test")
       create_user!(email: "boss@master.test")
 
       handles =
         %{site_id: site.id, actor: tenant} |> Mentions.candidates("") |> Enum.map(& &1.handle)
 
-      assert "sara@mine.test" in handles
+      assert "sam@mine.test" in handles
       refute "boss@master.test" in handles, "a master's address is not a tenant's to see"
     end
 
     test "a master is offered the site's people and the other masters", %{site: site} do
       master = create_user!(email: "boss@master.test")
+      create_user!(email: "other.boss@master.test")
       create_user!(site_id: site.id, email: "sara@mine.test")
 
       handles =
         %{site_id: site.id, actor: master} |> Mentions.candidates("") |> Enum.map(& &1.handle)
 
       assert "sara@mine.test" in handles
-      assert "boss@master.test" in handles
+      assert "other.boss@master.test" in handles
     end
 
     # Their own site whatever the document is: a tenant writing on a shared component still writes
     # to their own people, because the note is stamped with their site.
     test "a tenant on a shared document still reaches their own site", %{site: site} do
       tenant = create_user!(site_id: site.id, email: "sara@mine.test")
+      create_user!(site_id: site.id, email: "sam@mine.test")
       create_user!(email: "boss@master.test")
 
       handles = %{site_id: nil, actor: tenant} |> Mentions.candidates("") |> Enum.map(& &1.handle)
 
+      assert handles == ["sam@mine.test"]
+    end
+
+    # NAMING YOURSELF NOTIFIES NOBODY (`notify/2` drops the author), so the row would only push
+    # somebody who can be told off the end of a list cut at six.
+    test "the writer is never offered", %{site: site} do
+      writer = create_user!(site_id: site.id, email: "aaron@mine.test")
+      create_user!(site_id: site.id, email: "sara@mine.test")
+
+      handles =
+        %{site_id: site.id, actor: writer} |> Mentions.candidates("") |> Enum.map(& &1.handle)
+
       assert handles == ["sara@mine.test"]
+      assert %{site_id: site.id, actor: writer} |> Mentions.candidates("aaron") == []
+    end
+
+    # THE LIST IS CUT AT SIX, so its order is who can be picked without typing. The people a page
+    # involves come before the ones whose address merely sorts first: who is editing it with the
+    # writer now, then who has written on it, then everybody else — each in address order.
+    test "the people this page involves come first", %{site: site, page: page} do
+      writer = create_user!(site_id: site.id, email: "writer@mine.test")
+      for n <- 1..6, do: create_user!(site_id: site.id, email: "aa#{n}@mine.test")
+      editing = create_user!(site_id: site.id, email: "zz.editing@mine.test")
+      author = create_user!(site_id: site.id, email: "yy.author@mine.test")
+      elsewhere = create_user!(site_id: site.id, email: "xx.elsewhere@mine.test")
+      other_page = create_page!(site_id: site.id)
+
+      note!(site, %{document_id: page.id, author: author})
+      note!(site, %{document_id: other_page.id, author: elsewhere})
+
+      scope = %{
+        site_id: site.id,
+        actor: writer,
+        section: :page,
+        document_id: page.id,
+        editing: [editing.id]
+      }
+
+      assert scope |> Mentions.candidates("") |> Enum.map(& &1.handle) == [
+               "zz.editing@mine.test",
+               "yy.author@mine.test",
+               "aa1@mine.test",
+               "aa2@mine.test",
+               "aa3@mine.test",
+               "aa4@mine.test"
+             ]
+
+      # Typing still narrows first; the order only decides among what matches.
+      assert scope |> Mentions.candidates("aa") |> Enum.map(& &1.handle) ==
+               Enum.map(1..6, &"aa#{&1}@mine.test")
     end
 
     # A PREFIX OF THE ADDRESS, not a substring of it. Typing a domain on its own finds nobody, because

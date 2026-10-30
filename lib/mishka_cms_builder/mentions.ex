@@ -125,19 +125,35 @@ defmodule MishkaCmsBuilder.Mentions do
   end
 
   @doc """
-  Who `query` could mean, for the autocomplete — at most #{@limit}, nearest match first.
+  Who `query` could mean, for the autocomplete — at most #{@limit}, the people this document is
+  about first.
 
   A blank query offers the first few people rather than nothing, so pressing `@` is useful before
   typing anything. Matching is a prefix of the whole address, so `@mas` narrows to the masters and
   `@master@two` narrows those to one site — which is the point of naming people by address.
 
-  `scope[:actor]` decides how far the list reaches; see "Who can be named" above.
+  `scope[:actor]` decides how far the list reaches; see "Who can be named" above. The writer is never
+  offered: naming yourself notifies nobody (`notify/2`), so the row would only push someone else off
+  the list.
+
+  ## Who comes first
+
+  The list is cut at #{@limit}, so its order decides who can be picked without typing. Alphabetical
+  alone put whoever's address sorts first at the top of every page's list, whatever the page. So
+  the people this document involves lead, each group in address order:
+
+    1. who is editing it with the writer right now — `scope[:editing]`, the user ids of the session's
+       other editors (`MishkaCmsBuilder.Presence.others/2`);
+    2. who has written a note on it (`scope[:section]` and `scope[:document_id]`);
+    3. everybody else.
   """
   @spec candidates(map(), String.t() | nil) :: [
           %{id: String.t(), handle: String.t(), local: String.t(), domain: String.t()}
         ]
   def candidates(scope, query) do
     needle = query |> to_string() |> String.trim() |> String.downcase()
+    writer = scope |> Map.get(:actor) |> id_of()
+    rank = ranking(scope)
 
     # AND WHOEVER ELSE AN EXTENSION CAN NAME. A team plugin that knows about groups, or an
     # integration that can @-mention a channel, contributes here rather than needing its own field.
@@ -145,10 +161,49 @@ defmodule MishkaCmsBuilder.Mentions do
     |> visible_users()
     |> Enum.map(&card/1)
     |> then(&MishkaCmsCore.Builder.Events.collect_appended(:mention_sources, &1))
+    |> Enum.reject(&(writer && Map.get(&1, :id) == writer))
     |> Enum.filter(&String.starts_with?(&1.handle, needle))
-    |> Enum.sort_by(& &1.handle)
+    |> Enum.sort_by(&{rank.(&1), &1.handle})
     |> Enum.take(@limit)
   end
+
+  defp id_of(%{id: id}) when is_binary(id), do: id
+  defp id_of(_nobody), do: nil
+
+  # The group a candidate falls in; lower comes first. See "Who comes first" in `candidates/2`.
+  defp ranking(scope) do
+    editing = scope |> Map.get(:editing, []) |> List.wrap()
+    authors = authors(scope)
+
+    fn card ->
+      id = Map.get(card, :id)
+
+      cond do
+        id in editing -> 0
+        id in authors -> 1
+        true -> 2
+      end
+    end
+  end
+
+  # Who has written on this document: its notes and their replies, by anybody. Whom the writer may
+  # name is still `visible_users/1`'s answer; this only orders it. One read of one column.
+  defp authors(%{section: section, document_id: document_id})
+       when not is_nil(section) and is_binary(document_id) do
+    MishkaCmsBuilder.PageComment
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(
+      section == ^section and document_id == ^document_id and not is_nil(author_id)
+    )
+    |> Ash.Query.select([:author_id])
+    |> Ash.read(authorize?: false, page: false)
+    |> case do
+      {:ok, notes} -> notes |> Enum.map(& &1.author_id) |> Enum.uniq()
+      {:error, _reason} -> []
+    end
+  end
+
+  defp authors(_no_document), do: []
 
   @doc """
   The handles in `bodies` that name a master and nobody on `site_id`, downcased.
