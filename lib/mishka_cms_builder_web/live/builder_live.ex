@@ -920,8 +920,36 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp saved_settings(socket, %resource{} = record) do
     if resource == Drafts.resource(section(socket)),
       do: assign(socket, :draft, record),
-      else: assign(socket, :record, reloaded(socket, record))
+      else: page_saved(socket, reloaded(socket, record))
   end
+
+  # A SETTING SAVED TO THE PAGE ITSELF WHILE THIS SITTING HAS A DRAFT OPEN — Publish mode's dialog is
+  # the page's — goes into that draft too. Left out, it was reported as "the original was changed
+  # after this draft was made", about the author's own click a second ago; and the draft kept the
+  # older setting, which publishing it from Draft mode would then have written back over this one.
+  # `Drafts.follow/5` carries it and leaves a draft somebody else had already put behind as it was.
+  defp page_saved(socket, saved) do
+    socket
+    |> follow_into_draft(socket.assigns.record, saved)
+    |> assign(:record, saved)
+  end
+
+  defp follow_into_draft(%{assigns: %{editor: %{draft_id: id}}} = socket, before, saved)
+       when is_binary(id) do
+    section = section(socket)
+    actor = socket.assigns.current_user
+
+    with {:ok, draft} <- Drafts.get(section, id, actor),
+         {:ok, followed} <- Drafts.follow(section, draft, before, saved, actor) do
+      if match?(%{id: ^id}, socket.assigns[:draft]),
+        do: assign(socket, :draft, followed),
+        else: socket
+    else
+      _not_followed -> socket
+    end
+  end
+
+  defp follow_into_draft(socket, _before, _saved), do: socket
 
   defp reloaded(socket, record) do
     case load_record(section(socket), record.id, socket.assigns[:current_user]) do

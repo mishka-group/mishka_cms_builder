@@ -232,7 +232,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       |> render_submit()
 
       assert reread!(MishkaCmsCore.Runtime.Page, page.id).path == "/published-path"
-      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).path == page.path
+
+      # The sitting's own draft follows what its editor saved to the page, so publishing it later
+      # does not put the older path back.
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).path == "/published-path"
     end
 
     # PUBLISHING FROM THE DRAFT PUTS ITS SETTINGS ON THE PAGE. The dialog says the page takes them when
@@ -291,6 +294,49 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       assert stored_tag(live, "property", "og:image").content == "/uploads/drafted.png"
       refute live.template =~ "Contact Us", "the markup did not go with them"
       assert live.template =~ "Reach out any time."
+    end
+
+    # THE EDITOR'S OWN SAVE IS NOT SOMEBODY ELSE'S CHANGE. A setting saved to the page itself while
+    # this sitting's draft was open put up "The original was changed after this draft was made" about
+    # the author's own click, and the draft kept the older setting — which publishing it from Draft
+    # mode would then have written back over the one just saved.
+    test "a setting saved to the page beside the draft is the draft's too, and no notice", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+      render_click(view, "set_stage", %{"stage" => "published"})
+
+      open_settings(view)
+
+      view
+      |> form(settings_form("page"), %{"form" => %{"path" => "/saved-here"}})
+      |> render_submit()
+
+      refute has_element?(view, "#pb-original-changed")
+
+      render_click(view, "set_stage", %{"stage" => "draft"})
+      refute has_element?(view, "#pb-original-changed")
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).path == "/saved-here"
+
+      view |> element("#pb-stage-publish-now") |> render_click()
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).path == "/saved-here"
+    end
+
+    # The page's code is written to the page itself by the code drawer, and no publish of the draft
+    # writes it — so saving it beside a draft is nothing the draft would write over.
+    test "code saved to the page beside the draft puts up no notice", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      _draft_id = autosave!(view)
+
+      render_click(view, "save_code", %{
+        "tab" => "state",
+        "entry" => %{"0" => %{"name" => "count", "code" => "0"}}
+      })
+
+      assert [%{name: "count"}] = reread!(MishkaCmsCore.Runtime.Page, page.id).state
+      refute has_element?(view, "#pb-original-changed")
     end
 
     test "while a draft is being written, the canvas draws the draft's layout", %{
