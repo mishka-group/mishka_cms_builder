@@ -257,6 +257,35 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
       refute html =~ "needs an id", "the id the tag carries did not reach the dispatch"
     end
 
+    # THE ID IS THE ONE LIVEVIEW HANDS IT. A kit's live component reads `@id` without declaring it —
+    # a live component is given its id, it does not take one as an attribute — and the canvas keeps
+    # only what a component declares, so it drew `@id` as nil. `blog-post-list` writes
+    # `id={"#{@id}-cards"}` and keys its streamed rows by its id, so two live lists on one canvas were
+    # two `-cards` and the same `posts-post-<uuid>` twice: "Multiple IDs detected".
+    test "reads the id its tag carries, as LiveView would hand it", %{conn: conn, site: site} do
+      create_component!(
+        name: "live-list",
+        site_id: site.id,
+        stateful: true,
+        template: ~S|<div id={@id} {@rest} data-role="list"><ul id={"#{@id}-rows"}></ul></div>|,
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}]
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<.component component_name="live-list" site="localhost" id="l1" />) <>
+              ~s(<.component component_name="live-list" site="localhost" id="l2" />)
+        )
+
+      {_canvas, html} = canvas(conn, open_builder(conn, page))
+
+      assert html =~ ~s(id="l1-rows"), "the first list drew its own id as nothing"
+      assert html =~ ~s(id="l2-rows"), "the second list drew its own id as nothing"
+      refute html =~ ~s(id="-rows"), "an id built from a nil `@id` is the same on every list"
+    end
+
     test "the wrapper says which kind it is", %{conn: conn, page: page} do
       view = open_builder(conn, page)
       {_canvas, html} = canvas(conn, view)

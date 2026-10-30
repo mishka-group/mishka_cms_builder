@@ -3572,8 +3572,10 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     name = Node.component_name(node)
     scope = component_site(node, site)
 
-    module = CompilerHelpers.module_name(name, scope, "Component")
+    name |> CompilerHelpers.module_name(scope, "Component") |> stateful_module?()
+  end
 
+  defp stateful_module?(module) do
     Code.ensure_loaded?(module) and function_exported?(module, :__component_information__, 1) and
       module.__component_information__([:private, :stateful]) == true
   end
@@ -3605,12 +3607,33 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     |> put_globals(node, Map.merge(declared, @wrapper_attrs), global_key(specs))
     |> put_form_fields(node, tree, declared)
     |> put_unresolved_kit(node, specs, declared)
+    |> put_live_id(node, module)
     |> Map.merge(slot_assigns(node, tree, assigns))
     |> put_component_class(node, module)
     |> Map.put(@wrapper_attrs["component_name"], name)
     |> Map.put(@wrapper_attrs["site"], scope)
     |> tracked()
   end
+
+  # A LIVE COMPONENT IS HANDED ITS ID, it does not declare one: LiveView gives the `id` of
+  # `live_component/1` to the component as `@id`, and the published page's dispatch does exactly
+  # that. The canvas keeps only what a component DECLARES, so a kit's live component drew `@id` as
+  # nil here — `blog-post-list` writes `id={"#{@id}-cards"}` and keys its streamed rows by its id, so
+  # two live lists on one canvas were two `-cards` and the same `posts-post-<uuid>` twice.
+  #
+  # So the id the editor minted on drop is read the way the dispatch reads it. A function component
+  # takes an id only when it declares one, which `component_attr/2` has already carried.
+  defp put_live_id(assigns_map, node, module) do
+    with true <- stateful_module?(module),
+         [id] <- live_id(Node.attr(node, "id")) do
+      Map.put_new(assigns_map, :id, id)
+    else
+      _function_component_or_no_id -> assigns_map
+    end
+  end
+
+  defp live_id(nil), do: []
+  defp live_id(value), do: value |> attr_value() |> Enum.filter(&(is_binary(&1) and &1 != ""))
 
   # `put_unresolved/4` for a kit component: an attribute the author wrote as an expression the canvas
   # cannot evaluate, which the kit declares with no default, still reaches the template as a key.
