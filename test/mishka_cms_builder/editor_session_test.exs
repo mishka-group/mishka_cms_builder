@@ -40,6 +40,28 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
     session
   end
 
+  @pills %{
+    name: "pills",
+    attrs: [
+      %{"name" => "input_name", "type" => "string", "opts" => %{"default" => nil}},
+      %{"name" => "input_value", "type" => "string", "opts" => %{"default" => nil}}
+    ],
+    slots: []
+  }
+
+  @term_row %{
+    name: "term-row",
+    attrs: [
+      %{"name" => "terms", "type" => "any", "opts" => %{"default" => []}},
+      %{"name" => "limit", "type" => "any", "opts" => %{"default" => 3}},
+      %{"name" => "open", "type" => "boolean", "opts" => %{"default" => true}},
+      %{"name" => "kind", "type" => "atom", "opts" => %{"default" => :info}}
+    ],
+    slots: []
+  }
+
+  defp component(session), do: Enum.find(Tree.walk(session.tree), &(&1.kind == :component))
+
   defp find(session, tag), do: Enum.find(Tree.walk(session.tree), &(&1.tag == tag))
   defp html(session), do: Serializer.serialize(session.tree)
   defp parent_of(session, id), do: Tree.get(session.tree, id).parent_id
@@ -336,6 +358,89 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
         })
 
       assert html(session) =~ ~s(class="@lead")
+    end
+
+    # WORDS TYPED OVER A FORM FIELD'S BINDING. The box showed `f[:field].value`, the sweep typed
+    # `E2E-0` into it, and it was stored as `{E2E - 0}` — the published page answered HTTP 500.
+    test "words typed over a bound property are stored as words" do
+      session =
+        open(
+          ~S(<.component component_name="pills" site="Global" input_value={f[:pills].value} />),
+          %{components: [@pills]}
+        )
+
+      node = component(session)
+
+      {:ok, session} =
+        EditorSession.apply_op(session.token, %{
+          kind: :set_attr,
+          node_id: node.id,
+          name: "input_value",
+          value: "E2E-0"
+        })
+
+      assert Node.attr(component(session), "input_value") == {:string, "E2E-0"}
+    end
+
+    # A LIST CANNOT BE TYPED. `blog-term-row` maps over `terms`, declared `any` with `default: []`;
+    # the words typed into it were a string, and the component raised on the canvas and on the
+    # published page.
+    test "text typed into a property that takes a list is refused, and says so" do
+      session =
+        open(~S(<.component component_name="term-row" site="Global" />), %{
+          components: [@term_row]
+        })
+
+      node = component(session)
+
+      assert {:error, sentence} =
+               EditorSession.apply_op(session.token, %{
+                 kind: :set_attr,
+                 node_id: node.id,
+                 name: "terms",
+                 value: "E2E-0"
+               })
+
+      assert sentence =~ "Terms takes a list"
+      assert {:ok, session} = EditorSession.fetch(session.token)
+      assert Node.attr(component(session), "terms") == nil
+
+      # Stored as plain text from the expression's mark, too.
+      assert {:error, _sentence} =
+               EditorSession.apply_op(session.token, %{
+                 kind: :set_attr,
+                 node_id: node.id,
+                 name: "terms",
+                 value: "@terms",
+                 value_kind: "string"
+               })
+    end
+
+    test "a number, a switch and an atom are written as HEEx spells them" do
+      session =
+        open(~S(<.component component_name="term-row" site="Global" />), %{
+          components: [@term_row]
+        })
+
+      node = component(session)
+
+      for {name, typed} <- [{"limit", "7"}, {"open", "false"}, {"kind", "danger"}] do
+        {:ok, _session} =
+          EditorSession.apply_op(session.token, %{
+            kind: :set_attr,
+            node_id: node.id,
+            name: name,
+            value: typed
+          })
+      end
+
+      {:ok, session} = EditorSession.fetch(session.token)
+      written = component(session)
+
+      assert Node.attr(written, "limit") == {:expr, "7"}
+      assert Node.attr(written, "open") == {:expr, "false"}
+      assert Node.attr(written, "kind") == {:expr, ":danger"}
+      assert html(session) =~ ~S(limit={7})
     end
 
     test "sets text" do

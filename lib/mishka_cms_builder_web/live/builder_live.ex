@@ -6156,9 +6156,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp save(socket, stage) do
-    case missing_required(socket) ++ missing_slots(socket) do
-      [] -> save_whole(socket, stage)
-      missing -> refuse_save(socket, missing)
+    case {missing_required(socket) ++ missing_slots(socket), mistyped(socket)} do
+      {[], []} -> save_whole(socket, stage)
+      {[], mistyped} -> refuse_mistyped(socket, mistyped)
+      {missing, _mistyped} -> refuse_save(socket, missing)
     end
   end
 
@@ -6263,6 +6264,30 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     for node <- Tree.walk(editor.tree),
         {:slot, name} <- Inspector.unmet(node, editor.tree, components),
         do: "#{Node.component_name(node)}.:#{name}"
+  end
+
+  # TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP. The Inspector refuses to write one, so this is
+  # a page that arrived holding it — a hand edit, an import, a draft from before the refusal — and it
+  # renders the component as a box on the published page.
+  defp mistyped(%{assigns: %{editor: editor}}) do
+    components = component_lookup(editor)
+
+    for node <- Tree.walk(editor.tree),
+        {:type, name} <- Inspector.unmet(node, editor.tree, components),
+        do: "#{owner_label(node)}.#{name}"
+  end
+
+  defp refuse_mistyped(socket, mistyped) do
+    put_flash(
+      socket,
+      :error,
+      ngettext(
+        "Not saved — %{fields} holds text where the component takes a list or a map. Remove it in the Inspector to use the default.",
+        "Not saved — %{fields} hold text where the component takes a list or a map. Remove them in the Inspector to use the defaults.",
+        length(mistyped),
+        fields: Enum.join(Enum.uniq(mistyped), ", ")
+      )
+    )
   end
 
   defp component_lookup(%{components: components}) when is_list(components),

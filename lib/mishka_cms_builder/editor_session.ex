@@ -358,8 +358,9 @@ defmodule MishkaCmsBuilder.EditorSession do
       token,
       fn session ->
         with {:ok, built} <- Op.build(params),
-             {:ok, op} <- Events.before_node(built.kind, built, node_meta(session)),
-             :ok <- authorize(session, op),
+             {:ok, before} <- Events.before_node(built.kind, built, node_meta(session)),
+             :ok <- authorize(session, before),
+             {:ok, op} <- check_type(session, before),
              {base, op} = first_landing(session.tree, op),
              :ok <- check_containment(%{session | tree: base}, op),
              {:ok, tree, focus} <- run(op, base) do
@@ -819,6 +820,57 @@ defmodule MishkaCmsBuilder.EditorSession do
       false -> :ok
     end
   end
+
+  # A FREE-TEXT WRITE IS WRITTEN AS WHAT THE PROPERTY TAKES. A box posts what was typed with no
+  # kind, or as text, and the component on the other end may take a list, a number, a switch or an
+  # atom: `blog-term-row` maps over `terms`, so the words typed into it were a string that raised on
+  # the canvas and answered HTTP 500 on the published page. `Inspector.typed/3` reads the property's
+  # declaration and either writes the value as HEEx spells it or refuses it with the sentence that
+  # says what it takes, so the document never holds it. An attribute nothing declares, and a write
+  # that states it is an expression or a switch, is left as it came.
+  defp check_type(session, %{kind: :set_attr, value_kind: kind, value: value} = op)
+       when kind in [nil, :string] and is_binary(value) and value != "" do
+    with %Node{} = node <- Tree.get(session.tree, op.node_id),
+         %{} = attr <- declared_attr(node, session, op.name) do
+      held = held(kind, node, op.name)
+
+      case Inspector.typed(attr, value, held) do
+        {:ok, {value_kind, written}} -> {:ok, %{op | value_kind: value_kind, value: written}}
+        {:error, sentence} -> {:error, sentence}
+      end
+    else
+      _undeclared -> {:ok, op}
+    end
+  end
+
+  defp check_type(_session, op), do: {:ok, op}
+
+  # A write that says it is text is text, whatever the box was showing; one that says nothing is
+  # read against what the node holds.
+  defp held(:string, _node, _name), do: nil
+  defp held(nil, node, name), do: Node.attr(node, name)
+
+  # A component's property is declared on its palette entry; a slot's, in the slot's block on the
+  # component that owns it.
+  defp declared_attr(%Node{kind: :component} = node, session, name) do
+    case furnishing_entry(node, session) do
+      %{} = entry -> Enum.find(Inspector.attrs(entry), &(Inspector.name(&1) == name))
+      nil -> nil
+    end
+  end
+
+  defp declared_attr(%Node{kind: :slot} = node, session, name) do
+    with %Node{} = parent <- Tree.get(session.tree, node.parent_id),
+         %{} = entry <- furnishing_entry(parent, session),
+         %{} = slot <-
+           Enum.find(Inspector.slots(entry), &(Inspector.name(&1) == Node.slot_name(node))) do
+      Enum.find(Inspector.attrs(slot), &(Inspector.name(&1) == name))
+    else
+      _undeclared -> nil
+    end
+  end
+
+  defp declared_attr(_node, _session, _name), do: nil
 
   defp check_containment(session, %{kind: kind} = op) when kind in [:insert, :move] do
     case subject(session, op) do

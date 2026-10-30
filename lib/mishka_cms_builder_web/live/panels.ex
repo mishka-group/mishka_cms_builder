@@ -4400,6 +4400,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       assigns
       |> assign(:required?, Inspector.required?(assigns.attr))
       |> then(&assign(&1, :missing?, &1.required? and blank?(&1.value)))
+      |> assign(:mistyped?, mistyped?(assigns.attr, assigns.node, assigns.name))
 
     ~H"""
     <%!-- One property. It carries its own state rather than leaving it to be inferred: a violet dot
@@ -4410,7 +4411,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       id={"pb-attr-#{@node.id}-#{@name}"}
       class={[
         "scroll-mt-4 rounded-[10px] border px-2.5 py-2",
-        (@missing? && "border-[#e8b7b1] bg-[#fdf6f5]") ||
+        ((@missing? or @mistyped?) && "border-[#e8b7b1] bg-[#fdf6f5]") ||
           ((@focus == @name && "border-[#c3c1f0] bg-[#f7f6ff]") || "border-[#ecebe6] bg-white")
       ]}
       phx-mounted={@focus == @name && JS.dispatch("pb:reveal")}
@@ -4481,7 +4482,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             only by hovering a row you had already added — invisible at the one moment it is most
             needed, which is while you are deciding whether you want the property at all. --%>
       <p
-        :if={@doc not in [nil, ""] and !@missing?}
+        :if={@doc not in [nil, ""] and !@missing? and !@mistyped?}
         class="mt-1.5 text-[10px] font-medium leading-[1.5] text-[#8a877f]"
       >
         {@doc}
@@ -4489,6 +4490,15 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
       <p :if={@missing?} class="mt-1.5 text-[10px] font-semibold text-[#c0473d]">
         {gettext("Required — the page cannot be saved without it.")}
+      </p>
+      <p
+        :if={@mistyped?}
+        id={"pb-attr-mistyped-#{@node.id}-#{@name}"}
+        class="mt-1.5 text-[10px] font-semibold text-[#c0473d]"
+      >
+        {gettext(
+          "This holds text where the component takes a list or a map, so the page cannot be saved with it. Remove it to go back to the default."
+        )}
       </p>
       <p
         :if={!@missing? and is_nil(@value) and @default not in [nil, ""]}
@@ -4515,7 +4525,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # string attribute that genuinely wants quotes — `chelekom-range-field`'s value among them. The
   # three numeric types are the ones `Inspector.widget/2` itself routes to a number box.
   defp number_kind(attr) do
-    (Inspector.type(attr) in ~w(integer float pos_integer) && "expr") || nil
+    (Inspector.value_type(attr) in ~w(integer float pos_integer) && "expr") || nil
   end
 
   defp option_value(value, true), do: ":#{value}"
@@ -4532,6 +4542,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # else shows itself.
   defp shown(%{icon_map?: true}, value), do: Inspector.icon_in(value)
   defp shown(_assigns, value), do: value
+
+  # TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP, the same reading `Inspector.unmet/3` gives the
+  # publish refusal.
+  defp mistyped?(attr, node, name) do
+    Inspector.value_type(attr) in ~w(list keyword_list map) and
+      (match?({:string, _text}, Node.attr(node, name)) or Node.attr(node, name) == :boolean)
+  end
 
   defp blank?(nil), do: true
   defp blank?(value) when is_binary(value), do: String.trim(value) == ""
@@ -5037,7 +5054,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     assigns =
       case Collection.read(assigns.node, assigns.name, assigns.default) do
         {:ok, items} -> assigns |> assign(:items, items) |> assign(:bound?, false)
-        :error -> assigns |> assign(:items, []) |> assign(:bound?, true)
+        :error -> assigns |> assign(:items, []) |> assign(:bound?, not assigns.mistyped?)
       end
 
     ~H"""
@@ -5048,7 +5065,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       />
     </p>
 
-    <div :if={!@bound?} class="flex flex-col gap-1.5">
+    <div :if={!@bound? and !@mistyped?} class="flex flex-col gap-1.5">
       <.collection_item
         :for={{item, index} <- Enum.with_index(@items)}
         node={@node}

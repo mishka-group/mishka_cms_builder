@@ -2777,6 +2777,77 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
     end
   end
 
+  defp term_row_page(conn, site, terms) do
+    page =
+      create_page!(
+        site_id: site.id,
+        template:
+          ~s(<section id="hero"><.component component_name="term-row" site="#{site.name}"#{terms} /></section>)
+      )
+
+    {:ok, view, _html} = open_builder(conn, page)
+    node = component_node(view, "term-row")
+    render_click(view, "select", %{"id" => node.id})
+    view |> element("#pb-lefttab-inspector") |> render_click()
+    {view, node}
+  end
+
+  # A PROPERTY THAT TAKES A LIST. `blog-term-row` declares `terms` as `any` with `default: []` and
+  # maps over it. The Inspector drew a textarea, the words typed into it reached the component as a
+  # string, and the published page answered HTTP 500 while the canvas said "could not render".
+  describe "a property that takes a list" do
+    setup %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "term-row",
+        attrs: [
+          %{
+            "name" => "terms",
+            "type" => "any",
+            "opts" => %{
+              "default" => [],
+              "doc" => String.duplicate("What to draw, a list of maps carrying a name. ", 3)
+            }
+          }
+        ],
+        template: ~S|<p class="probe-terms"><span :for={term <- @terms}>{term}</span></p>|
+      )
+
+      %{conn: conn, site: site}
+    end
+
+    test "is edited as a list, and typed text is refused with a sentence", %{
+      conn: conn,
+      site: site
+    } do
+      {view, node} = term_row_page(conn, site, "")
+
+      assert has_element?(view, "#pb-collection-add-#{node.id}-terms")
+      refute has_element?(view, "textarea#pb-attr-terms")
+
+      html =
+        render_click(view, "op", %{
+          "kind" => "set_attr",
+          "node_id" => node.id,
+          "name" => "terms",
+          "value" => "E2E-0"
+        })
+
+      assert html =~ "Terms takes a list"
+      assert attr_of(view, node.id, "terms") == nil
+    end
+
+    test "a page holding text in it says so, and is not published", %{conn: conn, site: site} do
+      {view, node} = term_row_page(conn, site, ~s( terms="E2E-0"))
+
+      assert has_element?(view, "#pb-attr-mistyped-#{node.id}-terms")
+
+      html = publish!(view)
+      assert html =~ "Not saved"
+      assert html =~ "term-row.terms holds text where the component takes a list or a map"
+    end
+  end
+
   # THE BOX HAD NO IDEA WHAT THE NODE ALREADY HELD. It is free text, it sends a name and no value,
   # and the write went straight to the session with `value: ""` — past the rule that turns an empty
   # value into a removal, so the empty one landed. A string attribute came back as `color=""`, which
