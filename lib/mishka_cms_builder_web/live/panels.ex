@@ -5115,27 +5115,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       />
     </p>
 
-    <div :if={!@bound? and !@mistyped?} class="flex flex-col gap-1.5">
-      <.collection_item
-        :for={{item, index} <- Enum.with_index(@items)}
-        node={@node}
-        name={@name}
-        index={index}
-        item={item}
-        options={sibling_options(@node, @name)}
-      />
-
-      <button
-        type="button"
-        id={"pb-collection-add-#{@node.id}-#{@name}"}
-        phx-click="collection_add"
-        phx-value-node_id={@node.id}
-        phx-value-name={@name}
-        class="flex h-[34px] items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-[#cfcdf0] bg-[#faf9ff] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
-      >
-        <.icon name={:plus} size={12} /> {gettext("Add")}
-      </button>
-    </div>
+    <.collection_list
+      :if={!@bound? and !@mistyped?}
+      node={@node}
+      name={@name}
+      items={@items}
+      options={sibling_options(@node, @name)}
+    />
     """
   end
 
@@ -5174,8 +5160,62 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   defp widget_control(assigns), do: plain_input(assigns)
 
+  # HOW DEEP THE PANEL DRAWS A COLLECTION INSIDE A COLLECTION. A tree's node holds its children and
+  # each child its own; three levels inside the attribute's own list is a four-level outline, and past
+  # that the cards are too narrow to type into, so a deeper list says where it is edited instead.
+  @collection_depth 3
+
   attr(:node, :map, required: true)
   attr(:name, :string, required: true)
+  attr(:items, :list, required: true)
+
+  attr(:path, :list,
+    default: [],
+    doc: "the indexes and fields that lead to this list; [] for the attribute's own"
+  )
+
+  attr(:depth, :integer, default: 0)
+  attr(:options, :list, default: [])
+
+  # A ROW PER ITEM AND A TILE TO ADD ONE, at every level. The attribute's own list and a list inside
+  # one of its items are drawn by this same component, and `path` is what tells the events which list
+  # they are for.
+  defp collection_list(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-1.5">
+      <.collection_item
+        :for={{item, index} <- Enum.with_index(@items)}
+        node={@node}
+        name={@name}
+        path={@path}
+        depth={@depth}
+        index={index}
+        item={item}
+        options={@options}
+      />
+
+      <button
+        type="button"
+        id={"pb-collection-add-#{@node.id}-#{@name}#{path_suffix(@path)}"}
+        phx-click="collection_add"
+        phx-value-node_id={@node.id}
+        phx-value-name={@name}
+        phx-value-path={path_value(@path)}
+        class={[
+          "flex items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-[#cfcdf0] bg-[#faf9ff] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]",
+          (@path == [] && "h-[34px] text-[11px]") || "h-[26px] text-[10.5px]"
+        ]}
+      >
+        <.icon name={:plus} size={12} /> {gettext("Add")}
+      </button>
+    </div>
+    """
+  end
+
+  attr(:node, :map, required: true)
+  attr(:name, :string, required: true)
+  attr(:path, :list, default: [])
+  attr(:depth, :integer, default: 0)
   attr(:index, :integer, required: true)
   attr(:item, :any, required: true)
   attr(:options, :list, default: [])
@@ -5191,22 +5231,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         <span class="font-['Space_Grotesk'] text-[10px] font-bold text-[#a8a5a0]">
           {@index + 1}
         </span>
-        <button
-          type="button"
-          id={"pb-collection-del-#{@node.id}-#{@name}-#{@index}"}
-          phx-click="collection_remove"
-          phx-value-node_id={@node.id}
-          phx-value-name={@name}
-          phx-value-index={@index}
-          title={gettext("Remove")}
-          class="grid size-[18px] place-items-center rounded-[5px] text-[#a8a5a0] hover:bg-[#fdf6f5] hover:text-[#d5544b]"
-        >
-          <.icon name={:trash} size={11} />
-        </button>
+        <.collection_remove node={@node} name={@name} path={@path} index={@index} size={11} />
       </div>
 
       <div
-        :if={previewable?(picture(@item))}
+        :if={@path == [] and previewable?(picture(@item))}
         id={"pb-collection-thumb-#{@node.id}-#{@name}-#{@index}"}
         phx-hook="MediaThumb"
         data-loaded-background="#fff"
@@ -5218,7 +5247,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         <img src={picture(@item)} alt="" class="relative h-full w-full object-contain" />
       </div>
 
-      <div :for={key <- @keys} class="flex items-center gap-1.5">
+      <div
+        :for={key <- @keys}
+        class={[
+          "flex gap-1.5",
+          (nested?(Map.get(@item, key)) && "flex-col items-stretch") || "items-center"
+        ]}
+      >
         <span class="w-[58px] flex-none truncate text-[10px] font-semibold text-[#8a877f]">
           {Inspector.label(to_string(key))}
         </span>
@@ -5226,6 +5261,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         <.collection_field
           node={@node}
           name={@name}
+          path={@path}
+          depth={@depth}
           index={@index}
           key={key}
           value={Map.get(@item, key)}
@@ -5233,7 +5270,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         />
 
         <button
-          :if={picture_key?(key)}
+          :if={@path == [] and picture_key?(key)}
           type="button"
           id={"pb-collection-pick-#{@node.id}-#{@name}-#{@index}"}
           phx-click="pick_media"
@@ -5262,32 +5299,47 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       <.collection_field
         node={@node}
         name={@name}
+        path={@path}
+        depth={@depth}
         index={@index}
         key="__key"
         value={@pair_key}
-        options={[]}
       />
       <span class="flex-none text-[11px] font-bold text-[#a8a5a0]">→</span>
       <.collection_field
         node={@node}
         name={@name}
+        path={@path}
+        depth={@depth}
         index={@index}
         key="__value"
         value={@pair_value}
-        options={[]}
       />
-      <button
-        type="button"
-        id={"pb-collection-del-#{@node.id}-#{@name}-#{@index}"}
-        phx-click="collection_remove"
-        phx-value-node_id={@node.id}
-        phx-value-name={@name}
-        phx-value-index={@index}
-        title={gettext("Remove")}
-        class="grid size-8 flex-none place-items-center rounded-[8px] text-[#a8a5a0] hover:bg-[#fdf6f5] hover:text-[#d5544b]"
-      >
-        <.icon name={:trash} size={12} />
-      </button>
+      <.collection_remove node={@node} name={@name} path={@path} index={@index} size={12} />
+    </div>
+    """
+  end
+
+  # A PLACE EACH, WHATEVER THE SIZE. `chelekom-headless-segmented-control` takes `{label, value,
+  # disabled}` beside its plain words, and the whole tuple in one box was written back as the text
+  # of it — a string where the control reads a tuple. Each place is edited as what it holds: words
+  # as words, a switch as a switch.
+  defp collection_item(%{item: item} = assigns) when is_tuple(item) do
+    assigns = assign(assigns, :places, item |> Tuple.to_list() |> Enum.with_index())
+
+    ~H"""
+    <div class="flex items-center gap-1.5">
+      <.collection_field
+        :for={{value, place} <- @places}
+        node={@node}
+        name={@name}
+        path={@path}
+        depth={@depth}
+        index={@index}
+        key={"__#{place}"}
+        value={value}
+      />
+      <.collection_remove node={@node} name={@name} path={@path} index={@index} size={12} />
     </div>
     """
   end
@@ -5298,46 +5350,126 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       <.collection_field
         node={@node}
         name={@name}
+        path={@path}
+        depth={@depth}
         index={@index}
         key={nil}
         value={@item}
-        options={[]}
       />
-      <button
-        type="button"
-        id={"pb-collection-del-#{@node.id}-#{@name}-#{@index}"}
-        phx-click="collection_remove"
-        phx-value-node_id={@node.id}
-        phx-value-name={@name}
-        phx-value-index={@index}
-        title={gettext("Remove")}
-        class="grid size-8 flex-none place-items-center rounded-[8px] text-[#a8a5a0] hover:bg-[#fdf6f5] hover:text-[#d5544b]"
-      >
-        <.icon name={:trash} size={12} />
-      </button>
+      <.collection_remove node={@node} name={@name} path={@path} index={@index} size={12} />
     </div>
     """
   end
 
   attr(:node, :map, required: true)
   attr(:name, :string, required: true)
+  attr(:path, :list, default: [])
+  attr(:index, :integer, required: true)
+  attr(:size, :integer, default: 12)
+
+  defp collection_remove(assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={"pb-collection-del-#{@node.id}-#{@name}#{path_suffix(@path)}-#{@index}"}
+      phx-click="collection_remove"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      phx-value-path={path_value(@path)}
+      phx-value-index={@index}
+      title={gettext("Remove")}
+      class={[
+        "grid flex-none place-items-center text-[#a8a5a0] hover:bg-[#fdf6f5] hover:text-[#d5544b]",
+        (@size == 11 && "size-[18px] rounded-[5px]") || "size-8 rounded-[8px]"
+      ]}
+    >
+      <.icon name={:trash} size={@size} />
+    </button>
+    """
+  end
+
+  attr(:node, :map, required: true)
+  attr(:name, :string, required: true)
+  attr(:path, :list, default: [])
+  attr(:depth, :integer, default: 0)
   attr(:index, :integer, required: true)
   attr(:key, :any, default: nil)
   attr(:value, :any, default: nil)
   attr(:options, :list, default: [])
 
-  # A CATEGORY IS ONE OF THE FILTERS, not a word to spell again. The options come off the sibling
-  # attribute on the same node, so a filter renamed in the list above is the list this offers.
-  defp collection_field(assigns) do
+  # EACH FIELD IS EDITED AS WHAT IT HOLDS. A list or a map inside an item is a collection of its
+  # own and is drawn as one, so a tree's `children` are cards under their node rather than one line
+  # of their source text, whose write turned them into a string and took the tree down. A switch is
+  # a checkbox; words and numbers are a box; anything else — an atom, a tuple inside a card — is the
+  # component's own and is shown, not offered.
+  defp collection_field(%{value: value} = assigns) when is_list(value) or is_map(value) do
+    assigns =
+      assigns
+      |> assign(:inner_path, assigns.path ++ [assigns.index, field_key(assigns.key)])
+      |> assign(:inner, (is_map(value) && Enum.to_list(value)) || value)
+      |> assign(:shown?, assigns.depth < @collection_depth)
+
+    ~H"""
+    <div
+      :if={@shown?}
+      data-role="pb-collection-nested"
+      class="min-w-0 flex-1 border-s-2 border-[#ecebe6] ps-2"
+    >
+      <.collection_list
+        node={@node}
+        name={@name}
+        items={@inner}
+        path={@inner_path}
+        depth={@depth + 1}
+      />
+    </div>
+
+    <p
+      :if={!@shown?}
+      data-role="pb-collection-too-deep"
+      class="min-w-0 flex-1 rounded-[7px] bg-[#faf9f6] px-1.5 py-1 text-[10px] font-medium text-[#8a877f]"
+    >
+      {gettext("Nested too deep to edit here. Edit it in the code.")}
+    </p>
+    """
+  end
+
+  defp collection_field(%{value: value} = assigns) when is_boolean(value) do
     ~H"""
     <form
-      id={"pb-collection-form-#{@node.id}-#{@name}-#{@index}-#{@key || "item"}"}
+      id={"pb-collection-form-#{@node.id}-#{@name}#{path_suffix(@path)}-#{@index}-#{field_key(@key) || "item"}"}
+      phx-change="collection_set"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      phx-value-path={path_value(@path)}
+      phx-value-index={@index}
+      phx-value-key={field_key(@key)}
+      class="flex-none"
+    >
+      <input type="hidden" name="value" value="false" />
+      <input
+        type="checkbox"
+        name="value"
+        value="true"
+        checked={@value}
+        class="size-[14px] cursor-pointer accent-[#4f4bcc]"
+      />
+    </form>
+    """
+  end
+
+  defp collection_field(%{value: value} = assigns)
+       when is_binary(value) or is_number(value) or is_nil(value) do
+    ~H"""
+    <form
+      id={"pb-collection-form-#{@node.id}-#{@name}#{path_suffix(@path)}-#{@index}-#{field_key(@key) || "item"}"}
       phx-change="collection_set"
       phx-submit="collection_set"
       phx-value-node_id={@node.id}
       phx-value-name={@name}
+      phx-value-path={path_value(@path)}
       phx-value-index={@index}
-      phx-value-key={@key}
+      phx-value-key={field_key(@key)}
       class="min-w-0 flex-1"
     >
       <div :if={@options != []} class="relative">
@@ -5364,6 +5496,36 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     </form>
     """
   end
+
+  defp collection_field(assigns) do
+    ~H"""
+    <span
+      title={gettext("Set by the component, not here")}
+      class="min-w-0 flex-1 truncate rounded-[7px] bg-[#f2f1ec] px-1.5 py-1 font-['Space_Grotesk'] text-[10.5px] font-semibold text-[#8a877f]"
+    >
+      {printable(@value)}
+    </span>
+    """
+  end
+
+  # A map's key is any term and a field name is text; `phx-value-key` and the path carry text.
+  defp field_key(nil), do: nil
+  defp field_key(key) when is_binary(key), do: key
+  defp field_key(key) when is_atom(key), do: Atom.to_string(key)
+  defp field_key(key), do: inspect(key)
+
+  defp nested?(value), do: is_list(value) or is_map(value)
+
+  # The path as the events read it, and absent for the attribute's own list, so every control on it
+  # sends what it always did.
+  defp path_value([]), do: nil
+  defp path_value(path), do: Jason.encode!(path)
+
+  # A list inside an item has controls of its own, and their DOM ids must not be the outer list's.
+  defp path_suffix([]), do: ""
+
+  defp path_suffix(path),
+    do: "-" <> (path |> Enum.join("-") |> String.replace(~r/[^A-Za-z0-9_-]/, "_"))
 
   # WHATEVER IS IN THERE, AS A WORD. A collection is a kit's own data and may hold anything its
   # component reads; the field shows what can be shown and leaves the rest to the expression.

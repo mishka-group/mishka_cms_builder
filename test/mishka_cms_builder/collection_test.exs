@@ -128,6 +128,22 @@ defmodule MishkaCmsBuilder.CollectionTest do
     test "and a new row is an empty pair" do
       assert Collection.blank([{"kind", "banner"}]) == {"", ""}
     end
+
+    # Its pairs are what the panel edits, and a map is what goes back: written as the list of pairs it
+    # was edited as, `Phoenix.Flash.get(@flash, :info)` read a list.
+    test "and is written back a map" do
+      node = parsed(~S|<.component component_name="x" params={%{"kind" => "banner"}} />|)
+
+      assert {:ok, source} =
+               Collection.update(
+                 node,
+                 "params",
+                 %{},
+                 &Collection.put_side(&1, 0, :value, "toast")
+               )
+
+      assert {%{"kind" => "toast"}, _bindings} = Code.eval_string(source)
+    end
   end
 
   describe "the row a new one starts as" do
@@ -138,6 +154,131 @@ defmodule MishkaCmsBuilder.CollectionTest do
     test "and is a plain value when there is nothing to copy" do
       assert Collection.blank(["One", "Two"]) == ""
       assert Collection.blank([]) == ""
+    end
+
+    # THE REPORTED DEFECT. A tree's node holds its own `children`, and Add copied the first node's
+    # keys as the empty string, so a node added beside one with children carried `children: ""` and
+    # the tree, which iterates a node's children, raised on the canvas.
+    test "keeps a list a list and a map a map" do
+      nodes = [
+        %{
+          label: "Getting started",
+          value: "start",
+          children: [%{label: "Install"}],
+          meta: %{a: 1}
+        }
+      ]
+
+      assert Collection.blank(nodes) == %{label: "", value: "", children: [], meta: %{}}
+    end
+
+    test "and a switch off" do
+      assert Collection.blank([%{label: "Day", disabled: true}]) == %{label: "", disabled: false}
+    end
+
+    # `chelekom-headless-segmented-control` takes `{label, value, disabled}` as well as pairs.
+    test "a tuple of any size is blank in each of its places" do
+      assert Collection.blank(["Day", {"Week", "week", true}]) == {"", "", false}
+    end
+  end
+
+  # A TREE IS A LIST OF NODES THAT HOLD LISTS OF NODES. The panel edits each level in place, and a
+  # path says which list a change is for: the item's index, then the field holding the next list.
+  describe "a collection inside an item" do
+    @tree [
+      %{label: "Overview", value: "overview"},
+      %{
+        label: "Getting started",
+        value: "start",
+        children: [%{label: "Installation", value: "install"}]
+      }
+    ]
+
+    test "one field of a nested item changes and every level around it stays as it was" do
+      changed =
+        Collection.within(
+          @tree,
+          [1, "children"],
+          &Collection.put_in_item(&1, 0, "label", "Setup")
+        )
+
+      assert [_overview, %{children: [%{label: "Setup", value: "install"}]}] = changed
+      assert hd(changed) == hd(@tree)
+    end
+
+    test "an item added to a nested list takes the shape of its siblings" do
+      changed = Collection.add_blank(@tree, [1, "children"])
+
+      assert [_overview, %{children: [_install, %{label: "", value: ""}]}] = changed
+    end
+
+    test "and to an empty one, the shape of the same list elsewhere in the tree" do
+      tree = List.replace_at(@tree, 0, %{label: "Overview", value: "overview", children: []})
+
+      assert [%{children: [%{label: "", value: ""}]}, _start] =
+               Collection.add_blank(tree, [0, "children"])
+    end
+
+    test "an item added at the top keeps a list-valued key a list" do
+      assert [_one, _two, %{label: "", value: "", children: []}] =
+               Collection.add_blank(Enum.reverse(@tree), [])
+    end
+
+    test "a map inside an item is edited as its pairs and stays a map" do
+      items = [%{label: "A", params: %{"page" => "1"}}]
+
+      changed = Collection.within(items, [0, "params"], &Collection.put_side(&1, 0, :value, "2"))
+
+      assert changed == [%{label: "A", params: %{"page" => "2"}}]
+    end
+
+    test "a path that no longer leads anywhere changes nothing" do
+      fun = &Collection.put_in_item(&1, 0, "label", "x")
+
+      assert Collection.within(@tree, [9, "children"], fun) == @tree
+      assert Collection.within(@tree, [0, "children"], fun) == @tree
+      assert Collection.within(@tree, [1, "label"], fun) == @tree
+      assert Collection.within(@tree, ["1", "children"], fun) == @tree
+    end
+  end
+
+  # WHAT THE BOX SENDS IS TEXT; WHAT THE FIELD HOLDS MAY NOT BE. Writing the text as it came is
+  # what turned a node's `children` into a string, so a write is read as the kind of value it replaces,
+  # and one that cannot be read that way is refused.
+  describe "a typed write" do
+    test "into a list or a map is refused, whoever sends it" do
+      items = [%{label: "A", children: [%{label: "B"}], meta: %{a: 1}}]
+
+      assert Collection.put_in_item(items, 0, "children", "[]") == items
+      assert Collection.put_in_item(items, 0, "meta", "%{}") == items
+      assert Collection.put([["a"]], 0, "a") == [["a"]]
+    end
+
+    test "into a switch is a switch" do
+      assert Collection.put_in_item([%{disabled: false}], 0, "disabled", "true") == [
+               %{disabled: true}
+             ]
+
+      assert Collection.put_element([{"Day", "day", true}], 0, 2, "false") == [
+               {"Day", "day", false}
+             ]
+    end
+
+    test "into a number is a number, or nothing" do
+      assert Collection.put_in_item([%{size: 2}], 0, "size", "5") == [%{size: 5}]
+      assert Collection.put_in_item([%{size: 2}], 0, "size", "five") == [%{size: 2}]
+    end
+
+    test "one place of a tuple changes and the others stay" do
+      items = [{"Day", "day", true}, "Week"]
+
+      assert Collection.put_element(items, 0, 0, "Today") == [{"Today", "day", true}, "Week"]
+      assert Collection.put_element(items, 1, 0, "x") == items
+      assert Collection.put_element(items, 0, 7, "x") == items
+    end
+
+    test "an atom is the component's own word and is not retyped" do
+      assert Collection.put_in_item([%{type: :icon}], 0, "type", "text") == [%{type: :icon}]
     end
   end
 

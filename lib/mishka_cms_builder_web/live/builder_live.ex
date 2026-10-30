@@ -4232,18 +4232,27 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # THE WHOLE COLLECTION, REWRITTEN. One `set_attr` per change, so one add, one removal and one edit
   # are each one undo step — and an attribute the editor could not read is left alone rather than
   # replaced with what it made of it.
-  def handle_event("collection_add", %{"node_id" => node_id, "name" => name}, socket) do
-    write_collection(socket, node_id, name, fn items ->
-      Collection.add(items, Collection.blank(items))
-    end)
+  #
+  # A LIST INSIDE AN ITEM IS EDITED WHERE IT IS. A tree's node holds its own `children`, and the panel
+  # draws them as a collection of their own; `path` says which list a change is for, and it is absent
+  # for the attribute's own list.
+  def handle_event("collection_add", %{"node_id" => node_id, "name" => name} = params, socket) do
+    write_collection(socket, node_id, name, &Collection.add_blank(&1, collection_path(params)))
   end
 
   def handle_event(
         "collection_remove",
-        %{"node_id" => node_id, "name" => name, "index" => index},
+        %{"node_id" => node_id, "name" => name, "index" => index} = params,
         socket
       ) do
-    write_collection(socket, node_id, name, &Collection.remove(&1, to_index(index)))
+    write_collection(
+      socket,
+      node_id,
+      name,
+      &Collection.within(&1, collection_path(params), fn list ->
+        Collection.remove(list, to_index(index))
+      end)
+    )
   end
 
   def handle_event(
@@ -4254,14 +4263,18 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     at = to_index(index)
 
     change =
-      case params["key"] do
-        blank when blank in [nil, ""] -> &Collection.put(&1, at, value)
-        "__key" -> &Collection.put_side(&1, at, :key, value)
-        "__value" -> &Collection.put_side(&1, at, :value, value)
-        key -> &Collection.put_in_item(&1, at, key, value)
+      case {params["key"], Collection.place(params["key"])} do
+        {blank, _place} when blank in [nil, ""] -> &Collection.put(&1, at, value)
+        {_key, place} when is_integer(place) -> &Collection.put_element(&1, at, place, value)
+        {key, nil} -> &Collection.put_in_item(&1, at, key, value)
       end
 
-    write_collection(socket, node_id, name, change)
+    write_collection(
+      socket,
+      node_id,
+      name,
+      &Collection.within(&1, collection_path(params), change)
+    )
   end
 
   # THE SAME LIBRARY, FOR THE ONE PLACE A PICTURE IS NOT AN ATTRIBUTE. A hero's photograph is a
@@ -5198,14 +5211,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp write_collection(socket, node_id, name, change) do
     with %{} = editor <- socket.assigns[:editor],
          %Node{} = node <- Tree.get(editor.tree, node_id),
-         {:ok, items} <- Collection.read(node, name, declared_default(socket, node, name)) do
+         {:ok, source} <-
+           Collection.update(node, name, declared_default(socket, node, name), change) do
       handle_event(
         "op",
         %{
           "kind" => "set_attr",
           "node_id" => node_id,
           "name" => name,
-          "value" => items |> change.() |> Collection.write(),
+          "value" => source,
           "value_kind" => "expr"
         },
         socket
@@ -5214,6 +5228,20 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       _unreadable -> {:noreply, socket}
     end
   end
+
+  # The list inside the attribute's own one a change is for, as the panel wrote it: an item's index,
+  # then the field holding the next list. No path is the attribute's own list.
+  defp collection_path(%{"path" => path}) when is_binary(path) and path != "" do
+    with {:ok, steps} when is_list(steps) <- Jason.decode(path),
+         true <- Enum.all?(steps, &(is_binary(&1) or (is_integer(&1) and &1 >= 0))) do
+      steps
+    else
+      # A path that cannot be read leads nowhere, and `Collection.within/3` changes nothing there.
+      _unreadable -> ["unreadable"]
+    end
+  end
+
+  defp collection_path(_params), do: []
 
   defp declared_default(socket, node, name) do
     with %{} = editor <- socket.assigns[:editor],

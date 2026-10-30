@@ -40,6 +40,26 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
 
   @placed ~S|<.component component_name="picky" site="localhost" filters={["Branding", "Print"]} media={[%{src: "/images/one.jpg", alt: "a photograph", category: "Branding"}]} />|
 
+  # Chelekom's headless tree and segmented control, cut down to the attribute the panel edits. The
+  # nodes are the kit's furnished outline as it shipped before mishka_chelekom 51c329c2 put a leaf
+  # first to keep Add from crashing, so the node Add copies is one with children.
+  @outline ~S"""
+  <ul>
+    <li :for={node <- @nodes}>
+      {node.label}
+      <ul :if={node[:children]}><li :for={child <- node.children}>{child.label}</li></ul>
+    </li>
+  </ul>
+  """
+
+  @segments ~S"""
+  <div role="radiogroup"><label :for={option <- @options}>{inspect(option)}</label></div>
+  """
+
+  @placed_tree ~S|<.component component_name="outline" site="localhost" nodes={[%{label: "Getting started", value: "start", children: [%{label: "Installation", value: "install"}, %{label: "First page", value: "first-page"}]}, %{label: "Reference", value: "reference"}]} />|
+
+  @placed_segments ~S|<.component component_name="segments" site="localhost" options={["Day", {"Week", "week"}, {"Month", "month", true}]} />|
+
   setup %{conn: conn} do
     SiteState.clear()
     Application.put_env(:ash_json_api, MishkaCmsCore.Accounts, router: MishkaCmsWeb.Router)
@@ -62,14 +82,33 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
       ]
     )
 
+    create_component!(
+      name: "outline",
+      site_id: site.id,
+      template: @outline,
+      attrs: [%{"name" => "nodes", "type" => "list", "opts" => %{"required" => true}}]
+    )
+
+    create_component!(
+      name: "segments",
+      site_id: site.id,
+      template: @segments,
+      attrs: [%{"name" => "options", "type" => "list", "opts" => %{"required" => true}}]
+    )
+
     page = create_page!(site_id: site.id, template: @placed)
+    nested = create_page!(site_id: site.id, template: @placed_tree <> @placed_segments)
 
     conn =
       conn
       |> Map.put(:host, "localhost")
       |> Map.update!(:req_headers, &[{"host", "localhost"} | List.keydelete(&1, "host", 0)])
 
-    {:ok, conn: log_in(conn, admin("collection-field@example.com")), site: site, page: page}
+    {:ok,
+     conn: log_in(conn, admin("collection-field@example.com")),
+     site: site,
+     page: page,
+     nested: nested}
   end
 
   defp cache_site(site) do
@@ -229,6 +268,169 @@ defmodule MishkaCmsBuilderWeb.Live.CollectionFieldTest do
       view = selected_panel(conn, page)
 
       assert field(view, "alt") =~ "a photograph"
+    end
+  end
+
+  defp selected(conn, page, component_name) do
+    {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+    _settled = render_async(view)
+
+    component = component_named(view, component_name)
+
+    render_click(view, "set_left_tab", %{"tab" => "inspector"})
+    render_click(view, "select", %{"id" => component.id})
+    view
+  end
+
+  defp component_named(view, component_name) do
+    {:ok, editor} = MishkaCmsBuilder.EditorSession.fetch(token(view))
+
+    Enum.find(
+      Tree.walk(editor.tree),
+      &(&1.kind == :component and Tree.Node.component_name(&1) == component_name)
+    )
+  end
+
+  defp held(view, component_name, attr) do
+    {:expr, source} = view |> component_named(component_name) |> Tree.Node.attr(attr)
+    {value, _bindings} = Code.eval_string(source)
+    value
+  end
+
+  defp nested_form(path, key),
+    do:
+      ~s(form[phx-value-name="nodes"][phx-value-path='#{Jason.encode!(path)}'][phx-value-key="#{key}"])
+
+  # THE REPORTED DEFECT. A node's `children` drew one text box holding their source, and what it wrote
+  # back was a string, so the tree, which iterates a node's children, raised on the canvas.
+  describe "a list inside an item" do
+    test "is a collection of its own, not a line of its source", %{conn: conn, nested: page} do
+      view = selected(conn, page, "outline")
+
+      assert has_element?(view, ~s([data-role="pb-collection-nested"]))
+      assert has_element?(view, nested_form([0, "children"], "label"))
+      refute has_element?(view, ~s(form[phx-value-name="nodes"][phx-value-key="children"]))
+    end
+
+    test "and one child's field changes with the children still a list", %{
+      conn: conn,
+      nested: page
+    } do
+      view = selected(conn, page, "outline")
+
+      view
+      |> element(nested_form([0, "children"], "label") <> ~s([phx-value-index="0"]))
+      |> render_change(%{"value" => "Setup"})
+
+      assert [%{children: [%{label: "Setup", value: "install"}, %{label: "First page"}]}, _ref] =
+               held(view, "outline", "nodes")
+    end
+
+    test "Add under a node adds a child shaped like its siblings", %{conn: conn, nested: page} do
+      view = selected(conn, page, "outline")
+      node_id = component_named(view, "outline").id
+
+      view |> element("#pb-collection-add-#{node_id}-nodes-0-children") |> render_click()
+
+      assert [%{children: [_install, _first, %{label: "", value: ""}]}, _ref] =
+               held(view, "outline", "nodes")
+    end
+
+    test "Add at the top keeps a list-valued key a list", %{conn: conn, nested: page} do
+      view = selected(conn, page, "outline")
+      node_id = component_named(view, "outline").id
+
+      view |> element("#pb-collection-add-#{node_id}-nodes") |> render_click()
+
+      assert [_start, _ref, %{label: "", value: "", children: []}] =
+               held(view, "outline", "nodes")
+    end
+
+    # Each level is a card inside the one above it, and past three the cards are too narrow to type
+    # into. The deepest list says where it is edited instead of drawing a box that writes its text.
+    test "and one nested past three levels says it is edited in the code", %{
+      conn: conn,
+      site: site
+    } do
+      deep = %{label: "4", children: [%{label: "5"}]}
+
+      nodes = [
+        %{label: "1", children: [%{label: "2", children: [%{label: "3", children: [deep]}]}]}
+      ]
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<.component component_name="outline" site="localhost" nodes={#{inspect(nodes)}} />)
+        )
+
+      view = selected(conn, page, "outline")
+
+      assert has_element?(
+               view,
+               nested_form([0, "children", 0, "children", 0, "children"], "label")
+             )
+
+      assert has_element?(view, ~s([data-role="pb-collection-too-deep"]))
+
+      refute has_element?(
+               view,
+               ~s(form[phx-value-name="nodes"][phx-value-key="children"] input[type=text])
+             )
+    end
+
+    test "and text sent for it is refused", %{conn: conn, nested: page} do
+      view = selected(conn, page, "outline")
+      before = held(view, "outline", "nodes")
+
+      render_click(view, "collection_set", %{
+        "node_id" => component_named(view, "outline").id,
+        "name" => "nodes",
+        "index" => "0",
+        "key" => "children",
+        "value" => "[]"
+      })
+
+      assert held(view, "outline", "nodes") == before
+    end
+  end
+
+  # `chelekom-headless-segmented-control` takes plain words, `{label, value}` and `{label, value,
+  # disabled}`. The last drew one box holding the tuple's source and wrote the text back.
+  describe "a tuple in a list" do
+    defp place_form(index, place),
+      do:
+        ~s(form[phx-value-name="options"][phx-value-index="#{index}"][phx-value-key="__#{place}"])
+
+    test "is a field per place, and a switch is a checkbox", %{conn: conn, nested: page} do
+      view = selected(conn, page, "segments")
+
+      assert has_element?(view, place_form(2, 0) <> " input[type=text]")
+      assert has_element?(view, place_form(2, 1) <> " input[type=text]")
+      assert has_element?(view, place_form(2, 2) <> " input[type=checkbox][checked]")
+    end
+
+    test "and each place is written as what it holds", %{conn: conn, nested: page} do
+      view = selected(conn, page, "segments")
+
+      view |> element(place_form(2, 2)) |> render_change(%{"value" => "false"})
+      view |> element(place_form(2, 0)) |> render_change(%{"value" => "Quarter"})
+
+      assert held(view, "segments", "options") == [
+               "Day",
+               {"Week", "week"},
+               {"Quarter", "month", false}
+             ]
+    end
+
+    test "Add copies a tuple's places, blank", %{conn: conn, nested: page} do
+      view = selected(conn, page, "segments")
+      node_id = component_named(view, "segments").id
+
+      view |> element("#pb-collection-add-#{node_id}-options") |> render_click()
+
+      assert List.last(held(view, "segments", "options")) == {"", ""}
     end
   end
 end
