@@ -239,16 +239,19 @@ defmodule MishkaCmsBuilder.MentionsTest do
       author = create_user!(site_id: site.id, email: "ali@mine.test")
       before = named |> feed() |> length()
 
-      note!(site, %{
-        document_id: page.id,
-        body: "@sara@mine.test can you check this?",
-        author: author
-      })
+      note =
+        note!(site, %{
+          document_id: page.id,
+          body: "@sara@mine.test can you check this?",
+          author: author
+        })
 
       assert [newest | _rest] = feed(named)
       assert length(feed(named)) == before + 1
       assert newest.type == "cms_builder:page_comment:mentioned"
-      assert newest.link == "/admin/dashboard/runtime/builder/page/#{page.id}"
+
+      # AT THE NOTE, not only on the page: the editor opens its Review sheet on it.
+      assert newest.link == "/admin/dashboard/runtime/builder/page/#{page.id}?note=#{note.id}"
       assert newest.body =~ "can you check this?"
     end
 

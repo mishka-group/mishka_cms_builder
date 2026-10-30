@@ -500,6 +500,47 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign(:drafts_revision, 0)
     |> assign_editor(editor)
     |> assign_defaults()
+    |> open_note(params["note"], connected?(socket))
+  end
+
+  # `?note=<id>` IS A MENTION BEING FOLLOWED. The notification links here
+  # (`MishkaCmsBuilderWeb.Paths.note_path/3`), and the reader came for one note, not for the page:
+  # the Review sheet opens, the element the note is about is selected the way its chip selects it,
+  # and the note is marked in the thread. Read on the connected mount only, like `?draft_id=` — the
+  # static render has no session to select in.
+  #
+  # A NOTE THAT IS NOT THERE IS NOT AN ERROR. It was resolved and deleted, or the address names
+  # another document, or a site the reader cannot see — the link still opened the document it was
+  # about, which is the plain editor, and nothing is said.
+  defp open_note(socket, id, true) when is_binary(id) and id != "" do
+    scope = Panels.review_scope(socket.assigns)
+
+    case Review.fetch(id, scope) do
+      %{section: section, document_id: document_id} = note
+      when section == scope.section and document_id == scope.document_id ->
+        socket
+        |> select_note_anchor(note)
+        |> assign(:focused_note, note.id)
+        |> show_sheet(:review)
+
+      _elsewhere ->
+        socket
+    end
+  end
+
+  defp open_note(socket, _id, _connected?), do: socket
+
+  # The element the note was written about, when it is still on the page. A note about the whole page,
+  # or about an element since deleted, opens the thread with the selection left alone.
+  defp select_note_anchor(socket, note) do
+    with {:ok, node_id} <- Review.locate(note, socket.assigns.editor.tree),
+         {:ok, editor} <- EditorSession.select(socket.assigns.token, node_id, :panel) do
+      socket
+      |> assign_editor(editor)
+      |> assign(left_hidden: false, left_tab: :inspector)
+    else
+      _nothing_to_select -> socket
+    end
   end
 
   # Work the last session left behind and never published — OFFERED, never loaded. Opening a page and
@@ -921,6 +962,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     # left alone until one of them arrives.
     |> assign_new(:open_bugs, fn -> Review.open_bugs(Panels.review_scope(socket.assigns)) end)
     |> assign_new(:review_revision, fn -> 0 end)
+    # The note a mention's link opened the editor at (`open_note/3`), marked in the thread.
+    |> assign_new(:focused_note, fn -> nil end)
     |> assign_new(:reply_to, fn -> nil end)
     |> assign_new(:find_open, fn -> false end)
     |> assign_new(:find, fn -> "" end)

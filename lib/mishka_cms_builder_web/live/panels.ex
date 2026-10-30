@@ -14892,16 +14892,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           id="pb-review-thread"
           resource={PageComment}
           current_user={@current_user}
-          url_state={
-            %{
-              path_params:
-                Map.put(
-                  Review.thread_params(review_scope(assigns)),
-                  :revision,
-                  @review_revision
-                )
-            }
-          }
+          url_state={%{path_params: thread_path_params(assigns)}}
         />
       </div>
 
@@ -14971,6 +14962,20 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </div>
     </div>
     """
+  end
+
+  # WHAT THE THREAD IS SCOPED BY, and the two things that make it draw again. A change to either
+  # re-reads the thread: `revision` when a note was written, and `editor_focus` — the note a mention's
+  # link opened the editor at, which the thread marks. Neither names a `PageComment` attribute, so
+  # Gervaz filters by neither; see `Review.thread_params/1`.
+  defp thread_path_params(assigns) do
+    assigns
+    |> review_scope()
+    |> Review.thread_params()
+    |> Map.merge(%{
+      revision: assigns[:review_revision],
+      editor_focus: assigns[:focused_note]
+    })
   end
 
   # WHAT THE EDITOR KNOWS, in the shape `Review` asks for. One place, so the composer's defaults, the

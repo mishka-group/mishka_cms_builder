@@ -407,11 +407,16 @@ defmodule MishkaCmsBuilder.Mentions do
 
   defp excerpt(_body), do: ""
 
-  # The editor the note was written in, opened on the document it is about. `error_page` is
-  # `error-page` in a URL, which is the only place the two spellings differ.
+  # The editor the note was written in, opened on the document it is about AND AT THE NOTE: a link
+  # that lands on the page and leaves the reader to find which of its notes named them is half a
+  # link. `error_page` is `error-page` in a URL, which is the only place the two spellings differ.
+  # A note with no document has nothing to open at, so it opens the section's builder.
   defp link(comment, scope) do
     section = comment.section || scope[:section] || :page
 
-    Paths.builder_path(section, comment.document_id)
+    case comment.document_id do
+      nil -> Paths.builder_path(section)
+      document_id -> Paths.note_path(section, document_id, comment.id)
+    end
   end
 end

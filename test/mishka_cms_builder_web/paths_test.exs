@@ -41,6 +41,15 @@ defmodule MishkaCmsBuilderWeb.PathsTest do
                "/admin/dashboard/runtime/builder/error-page/e1?status=offline"
     end
 
+    # Where a mention's notification points: the editor, opened at the note.
+    test "a note is addressed as its document's builder, at the note" do
+      assert Paths.note_path(:error_page, "e1", "n1") ==
+               "/admin/dashboard/runtime/builder/error-page/e1?note=n1"
+
+      assert Paths.note_path("page", "p1", "n 1&x") ==
+               "/admin/dashboard/runtime/builder/page/p1?note=n+1%26x"
+    end
+
     test "the back link honours another builder" do
       assert Paths.back_path("component", "/admin/dashboard/runtime/builder/page/p1") ==
                "/admin/dashboard/runtime/builder/page/p1"

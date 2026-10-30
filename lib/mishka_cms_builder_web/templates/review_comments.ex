@@ -51,6 +51,7 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewComments do
   alias MishkaCmsBuilder.Comment
   alias MishkaCmsBuilder.Mentions
   alias MishkaCmsBuilderWeb.Live.Panels
+  alias Phoenix.LiveView.JS
 
   @impl true
   def name, do: :review_comments
@@ -167,6 +168,10 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewComments do
   @action_square "grid size-[22px] flex-none place-items-center rounded-[7px] border " <>
                    "border-[#e6e4de] bg-white text-[#a8a5a0]"
 
+  # The ring the note a mention's link points at wears: the thread's own violet, outside the border.
+  # The ring is the focus indicator too, so the browser's own outline is not drawn around it.
+  @focus_ring "ring-2 ring-[#4f4bcc] ring-offset-2 outline-none"
+
   @impl true
   def render_item(assigns) do
     comment = assigns.record
@@ -174,6 +179,7 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewComments do
     assigns =
       assigns
       |> assign(:action_square, @action_square)
+      |> assign(:focus_ring, @focus_ring)
       |> assign(:me, me(assigns.state))
       |> assign(:reader, reader(assigns.state))
       |> assign(:resolved?, comment.status == :resolved)
@@ -184,13 +190,20 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewComments do
       |> assign(:ago, Comment.ago(%{at: comment.inserted_at}, DateTime.utc_now()))
       |> assign(:closable?, closable?(comment, assigns.state))
       |> assign(:tone, type_tone(comment.type))
+      |> assign(:focus, focus(assigns.state))
 
     ~H"""
+    <%!-- THE NOTE A MENTION'S LINK OPENED THE EDITOR AT is ringed and taken to: focusing it is what
+          scrolls the sheet down to it, and `tabindex` is what lets an article take focus. --%>
     <article
       id={"pb-comment-#{@record.id}"}
+      data-focused={@focus == @record.id && "true"}
+      tabindex={@focus == @record.id && "-1"}
+      phx-mounted={@focus == @record.id && JS.focus()}
       class={[
         "rounded-[10px] border p-3",
-        (@resolved? && "border-[#f0efea] bg-[#faf9f6]") || "border-[#e6e4de] bg-white"
+        (@resolved? && "border-[#f0efea] bg-[#faf9f6]") || "border-[#e6e4de] bg-white",
+        @focus == @record.id && @focus_ring
       ]}
     >
       <div class="flex items-center gap-2">
@@ -304,7 +317,14 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewComments do
         :if={replies(@record) != []}
         class="mt-3 flex flex-col gap-2 border-s-2 border-[#e4e2f7] ps-3"
       >
-        <div :for={reply <- replies(@record)} id={"pb-comment-#{reply.id}"}>
+        <div
+          :for={reply <- replies(@record)}
+          id={"pb-comment-#{reply.id}"}
+          data-focused={@focus == reply.id && "true"}
+          tabindex={@focus == reply.id && "-1"}
+          phx-mounted={@focus == reply.id && JS.focus()}
+          class={@focus == reply.id && ["rounded-[8px] p-1", @focus_ring]}
+        >
           <div class="flex items-center gap-2">
             <span class={[
               "grid size-[18px] flex-none place-items-center rounded-full text-[8px] font-bold text-white",
@@ -458,6 +478,11 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewComments do
   defp closable?(%{site_id: nil}, %{master_user?: true}), do: true
   defp closable?(%{site_id: nil}, _state), do: false
   defp closable?(_comment, _state), do: true
+
+  # WHICH NOTE THE READER CAME FOR, if any: the id `BuilderLive` was opened at by a mention's link,
+  # which the sheet hands the thread in its `path_params` (`Panels.thread_path_params/1`).
+  defp focus(%{path_params: %{editor_focus: id}}) when is_binary(id), do: id
+  defp focus(_state), do: nil
 
   # `keep_loaded_records true` is on the resource, so this is every page loaded so far rather than
   # only the last one — which is what makes "Show older" accumulate instead of replace.

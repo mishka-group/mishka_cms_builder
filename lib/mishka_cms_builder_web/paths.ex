@@ -39,6 +39,17 @@ defmodule MishkaCmsBuilderWeb.Paths do
     do: builder_path(section, id) <> "?" <> URI.encode_query(%{"status" => status})
 
   @doc """
+  The builder's address for one document, opened at one of its review notes.
+
+  The editor reads `?note=` on its connected mount: the Review sheet opens, the element the note is
+  about is selected and the note is marked. A note that is gone by the time the address is followed
+  opens the document as `builder_path/2` would.
+  """
+  @spec note_path(String.t() | atom(), String.t(), String.t()) :: String.t()
+  def note_path(section, id, note_id),
+    do: builder_path(section, id) <> "?" <> URI.encode_query(%{"note" => note_id})
+
+  @doc """
   Where the builder's back link goes: `return_to` when it names another builder, the section's list
   otherwise.
 
