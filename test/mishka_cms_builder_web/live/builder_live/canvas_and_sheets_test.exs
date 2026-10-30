@@ -386,6 +386,23 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert assigns[:live_tailwind], "a class typed in the inspector must exist a frame later"
     end
 
+    # THE SITE'S HOOKS AND NOT ITS SOCKET. The document names the site's runtime hooks —
+    # `GlobalChelekomFloating`, a doc page's `LocalhostDocToc` — and only the site's bundle carries
+    # them, so without it LiveView logged "unknown hook" for each and a slider or a tree drew no box.
+    # The host's layout loads that bundle for its hooks alone when the canvas asks, and keeps its
+    # LiveSocket out, which would fight this one for the frame's DOM.
+    test "asks for the site's hooks and never the site's socket", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assigns = live_assigns(canvas)
+
+      assert assigns[:site_hooks], "the frame's components would mount without their hooks"
+      assert assigns[:suppress_site_js], "the site's bundle would open a second LiveSocket"
+    end
+
     # THE FAST WAY TO THE ONE THING PEOPLE CHANGE. Everything else on the element toolbar acts at
     # once; layout is a choice, so the bar grows a row of shapes rather than sending the reader off
     # to the Inspector. It offers only what the component itself declares.

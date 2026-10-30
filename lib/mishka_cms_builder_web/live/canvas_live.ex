@@ -553,7 +553,13 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # inside the frame would fight this canvas for the same DOM — and `standalone_assets` loads the
     # admin `app.js` instead, which is where this canvas's hooks live. `suppress_site_css` turns the
     # layout's site `<link>` off because the frame links its own bundle, `canvas_css_hrefs`.
+    #
+    # `site_hooks` asks for that bundle all the same, for its HOOKS: the document names the site's
+    # runtime hooks (`GlobalChelekomFloating`, a doc page's `LocalhostDocToc`), and only the site's
+    # bundle carries them. The host's layout loads it marked, ahead of `app.js`, and the bundle hands
+    # its hooks to the admin's socket instead of opening its own.
     |> assign(:current_site, session.site_name && %{name: session.site_name})
+    |> assign(:site_hooks, true)
     |> assign(:suppress_site_js, true)
     |> assign(:suppress_site_css, true)
     |> assign(:standalone_assets, true)
