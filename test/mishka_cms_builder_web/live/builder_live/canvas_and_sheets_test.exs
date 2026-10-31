@@ -29,6 +29,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert has_element?(view, "#pb-redo")
     end
 
+    # THE ••• MENU IS TALLER THAN A SHORT SCREEN. At 623px it stood 674px with nothing to scroll, so
+    # Command palette, Fit to screen and Record history were cut off below the window's edge.
+    test "the ••• menu scrolls within the screen below the header", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      menu = view |> element("#pb-more-menu") |> render() |> opening_tag()
+
+      assert menu =~ "max-h-[calc(100vh-56px)]"
+      assert menu =~ "overflow-y-auto"
+    end
+
     # The editor takes the whole viewport, like the prototype: no admin sidebar, no admin topbar, no
     # 1340px content column. It is a `h-screen` three-column workspace, and nesting it in the admin
     # shell's scrolling, padded, width-capped `<main>` costs it the canvas and adds a second
