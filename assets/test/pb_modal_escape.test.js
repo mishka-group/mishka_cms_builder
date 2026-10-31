@@ -72,12 +72,17 @@ describe("escape while a modal is open", () => {
   });
 
   // ⌘S in the Code window still saves, and ⌘Z still undoes: only escape has an owner of its own.
+  // Inside the window's editor ⌘Z is CodeMirror's own undo of the typing (`pb_typing_keys.test.js`).
   it("and every other shortcut still reaches the editor", () => {
     const ctx = chrome(SOURCE_MODAL);
 
     key({ metaKey: true, key: "s", code: "KeyS" });
+    key({ metaKey: true, key: "z", code: "KeyZ" });
 
-    expect(ctx.pushed).toEqual([["shortcut", { key: "save", node_id: "h1" }]]);
+    expect(ctx.pushed).toEqual([
+      ["shortcut", { key: "save", node_id: "h1" }],
+      ["shortcut", { key: "undo", node_id: "h1" }],
+    ]);
   });
 
   it("goes back to the editor once the modal has gone", () => {

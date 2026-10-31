@@ -752,12 +752,33 @@ export const PB_SHORTCUTS = (event) => {
   return null;
 };
 
-// Typing in a field must stay typing. Undo is the one exception: it means "undo my last edit"
-// everywhere, including mid-text-edit, which is what every editor does.
+// Typing in a field must stay typing.
 const PB_EDITABLE = (target) =>
   target &&
   (target.isContentEditable ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
+// A field that holds typed text: inline words on the canvas, the Code window's CodeMirror, a text
+// input, a textarea. A `<select>` or a checkbox holds none.
+const PB_TEXT_INPUTS = ["text", "search", "url", "tel", "email", "password", "number"];
+
+const PB_TYPED = (target) =>
+  target.isContentEditable ||
+  target.tagName === "TEXTAREA" ||
+  (target.tagName === "INPUT" && PB_TEXT_INPUTS.includes(target.type));
+
+// Whether a field keeps this key for itself, so the editor neither prevents nor sends it.
+//
+// UNDO AND REDO IN TYPED TEXT ARE THE FIELD'S OWN. The words being typed are not in the document
+// yet: inline text is written by `set_text` on blur, so ⌘Z sent to the server undid the structural
+// change before them while they stayed on screen. Left to the field, it is the browser's undo, or
+// CodeMirror's own history in the Code window. With the focus anywhere else, a `<select>` included,
+// ⌘Z still undoes the page.
+const PB_FIELD_KEEPS = (event, shortcut) => {
+  if (!PB_EDITABLE(event.target)) return false;
+  if (shortcut !== "undo" && shortcut !== "redo") return true;
+  return PB_TYPED(event.target);
+};
 
 // A MODAL THAT CLOSES ITSELF OWNS ESCAPE. Each one marked `data-pb-modal` binds
 // `phx-window-keydown` on escape, the one binding that also hears the key inside CodeMirror, where
@@ -950,7 +971,7 @@ const PbShortcuts = {
 
       const shortcut = PB_SHORTCUTS(event);
       if (!shortcut) return;
-      if (PB_EDITABLE(event.target) && shortcut !== "undo" && shortcut !== "redo") return;
+      if (PB_FIELD_KEEPS(event, shortcut)) return;
       if (shortcut === "escape" && PB_MODAL_OPEN()) return;
 
       event.preventDefault();
@@ -1337,7 +1358,7 @@ const PbCanvas = {
 
       const shortcut = PB_SHORTCUTS(event);
       if (!shortcut) return;
-      if (PB_EDITABLE(event.target) && shortcut !== "undo" && shortcut !== "redo") return;
+      if (PB_FIELD_KEEPS(event, shortcut)) return;
 
       event.preventDefault();
 
