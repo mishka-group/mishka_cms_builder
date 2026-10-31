@@ -3627,8 +3627,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         "value" => ""
       })
 
+      # Publish is the write it stops, so that is the word the Inspector and the refusal use; the
+      # draft is still saved.
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      assert render(view) =~ "Required — the page cannot be published without it."
+      refute render(view) =~ "cannot be saved without it"
+      assert save!(view) =~ "saved"
+
       html = publish!(view)
-      assert html =~ "Not saved"
+      assert html =~ "Not published"
+      refute html =~ "Not saved"
       assert html =~ "needs-title.title"
 
       # Fill it and the save goes through.

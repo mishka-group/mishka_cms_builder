@@ -2926,10 +2926,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
     test "a page holding text in it says so, and is not published", %{conn: conn, site: site} do
       {view, node} = term_row_page(conn, site, ~s( terms="E2E-0"))
 
-      assert has_element?(view, "#pb-attr-mistyped-#{node.id}-terms")
+      assert has_element?(
+               view,
+               "#pb-attr-mistyped-#{node.id}-terms",
+               "so the page cannot be published with it"
+             )
 
       html = publish!(view)
-      assert html =~ "Not saved"
+      assert html =~ "Not published"
       assert html =~ "term-row.terms holds text where the component takes a list or a map"
     end
   end

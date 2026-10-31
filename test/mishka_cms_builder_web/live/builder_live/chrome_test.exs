@@ -580,7 +580,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       {:ok, view, _html} = open_builder(conn, page)
 
       html = publish!(view)
-      assert html =~ "Not saved"
+      assert html =~ "Not published"
       assert html =~ "demo-collapse.:trigger"
     end
 

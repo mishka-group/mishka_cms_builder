@@ -4561,7 +4561,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </p>
 
       <p :if={@missing?} class="mt-1.5 text-[10px] font-semibold text-[#c0473d]">
-        {gettext("Required — the page cannot be saved without it.")}
+        {gettext("Required — the page cannot be published without it.")}
       </p>
       <p
         :if={@mistyped?}
@@ -4569,7 +4569,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         class="mt-1.5 text-[10px] font-semibold text-[#c0473d]"
       >
         {gettext(
-          "This holds text where the component takes a list or a map, so the page cannot be saved with it. Remove it to go back to the default."
+          "This holds text where the component takes a list or a map, so the page cannot be published with it. Remove it to go back to the default."
         )}
       </p>
       <p

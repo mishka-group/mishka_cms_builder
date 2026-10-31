@@ -32,21 +32,21 @@
   {"lib/mishka_cms_builder/editor_session.ex", :unused_fun, 1943},
   {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 1266},
   {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 6315},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 7805},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match, 7806},
 
   # A last clause that matches anything, after clauses the current callers already cover. Kept on
   # purpose: it is the answer to a shape a plugin, a stored row or a later caller may send.
   {"lib/mishka_cms_builder/editor_session/journal.ex", :pattern_match_cov, 415},
   {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6225},
   {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6551},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6723},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6799},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6831},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6862},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6874},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6886},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6898},
-  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 7638},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6724},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6800},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6832},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6863},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6875},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6887},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 6899},
+  {"lib/mishka_cms_builder_web/live/builder_live.ex", :pattern_match_cov, 7639},
 
   # `:elixir_tokenizer.tokenize/3` and the project's HEEx tokenizer are called through a clause for
   # each shape either has returned across Elixir releases; dialyzer sees the one of this release.
