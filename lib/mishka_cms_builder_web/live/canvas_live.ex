@@ -1259,185 +1259,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       /* A field is being dragged: every form it could join is outlined until the drag ends. */
       html[data-pb-field-drag] [data-pb-form] { outline: 2px dashed #8b5cf6; outline-offset: 3px; }
 
-      /* AN OVERLAY OPENS WHEN IT IS SELECTED, AND SHUTS WHEN THE SELECTION MOVES ON.
-
-         Fourteen kit components render their content closed, and every one of them used to be held
-         open for the whole session: a page with a dialog, a drawer and a dropdown on it drew all
-         three over the content they belong to, permanently, and the author had no way to see the
-         page. Selection is the answer every editor of this kind arrives at — clicking the thing you
-         mean to edit is already the gesture, so opening it costs no second one.
-
-         `data-selected` is painted by the canvas hook on the click itself, which is why this is CSS
-         and not an assign: threading the selection through every node would re-render the whole
-         document on every click, which is the trap the selection ring already sidesteps. `:has()`
-         is what keeps it open while something INSIDE it is selected — a heading in a dialog is the
-         author editing the dialog.
-
-         `data-pb-reveal` is the third way in: the pin on the layers row, for the one case selection
-         cannot express — keeping an overlay open while working on the page behind it.
-
-         Each rule reaches DOWN, because none of this lands on the element the canvas wraps:
-         `data-pb-overlay` is on the wrapper, the `hidden` is on the component's own root a level
-         down and the `fixed` backdrop a level below that. `!important` because what is being beaten
-         is a utility class, and no selector out-specifies a class from a rule that is not one.
-
-         A node whose own root is a `<td>` or an `<option>` has no wrapper — see `component_frame/1`
-         — so for it the two would be the same element and the rule would reach past what it means
-         to open. No kit ships a component that is both concealed and stamped, and
-         `MishkaCmsBuilderWeb.Live.TableCellCanvasTest` is what says so.
-
-         `.fixed` is neutralised rather than left alone: a dialog pins itself to the viewport, which
-         is right for a dialog and wrong for something being edited in place — it would cover the
-         page it belongs to. `aria-hidden` is the kit's own marker for its scrim, and an author is
-         editing the content, not the overlay.
-
-         AND ONLY `.fixed`. `.absolute` was swept in with it and is not the same thing: pinning to
-         the VIEWPORT is what covers the page, while absolute positioning is ordinary layout inside
-         the component's own box. A carousel was in this set then, so selecting one un-positioned its
-         own prev and next buttons and both fell into a heap in the top-left corner — reported as
-         "the next and prev button is not obvious how they are and where they are".
-
-         AND ITS HEIGHT GOES WITH ITS PIN. A drawer and `chelekom-sidebar` are `fixed h-screen`: the
-         height of the viewport is right for a panel pinned to it, and back in the flow the same
-         class stood a panel of three links as tall as the screen over the page below it. Height
-         `auto` lets it take its content's, and the panel inside it, which is `h-full`, follows. A
-         modal sets no height on its `fixed` layers, so it is drawn as it was.
-
-         AND SO DOES ITS SLIDE. A drawer is moved off the screen with `-translate-x-full`, and a
-         sidebar on a narrow device with `-translate-x-full md:translate-x-0`. Tailwind v4 writes
-         those as the `translate` property, which `transform: none` does not reach, so a selected
-         drawer opened its own width to the left, off the canvas. `translate: none` puts it back.
-
-         IN THE BASE LAYER, because that is where the rule keeping `[hidden]` shut lives: Tailwind's
-         preflight writes `[hidden] { display: none !important }` inside `@layer base`, and an
-         `!important` in a cascade layer outranks every unlayered one, whatever the selectors. So a
-         panel hidden by the attribute — `chelekom-dropdown-content`, a headless popover's popup —
-         stayed shut when selected and drew a box 0px high. Inside the same layer the selector below
-         is the more specific one. The scrim rule moves with the reveal so the two keep the order
-         they had between themselves; a stylesheet with no base layer gets one, which changes
-         nothing else.
-
-         PREVIEW NEVER GETS THIS: the whole `<style>` is inside `:if={!@preview?}`, so a visitor sees
-         the component close itself exactly as its author intended. */
-      @layer base {
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) :is(.hidden, .invisible, .opacity-0, .max-h-0, [hidden]) {
-          display: block !important;
-          visibility: visible !important;
-          opacity: 1 !important;
-          max-height: none !important;
-          pointer-events: auto !important;
-        }
-
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) .fixed { position: static !important; transform: none !important; translate: none !important; height: auto !important; }
-
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) [data-floating-content] { visibility: visible !important; opacity: 1 !important; }
-
-        /* THE SCRIM GOES, THE PANEL STAYS. A modal's backdrop, a drawer's overlay and a scroll area's
-           two scrollbars are all `aria-hidden` and all decorative — none holds a node an author put
-           there — so hiding them while the overlay is open is right. A dropdown's and a popover's
-           CONTENT is `aria-hidden` too while shut, and it is the one thing the author came to fill:
-           this rule was hiding the panel the reveal above had just opened, which is why a dropdown
-           showed its trigger and nothing else and read as "we cannot add any content inside". */
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) [aria-hidden="true"]:not([data-floating-content]):not(:has([data-node-id])) {
-          display: none !important;
-        }
-      }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) { outline: 2px dotted #8580d8; outline-offset: 3px; }
-
-      /* AND WHILE IT IS SHUT IT IS STILL SOMETHING ON THE PAGE, so it says what it is rather than
-         collapsing to nothing. A dialog's root is `display:none`, so a closed one occupies no space
-         at all: the author dropped a modal, watched it vanish, and had nothing left to click. The
-         chip is what they click.
-
-         `attr()` rather than markup, for the same reason the empty-dialog label below is: what is
-         inside the wrapper belongs to the COMPONENT, and the editor's words have no business in
-         somebody's dialog. */
-      [data-pb-overlay] {
-        position: relative;
-        display: block;
-        min-height: 32px;
-      }
-
-      [data-pb-overlay]::before {
-        display: flex;
-        align-items: center;
-        height: 32px;
-        padding: 0 11px;
-        border: 1px dashed #c3c1f0;
-        border-radius: 9px;
-        background: #faf9ff;
-        color: #6c67c9;
-        font: 600 11.5px ui-sans-serif, system-ui;
-        letter-spacing: .01em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      )::before { display: none; }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) { min-height: 0; }
-
-      /* AND ONE WITH NOTHING IN IT SAYS WHAT IT IS AND ASKS FOR SOMETHING. Revealing an empty dialog
-         reveals a few pixels of the kit's own padding, which is not a target anybody can hit — so
-         the wrapper is given a real height and its own words. `attr()` rather than markup: what is
-         inside the wrapper is the component's, and this is the editor talking. */
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      )[data-pb-hollow] {
-        position: relative;
-        min-height: 140px;
-        border: 2px dashed #c3c1f0;
-        border-radius: 12px;
-        background: #faf9ff;
-      }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      )[data-pb-hollow]::after {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #6c67c9;
-        font: 600 12.5px ui-sans-serif, system-ui;
-        letter-spacing: .01em;
-        pointer-events: none;
-      }
+      /* A shut overlay is a chip; opened, it is drawn in the flow — see `overlay_rules/0`. */
+      <%= style_body(overlay_rules()) %>
 
       /* NOTHING DRAWN IS STILL SOMETHING THERE. The canvas hook sets `data-pb-blank` on a
          component's box when nothing inside it has a size (`markBlanks` in `hooks.js`): a pager with
@@ -2018,17 +1841,176 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end
   end
 
+  # AN OVERLAY IS A CHIP UNTIL THE AUTHOR OPENS IT, the way Elementor's editing mode, Bricks' "keep
+  # open while styling", Oxygen and Webflow's Show menu all work. Fourteen kit components render
+  # their content closed — a dialog, a drawer, a dropdown — and the canvas draws each shut one as a
+  # chip with its name (`data-pb-overlay` on the editor's wrapper, the label drawn by `::before`).
+  #
+  # THE CHIP IS A HANDLE. Clicking it selects the component, so the Inspector shows its properties,
+  # and dragging it moves it; neither opens it. Opening it on a click covered the page the author
+  # was arranging it on, and a drag started on an open dialog moved the dialog's contents instead.
+  #
+  # OPENING IS ASKED FOR, three ways:
+  #
+  #   * `data-pb-reveal`, written by the server for an overlay in the session's `pinned` set: the
+  #     Inspector's "Open on canvas" button and the pin on its layers row. It stays open until it is
+  #     closed the same way, and is never saved.
+  #   * `:has([data-selected])`: a node INSIDE a shut overlay, selected from the layers rail, opens it
+  #     for as long as that selection lasts — the author is editing what is inside it.
+  #   * `data-pb-anchored`: the same for a slot, which has no element of its own, so the hook rings
+  #     the component it belongs to and marks the ring as standing in for something inside it.
+  #
+  # `data-selected` and the anchor mark are painted by the canvas hook on the click itself, which is
+  # why this is CSS and not an assign: threading the selection through every node would re-render
+  # the whole document on every click.
+  #
+  # AN OPENED OVERLAY IS DRAWN IN THE FLOW, where its chip stood. Each rule reaches DOWN, because
+  # `data-pb-overlay` is on the wrapper, the `hidden` on the component's own root a level down and
+  # the `fixed` backdrop below that; `!important` because what is being beaten is a utility class. A
+  # node whose own root is a `<td>` or an `<option>` has no wrapper (`component_frame/1`), so the two
+  # would be one element — no kit ships a component that is both, and
+  # `MishkaCmsBuilderWeb.Live.TableCellCanvasTest` says so.
+  #
+  #   * `.fixed` goes back in the flow: pinned to the viewport, a dialog covers the page it belongs
+  #     to. Only `.fixed`: `.absolute` is layout inside the component's own box, and a carousel's
+  #     prev and next buttons fell into a heap when it was swept in too.
+  #   * Its height and slide go with the pin. A drawer and `chelekom-sidebar` are `fixed h-screen`,
+  #     and back in the flow that stood three links as tall as the screen; `height: auto` gives it
+  #     its content's. A drawer is slid away with `-translate-x-full`, which Tailwind v4 writes as the
+  #     `translate` property that `transform: none` does not reach.
+  #   * `aria-hidden` is the kit's scrim — a modal's backdrop, a drawer's overlay — and is hidden; a
+  #     dropdown's and a popover's panel is `aria-hidden` too while shut, and is the thing the author
+  #     came to fill, so `[data-floating-content]` and anything holding a node is kept.
+  #   * One with nothing in it gets a real height and its own words (`data-pb-hollow`), since the
+  #     kit's own padding is not a target anybody can hit.
+  #
+  # IN THE BASE LAYER, because the rule keeping `[hidden]` shut lives there: Tailwind's preflight
+  # writes `[hidden] { display: none !important }` inside `@layer base`, and an `!important` in a
+  # cascade layer outranks every unlayered one. Inside the same layer these selectors are the more
+  # specific ones.
+  #
+  # A SIDEBAR THAT STAYS ON THE SCREEN IS EDITED WHERE IT SITS. `chelekom-sidebar` is a drawer below
+  # `md` and a fixed column from `md` up (`PaletteEntry.persistent_at/1`), and its wrapper says so
+  # with `data-pb-persistent="md"`. The canvas frames are real iframes at the device's width, so a
+  # media query is the answer: at and above that width it has no chip and none of the rules above,
+  # the real fixed column stays put, a click selects it and its children are ordinary nodes; below
+  # it, it is a drawer like any other. Tailwind's own breakpoints, so the canvas switches where the
+  # component does.
+  #
+  # PREVIEW NEVER GETS THIS: the whole `<style>` is inside `:if={!@preview?}`, so a visitor sees the
+  # component close itself exactly as its author intended.
+  @opened ~s|:is([data-pb-reveal="true"], [data-pb-overlay]:has([data-selected="true"]), | <>
+            ~s|[data-pb-overlay][data-pb-anchored="true"])|
+
+  @breakpoint_widths [
+    {"sm", "40rem"},
+    {"md", "48rem"},
+    {"lg", "64rem"},
+    {"xl", "80rem"},
+    {"2xl", "96rem"}
+  ]
+
+  defp overlay_rules do
+    always = opened_rules(@opened <> ":not([data-pb-persistent])")
+
+    by_width =
+      for {name, width} <- @breakpoint_widths, into: "" do
+        persistent = ~s|[data-pb-persistent="#{name}"]|
+
+        """
+        @media (width < #{width}) {
+        #{opened_rules(@opened <> persistent)}
+        }
+
+        @media (width >= #{width}) {
+          #{persistent}::before, #{persistent}[data-pb-hollow]::after { display: none; }
+          #{persistent} { min-height: 0; }
+        }
+        """
+      end
+
+    chip() <> always <> by_width
+  end
+
+  defp chip do
+    """
+    [data-pb-overlay] {
+      position: relative;
+      display: block;
+      min-height: 32px;
+    }
+
+    [data-pb-overlay]::before {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 11px;
+      border: 1px dashed #c3c1f0;
+      border-radius: 9px;
+      background: #faf9ff;
+      color: #6c67c9;
+      font: 600 11.5px ui-sans-serif, system-ui;
+      letter-spacing: .01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    """
+  end
+
+  defp opened_rules(open) do
+    """
+    @layer base {
+      #{open} :is(.hidden, .invisible, .opacity-0, .max-h-0, [hidden]) {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        max-height: none !important;
+        pointer-events: auto !important;
+      }
+
+      #{open} .fixed { position: static !important; transform: none !important; translate: none !important; height: auto !important; }
+
+      #{open} [data-floating-content] { visibility: visible !important; opacity: 1 !important; }
+
+      #{open} [aria-hidden="true"]:not([data-floating-content]):not(:has([data-node-id])) {
+        display: none !important;
+      }
+    }
+
+    #{open} { outline: 2px dotted #8580d8; outline-offset: 3px; min-height: 0; }
+
+    #{open}::before { display: none; }
+
+    #{open}[data-pb-hollow] {
+      position: relative;
+      min-height: 140px;
+      border: 2px dashed #c3c1f0;
+      border-radius: 12px;
+      background: #faf9ff;
+    }
+
+    #{open}[data-pb-hollow]::after {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6c67c9;
+      font: 600 12.5px ui-sans-serif, system-ui;
+      letter-spacing: .01em;
+      pointer-events: none;
+    }
+    """
+  end
+
   @word_marker "␞"
 
   defp chrome_words do
-    reveal =
-      ~s|:is([data-pb-reveal="true"], [data-pb-overlay][data-selected="true"], | <>
-        ~s|[data-pb-overlay]:has([data-selected="true"]))|
-
     """
     [data-pb-overlay]::before { content: #{css_content(gettext("%{name} — opens from its trigger", name: @word_marker), "data-pb-overlay")}; }
-    #{reveal}[data-pb-hollow]::after { content: #{css_content(gettext("Empty %{name} — drop something in here", name: @word_marker), "data-pb-hollow")}; }
-    #{reveal}[data-pb-hollow][data-pb-sealed]::after { content: #{css_content(gettext("%{name} — draws its own content; nothing goes in here", name: @word_marker), "data-pb-hollow")}; }
+    #{@opened}[data-pb-hollow]::after { content: #{css_content(gettext("Empty %{name} — drop something in here", name: @word_marker), "data-pb-hollow")}; }
+    #{@opened}[data-pb-hollow][data-pb-sealed]::after { content: #{css_content(gettext("%{name} — draws its own content; nothing goes in here", name: @word_marker), "data-pb-hollow")}; }
     :is([data-pb-live]:hover, [data-pb-live][data-selected="true"])::after { content: #{css_content(gettext("Live · %{name} — runs on the published page", name: @word_marker), "data-pb-live")}; }
     [data-pb-blank]::before { content: #{css_content(gettext("%{name} — draws nothing visible here", name: @word_marker), "data-component")}; }
     [data-pb-blank][data-stateful]::before { content: #{css_content(gettext("Live · %{name} — draws nothing here; it fills in on the published page", name: @word_marker), "data-component")}; }
@@ -2574,6 +2556,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       |> assign(:wants_media, wants_media(assigns))
       |> assign(:overlay, overlay(assigns))
       |> assign(:reveal, reveal(assigns))
+      |> assign(:persistent, persistent(assigns))
       |> assign(:hollow, hollow(assigns))
       |> then(&assign(&1, :sealed, sealed(&1)))
 
@@ -2766,6 +2749,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       "data-incomplete" => missing != [] && "true",
       "data-pb-overlay" => assigns[:overlay],
       "data-pb-reveal" => assigns[:reveal],
+      "data-pb-persistent" => assigns[:persistent],
       "data-pb-hollow" => assigns[:hollow],
       "data-pb-sealed" => assigns[:sealed],
       "data-pb-hidden" => Visibility.hidden?(assigns.node) && "true",
@@ -2817,7 +2801,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   #
   # It was then held open for the whole session, which traded that for the opposite complaint: three
   # overlays on a page cover the page. The label is what the `data-pb-overlay` rules in
-  # `#pb-canvas-chrome` draw as a chip, and selecting it is what opens it.
+  # `#pb-canvas-chrome` draw as a chip, a handle that selects and moves the component; opening it is
+  # the author's explicit ask — see `overlay_rules/0`.
   #
   # Never in preview: a visitor sees the component close itself exactly as its author intended.
   defp overlay(%{preview?: true}), do: nil
@@ -2829,9 +2814,9 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end
   end
 
-  # HELD OPEN ON PURPOSE. Selection opens an overlay and closing it again is the selection moving on,
-  # which is the wrong answer exactly once: when the point is the page BEHIND the dialog. The pin on
-  # the layers row is that case, and it is the only thing this attribute now means.
+  # OPENED ON PURPOSE. The Inspector's "Open on canvas" button and the pin on the layers row put the
+  # overlay in the session's `pinned` set, and this is what draws it open, in the flow, until the
+  # author closes it the same way.
   defp reveal(%{preview?: true}), do: nil
 
   defp reveal(%{node: node} = assigns) do
@@ -2861,12 +2846,23 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # to make a drop the core then refused. `data-pb-sealed` picks the other sentence.
   defp sealed(%{hollow: hollow, node: node} = assigns) when is_binary(hollow) do
     case Map.get(assigns[:conceals] || %{}, Node.component_name(node)) do
-      true -> "true"
+      {true, _persistent_at} -> "true"
       _takes_content -> nil
     end
   end
 
   defp sealed(_assigns), do: nil
+
+  # AND ONE THAT STAYS ON THE SCREEN FROM A BREAKPOINT UP SAYS WHICH, so the canvas draws it as an
+  # ordinary element at that width and as an overlay below it — see `overlay_rules/0`.
+  defp persistent(%{preview?: true}), do: nil
+
+  defp persistent(%{node: node} = assigns) do
+    case Map.get(assigns[:conceals] || %{}, Node.component_name(node)) do
+      {_sealed, breakpoint} when is_binary(breakpoint) -> breakpoint
+      _always_an_overlay -> nil
+    end
+  end
 
   defp conceals?(assigns, %Node{kind: :component} = node) do
     case assigns[:conceals] do
@@ -2893,12 +2889,13 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   defp label_for(_absent), do: gettext("component")
 
   # The names of every component that renders its own content closed, read off the palette once,
-  # each with whether it is sealed: whether `Containment` would refuse anything dropped into it.
+  # each with whether it is sealed — whether `Containment` would refuse anything dropped into it —
+  # and the breakpoint from which it stays on the screen, if it does.
   defp conceals(components) do
     for entry <- components || [],
         Map.get(entry, :concealed?, false),
         into: %{},
-        do: {entry.name, sealed_entry?(entry)}
+        do: {entry.name, {sealed_entry?(entry), Map.get(entry, :persistent_at)}}
   end
 
   defp sealed_entry?(%{name: name} = entry),

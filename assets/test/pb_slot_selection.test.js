@@ -11,7 +11,8 @@ import hooks from "../js/index.js";
 // rail has no `[data-node-id]` on the canvas. The hook painted `data-selected` on nothing, and the
 // `[data-pb-overlay]:has([data-selected="true"])` rules that keep an opened overlay in the flow let
 // go of it: the sidebar snapped back to `fixed` and the height of the screen. The server sends the
-// nearest drawn ancestor with the selection, and the hook paints that one instead.
+// nearest drawn ancestor with the selection, and the hook paints that one instead, marked
+// `data-pb-anchored` so the canvas opens the overlay for a slot inside it and not for its own chip.
 const live = [];
 
 const PAGE =
@@ -42,7 +43,9 @@ function canvas(html, root = {}) {
 const ringed = () =>
   [...document.querySelectorAll('[data-selected="true"]')].map((el) => el.dataset.nodeId);
 
-const opened = () => document.querySelector('[data-pb-overlay][data-selected="true"]') !== null;
+const opened = () =>
+  document.querySelector('[data-pb-overlay][data-selected="true"][data-pb-anchored="true"]') !==
+  null;
 
 beforeEach(() => {
   document.body.innerHTML = "";
@@ -94,6 +97,17 @@ describe("a selection with no element of its own", () => {
 });
 
 describe("a selection that is drawn", () => {
+  // THE CHIP IS A HANDLE. Selecting the overlay itself rings it for a move or the Inspector; only
+  // the Inspector's "Open on canvas" and the layers pin open it.
+  it("rings an overlay's own chip without opening it", () => {
+    const ctx = canvas(PAGE);
+
+    ctx.handlers["pb:selected"]({ id: "sb", anchor: null });
+
+    expect(ringed()).toEqual(["sb"]);
+    expect(opened()).toBe(false);
+  });
+
   it("is ringed itself, whatever anchor arrives with it", () => {
     const ctx = canvas(PAGE);
 

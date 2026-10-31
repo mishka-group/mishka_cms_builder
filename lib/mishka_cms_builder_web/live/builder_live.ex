@@ -2178,6 +2178,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       # Answered once here, beside `reads`, because the template it is read from is the thing the
       # palette deliberately does not carry.
       concealed?: PaletteEntry.concealed?(component),
+      # And the breakpoint from which it stays on the screen, as `chelekom-sidebar` does from `md`
+      # up — see `PaletteEntry.persistent_at/1`. Read from the same source for the same reason.
+      persistent_at: PaletteEntry.persistent_at(component),
       # Whether this component reaches for the elements an author puts inside it — see
       # `PaletteEntry.shapes_children?/1`. Read from the same template and helper bodies, for the
       # same reason, and the canvas uses it to decide whether it may put a box of its own between
@@ -8086,6 +8089,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
           aim_target={@aim_target}
           act_action={@act_action}
           current_user={@current_user}
+          device={@device}
         />
         <Panels.center
           editor={@editor}

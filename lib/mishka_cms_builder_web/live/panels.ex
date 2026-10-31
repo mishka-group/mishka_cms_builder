@@ -1669,6 +1669,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     doc: "the verb in the On-click action select right now, which decides what box sits under it"
   )
 
+  attr(:device, :atom,
+    default: :desktop,
+    doc: "the canvas device, which says whether a sidebar is docked at the width being edited"
+  )
+
   def left_panel(assigns) do
     ~H"""
     <%!-- One wrapper that is ALWAYS in the DOM. The rail and the panel swap inside it, so the number
@@ -1802,6 +1807,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           aim_target={@aim_target}
           act_action={@act_action}
           current_user={@current_user}
+          device={@device}
         />
       </aside>
 
@@ -2992,6 +2998,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               {selection_meta(@selected_node)}
             </div>
             <.form_part part={Inspector.form_part(@editor, @selected_node)} />
+            <.overlay_open
+              :if={@selected_node.kind == :component and overlay?(component_entry(assigns))}
+              id={@selected_node.id}
+              open?={pinned?(@editor, @selected_node.id)}
+              breakpoint={PaletteEntry.optional(component_entry(assigns), :persistent_at)}
+              docked={docked(component_entry(assigns), @device)}
+            />
             <%!-- WHERE THE AUTHOR IS LOOKING. The only way into a component's own editor was an icon
                   on its layers row that shows on hover, so someone looking at a live list in the
                   Inspector had no way to change what it draws. Same tab, with the way back in the
@@ -10060,24 +10073,24 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         >
           <.icon name={(@folded? && :eye_off) || :eye} size={12} />
         </button>
-        <%!-- ONLY WHERE THERE IS SOMETHING TO PIN. An overlay opens on the canvas while it is
-              selected and shuts when the selection moves on, which is what an author wants nine
-              times in ten. This is the tenth: keeping a dialog open while working on the page
-              behind it. Every other row has no closed state, so it gets no pin. --%>
+        <%!-- ONLY WHERE THERE IS SOMETHING TO OPEN, AND ALWAYS THERE. Selecting an overlay's chip
+              on the canvas selects it and nothing more, so this pin and the Inspector's "Open on
+              canvas" are how it opens, and a way in has to be in view, not behind the pointer. It
+              stays open until it is pressed again. Every other row has no closed state, so it gets
+              no pin. --%>
         <button
           :if={overlay?(@entry)}
           type="button"
+          id={"pb-layer-pin-#{@id}"}
           phx-click="toggle_pinned"
           phx-value-id={@id}
+          aria-pressed={to_string(pinned?(@editor, @id))}
           title={
-            (pinned?(@editor, @id) && gettext("Let it close again")) ||
-              gettext("Keep it open on the canvas")
+            (pinned?(@editor, @id) && gettext("Close it on the canvas")) ||
+              gettext("Open it on the canvas")
           }
           class={[
-            "size-5 flex-none place-items-center rounded-[6px] hover:bg-[#f2f1ec]",
-            "group-hover:grid group-focus-within:grid",
-            (pinned?(@editor, @id) || @id == @selection) && "grid",
-            !(pinned?(@editor, @id) || @id == @selection) && "hidden",
+            "grid size-5 flex-none place-items-center rounded-[6px] hover:bg-[#f2f1ec]",
             (pinned?(@editor, @id) && "text-[#8580d8]") || "text-[#a8a5a0]"
           ]}
         >
@@ -12544,6 +12557,80 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     case Node.literal(node, "title") do
       title when is_binary(title) and title != "" -> "#{name} — #{title}"
       _untitled -> "#{name} · #{String.slice(node.id, 0, 5)}"
+    end
+  end
+
+  # OPENING AN OVERLAY IS ASKED FOR, here and on its layers row. Its chip on the canvas is a handle:
+  # a click selects it and a drag moves it. This opens it in the flow, where the chip stood, until it
+  # is closed again, and nothing of it is saved — see `EditorSession.toggle_pinned/2`.
+  #
+  # A SIDEBAR THAT STAYS ON THE SCREEN has nothing to open at a width where it is docked: the canvas
+  # draws it as the fixed column it is there, edited in place. Below that width it is a drawer, and
+  # with the three frames side by side it is both.
+  attr(:id, :string, required: true)
+  attr(:open?, :boolean, default: false)
+  attr(:breakpoint, :string, default: nil)
+  attr(:docked, :atom, default: :none, values: [:none, :some, :all])
+
+  defp overlay_open(assigns) do
+    ~H"""
+    <p
+      :if={@docked == :all}
+      id="pb-overlay-docked"
+      class="mt-1.5 text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]"
+    >
+      {gettext("Always visible at this width — edit it on the page")}
+    </p>
+    <button
+      :if={@docked != :all}
+      type="button"
+      id="pb-overlay-open"
+      phx-click="toggle_pinned"
+      phx-value-id={@id}
+      aria-pressed={to_string(@open?)}
+      title={
+        (@open? && gettext("Close it on the canvas")) ||
+          gettext("Open it on the canvas, in the flow of the page, until you close it")
+      }
+      class={[
+        "mt-1.5 inline-flex h-6 items-center gap-1.5 rounded-[7px] border px-2 text-[10.5px] font-bold",
+        (@open? && "border-[#8580d8] bg-[#f2f1fc] text-[#4f4bcc]") ||
+          "border-[#dcdbf5] bg-white text-[#4f4bcc] hover:bg-[#f7f6ff]"
+      ]}
+    >
+      <.icon name={:pin} size={11} /> {(@open? && gettext("Close")) || gettext("Open on canvas")}
+    </button>
+    <p
+      :if={@docked == :some}
+      id="pb-overlay-docked"
+      class="mt-1 text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+    >
+      {gettext("From %{breakpoint} up it is always visible — edit it on the page there.",
+        breakpoint: @breakpoint
+      )}
+    </p>
+    """
+  end
+
+  # The canvas widths each device lays a page out at, as `BuilderLive.devices/0` and
+  # `BuilderLive.frame_widths/0` draw them, and Tailwind's own breakpoints in pixels.
+  @device_widths %{desktop: [1180], tablet: [834], mobile: [390], frames: [1180, 900, 560]}
+  @breakpoint_px %{"sm" => 640, "md" => 768, "lg" => 1024, "xl" => 1280, "2xl" => 1536}
+
+  # Whether a sidebar that stays on the screen from a breakpoint up is docked on the canvas being
+  # edited: at every width it is drawn at, at some of them, or at none.
+  defp docked(entry, device) do
+    with breakpoint when is_binary(breakpoint) <- PaletteEntry.optional(entry, :persistent_at),
+         px when is_integer(px) <- Map.get(@breakpoint_px, breakpoint) do
+      widths = Map.get(@device_widths, device, [1180])
+
+      cond do
+        Enum.all?(widths, &(&1 >= px)) -> :all
+        Enum.any?(widths, &(&1 >= px)) -> :some
+        true -> :none
+      end
+    else
+      _always_an_overlay -> :none
     end
   end
 

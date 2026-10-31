@@ -1404,6 +1404,10 @@ const PbCanvas = {
     // nothing painted the rules that keep an overlay open while something in it is selected let an
     // opened sidebar fall shut. `anchor` is the server's nearest drawn ancestor (`selection_anchor/2`
     // in `CanvasLive`), kept so `updated()` paints it again; the selection itself stays the slot.
+    //
+    // A RING STANDING IN FOR A SLOT ALSO SAYS SO, with `data-pb-anchored`. Selecting an overlay's
+    // own chip does not open it, but selecting a slot inside it does, and on the canvas the two
+    // would otherwise be the same `data-selected` on the same wrapper.
     this.markSelected = (id, anchor = null) => {
       const doc = this.el.ownerDocument;
       // THE PANEL BELONGS TO THE ELEMENT IT WAS OPENED ON. It survives a patch — that is what lets
@@ -1421,10 +1425,15 @@ const PbCanvas = {
       doc
         .querySelectorAll('[data-node-id][data-selected="true"]')
         .forEach((el) => el.removeAttribute("data-selected"));
+      doc
+        .querySelectorAll("[data-node-id][data-pb-anchored]")
+        .forEach((el) => el.removeAttribute("data-pb-anchored"));
       if (!id) return this.placeToolbar?.();
       const drawn = (nodeId) => doc.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
-      const node = drawn(id) || (this.selectedAnchor && drawn(this.selectedAnchor));
+      const own = drawn(id);
+      const node = own || (this.selectedAnchor && drawn(this.selectedAnchor));
       if (node) node.setAttribute("data-selected", "true");
+      if (node && !own) node.setAttribute("data-pb-anchored", "true");
       // A SELECTION MADE SOMEWHERE ELSE HAS TO BE FINDABLE. Clicking a review note anchored to an
       // element three screens down used to ring something nobody could see. A selection made ON the
       // canvas is already in view by definition, so only bring it into view when the ring moved.

@@ -1,8 +1,8 @@
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_builder_web/live/builder_live.ex:7042,522EC8D
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_builder_web/live/canvas_live.ex:3141,4BE671
-XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:1764,283B613
-XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:1789,2453C15
-XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:2270,582EFB3
-XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:2613,1847A36
-XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:3079,1E40A13
-XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:3601,3C013DD
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_builder_web/live/builder_live.ex:7045,3D31099
+DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_builder_web/live/canvas_live.ex:3138,1613697
+XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:1587,58614CF
+XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:1612,4E26FA7
+XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:2252,29FBE47
+XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:2596,647CD39
+XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:3076,465F919
+XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:3598,65667E0
