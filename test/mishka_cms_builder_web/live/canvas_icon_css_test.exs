@@ -23,6 +23,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
 
   import MishkaCmsBuilder.LiveCase, only: [token: 1]
 
+  import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -156,6 +157,51 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
         )
 
       refute canvas_html(conn, page) =~ "not-an-icon-at-all{"
+    end
+  end
+
+  # AN ICON NAME THE CANVAS CANNOT COMPUTE STANDS IN AS AN ICON. `name={assigns[:icon]}` has no value
+  # without the page's assigns, and the stand-in for any other string is shaped like a DOM id,
+  # `pb-<id>-name`. An icon's body reads that name as `"hero-" <> _` and raised: a kit icon was
+  # logged "body did not apply" on every render while the palette had not arrived, and core's
+  # `<.icon>` drew the "could not render" box.
+  describe "an icon name the canvas cannot compute" do
+    test "stands in as a real icon on core's `<.icon>`", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="w4"><.icon name={assigns[:icon]} /></div>)
+        )
+
+      html = canvas_html(conn, page)
+
+      assert html =~ "hero-sparkles size-4"
+      refute html =~ ~r/pb-n[a-z0-9]{8}-name/
+      refute html =~ "could not render"
+    end
+
+    test "and on a kit component whose attribute is an icon", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "acme-glyph",
+        template: ~S|<span class={["glyph", @name]}></span>|,
+        body: ~S|%{name: "hero-" <> _} = assigns = assigns|,
+        attrs: [%{"name" => "name", "type" => "string", "opts" => %{"editor" => "icon"}}]
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="w5"><.component component_name="acme-glyph" site="#{site.name}" name={assigns[:icon]} /></div>)
+        )
+
+      log = capture_log(fn -> send(self(), {:html, canvas_html(conn, page)}) end)
+      assert_received {:html, html}
+
+      assert html =~ "glyph hero-sparkles"
+      refute html =~ ~r/pb-n[a-z0-9]{8}-name/
+      refute log =~ "did not apply"
     end
   end
 end
