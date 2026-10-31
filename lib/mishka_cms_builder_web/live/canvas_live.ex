@@ -1276,6 +1276,17 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
          own prev and next buttons and both fell into a heap in the top-left corner — reported as
          "the next and prev button is not obvious how they are and where they are".
 
+         AND ITS HEIGHT GOES WITH ITS PIN. A drawer and `chelekom-sidebar` are `fixed h-screen`: the
+         height of the viewport is right for a panel pinned to it, and back in the flow the same
+         class stood a panel of three links as tall as the screen over the page below it. Height
+         `auto` lets it take its content's, and the panel inside it, which is `h-full`, follows. A
+         modal sets no height on its `fixed` layers, so it is drawn as it was.
+
+         AND SO DOES ITS SLIDE. A drawer is moved off the screen with `-translate-x-full`, and a
+         sidebar on a narrow device with `-translate-x-full md:translate-x-0`. Tailwind v4 writes
+         those as the `translate` property, which `transform: none` does not reach, so a selected
+         drawer opened its own width to the left, off the canvas. `translate: none` puts it back.
+
          IN THE BASE LAYER, because that is where the rule keeping `[hidden]` shut lives: Tailwind's
          preflight writes `[hidden] { display: none !important }` inside `@layer base`, and an
          `!important` in a cascade layer outranks every unlayered one, whatever the selectors. So a
@@ -1304,7 +1315,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
           [data-pb-reveal="true"],
           [data-pb-overlay][data-selected="true"],
           [data-pb-overlay]:has([data-selected="true"])
-        ) .fixed { position: static !important; transform: none !important; }
+        ) .fixed { position: static !important; transform: none !important; translate: none !important; height: auto !important; }
 
         :is(
           [data-pb-reveal="true"],
