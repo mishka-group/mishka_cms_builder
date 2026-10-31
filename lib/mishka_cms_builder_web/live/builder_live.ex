@@ -7300,9 +7300,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # holding place is named too, because it is an editing session and not a row: nothing else in the
   # product keeps work there, and an author who is told only "when you publish" would read it as
   # saved.
+  #
+  # AND WHERE IT DOES NOT SHOW YET. The canvas draws the held rule from the session, but the new-tab
+  # draft preview is compiled by the core from the saved stylesheet rows and the draft's markup, and
+  # the hold is in neither until the publish writes it. An author who opened that tab to check the
+  # style found it missing and read the Apply as lost, so the sentence says so.
   defp css_flash(:draft, said),
     do:
-      gettext("%{said} Held in this editing session — it goes live when you publish.",
+      gettext(
+        "%{said} Held in this editing session — it goes live when you publish. The canvas shows it now; the new-tab draft preview shows it only after publishing.",
         said: said
       )
 

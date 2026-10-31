@@ -987,6 +987,9 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       assert html =~ "Held in this editing session",
              "the flash did not say where the style is until then"
 
+      assert html =~ "the new-tab draft preview shows it only after publishing",
+             "the flash did not say the new-tab preview is built without the held rule"
+
       assert ElementCss.all(actor, site.id, owner) == %{}, "draft-stage CSS reached the live row"
       assert editor(view).staged_element_css, "nothing was held for the publish"
       assert editor(view).element_css =~ "rebeccapurple", "the canvas was not shown the rule"
@@ -1007,6 +1010,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "color: teal;"})
 
       refute html =~ "goes live when you publish"
+      refute html =~ "new-tab draft preview"
       assert [body] = Map.values(ElementCss.all(actor, site.id, owner))
       assert body =~ "teal", "the live row was not written under a chip reading Publish"
     end
