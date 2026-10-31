@@ -5379,7 +5379,16 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> Map.put("value_kind", "expr")
   end
 
-  defp icon_op(_params, op, value), do: Map.put(op, "value", value)
+  # BRACES ARE AN EXPRESSION, as in HEEx. The box shows a bound icon's source without them, so a
+  # name typed over it is text, and `{item[:icon]}` typed into it stays bound.
+  defp icon_op(_params, op, value) do
+    with [_braces, source] <- Regex.run(~r/\A\s*\{(.*)\}\s*\z/s, value),
+         source when source != "" <- String.trim(source) do
+      Map.merge(op, %{"value" => source, "value_kind" => "expr"})
+    else
+      _text -> Map.put(op, "value", value)
+    end
+  end
 
   defp unknown_in_map?(%{"shape" => "map"}, value),
     do: value != "" and Icons.available?() and not Icons.known?(value)

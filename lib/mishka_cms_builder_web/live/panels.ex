@@ -5215,7 +5215,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           title={
             (@icon_map? &&
                gettext("Not in any installed icon set. Pick one, or choose Text for words.")) ||
-              gettext("Not in any installed icon set — it will still be written as you typed it")
+              gettext(
+                "Not in any installed icon set — it will still be written as you typed it. {…} keeps an expression."
+              )
           }
         >
           ?

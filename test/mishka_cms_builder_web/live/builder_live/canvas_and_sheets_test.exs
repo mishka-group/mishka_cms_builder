@@ -740,6 +740,41 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert {"icon", {:string, "lucide-rocket"}} in edited.attrs
     end
 
+    # BRACES ARE AN EXPRESSION, AS IN HEEx. The box shows a bound icon's source without them, and a
+    # name typed over it is text; typed between braces it stays bound.
+    test "an icon typed between braces is written as an expression", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "iconbound",
+        template: "<div><span class={@icon}></span></div>",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{"editor" => "icon"}}],
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="iconbound" site="#{site.name}"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      component = node_with_tag(view, ".component")
+      render_click(view, "inspect", %{"id" => component.id})
+
+      html =
+        render_change(view, "icon_typed", %{
+          "name" => "icon",
+          "node_id" => component.id,
+          "value" => "{item[:icon]}"
+        })
+
+      edited = view |> editor() |> Map.fetch!(:tree) |> Tree.get(component.id)
+
+      assert {"icon", {:expr, "item[:icon]"}} in edited.attrs
+      assert html =~ "{…} keeps an expression"
+    end
+
     # Picking is a decision, so the popover has answered its question and gets out of the way. Typing
     # is not — there the list is a filter being narrowed, and closing it on every keystroke would
     # make the grid useless.
