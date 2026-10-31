@@ -3312,18 +3312,38 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     |> declared_attr_specs(fun)
     |> Enum.reduce(assigns_map, fn attr, acc ->
       case Map.get(attr, :required, false) and not Map.has_key?(acc, attr.name) do
-        true -> put_written(acc, node, attr)
+        true -> put_written(acc, node, attr, fun)
         false -> acc
       end
     end)
   end
 
-  defp put_written(assigns_map, node, attr) do
+  defp put_written(assigns_map, node, attr, fun) do
     case Node.attr(node, Atom.to_string(attr.name)) do
-      {:expr, _source} -> Map.put(assigns_map, attr.name, stand_in(attr.type, node, attr.name))
-      _unwritten -> assigns_map
+      {:expr, _source} ->
+        widget = function_widget(attr, fun)
+        Map.put(assigns_map, attr.name, stand_in(attr.type, node, attr.name, widget))
+
+      _unwritten ->
+        assigns_map
     end
   end
+
+  # AN ICON'S NAME IS READ, NOT PRINTED. `chelekom-icon`'s body is `%{name: "hero-" <> _} = assigns`
+  # and core's `<.icon>` has the same head, so the id-shaped stand-in raised in both. Before the
+  # palette arrives the canvas knows no attribute is required, so `name={item[:icon]}` on a kit icon
+  # was handed `pb-<id>-name`, and core logged "body did not apply" on every render; core's own
+  # `<.icon>` drew the "could not render" box. An attribute the Inspector gives its icon picker
+  # stands in as a real icon instead. That is read off the attribute, not off the palette.
+  @icon_stand_in "hero-sparkles"
+
+  defp stand_in(:string, _node, _name, :icon), do: @icon_stand_in
+  defp stand_in(type, node, name, _widget), do: stand_in(type, node, name)
+
+  # Core's `<.icon>` names its icon `name`, which the Inspector reads as an icon only on a component
+  # whose name ends in `-icon`. Any other attribute of a function component is asked by its name.
+  defp function_widget(%{name: :name}, :icon), do: :icon
+  defp function_widget(%{name: name}, _fun), do: Inspector.widget(%{"name" => to_string(name)})
 
   defp stand_in(:string, node, name), do: "pb-#{node.id}-#{name}"
   defp stand_in(:integer, _node, _name), do: 0
@@ -3937,7 +3957,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
            atom when not is_nil(atom) <- Map.get(declared, name),
            false <- Map.has_key?(acc, atom) or defaulted?(attr),
            {:expr, _source} <- Node.attr(node, name) do
-        Map.put(acc, atom, stand_in(kit_type(attr), node, atom))
+        widget = Inspector.widget(attr, %{}, %{name: Node.component_name(node)})
+        Map.put(acc, atom, stand_in(kit_type(attr), node, atom, widget))
       else
         _supplied_defaulted_or_unwritten -> acc
       end
