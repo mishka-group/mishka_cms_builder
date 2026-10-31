@@ -2409,6 +2409,38 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     """
   end
 
+  # A TEXTAREA'S CONTENT IS TEXT, NOT MARKUP. The browser reads everything up to `</textarea>` as the
+  # field's value, so the `<span data-node-id …>` the canvas draws a text node as, and the dev
+  # annotations around it, showed as words in the box. Its text children are written into it as
+  # text, through `text_html/1` like any other run, and nothing else is: an element dropped inside
+  # one keeps its row in the layers rail, and the published page would show its markup as text.
+  # A `<title>` reads its content the same way. `phx-no-format` keeps the formatter from indenting
+  # the content, which would put whitespace in the value.
+  @raw_text_tags ~w(textarea title)
+
+  defp visible_node(%{node: %Node{kind: :tag, tag: tag}} = assigns) when tag in @raw_text_tags do
+    assigns =
+      assigns
+      |> assign(
+        :html_attrs,
+        Map.merge(html_attrs(assigns.node, assigns.tree), form_marks(assigns))
+      )
+      |> assign(:raw_text, raw_text(assigns.node, assigns.tree))
+
+    ~H"""
+    <.dynamic_tag
+      tag_name={@node.tag}
+      draggable="true"
+      data-node-id={@node.id}
+      style={wrapper_style(assigns)}
+      phx-click="select"
+      phx-value-id={@node.id}
+      {@html_attrs}
+      phx-no-format
+    >{text_html(@raw_text)}</.dynamic_tag>
+    """
+  end
+
   defp visible_node(%{node: %Node{meta: %{self_close: true}}} = assigns) do
     assigns =
       assign(
@@ -2476,6 +2508,15 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   defp trailing_in_component?(_assigns, _node), do: false
+
+  defp raw_text(node, tree) do
+    Enum.map_join(node.children, fn id ->
+      case Tree.get(tree, id) do
+        %Node{kind: :text, text: text} when is_binary(text) -> text
+        _element_or_gone -> ""
+      end
+    end)
+  end
 
   # A function the editor cannot resolve, or one missing something it declared required. Both are
   # the editor's own markup rather than the component's, so both keep the box.
