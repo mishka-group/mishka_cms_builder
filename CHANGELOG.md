@@ -17,3 +17,4 @@
 - A `<textarea>` on the canvas holds its text as its value, as on the published page, instead of the editor's `<span data-node-id>` markup around it; an element dropped inside one is not drawn into it, and a `<title>` is drawn the same way
 - An icon name the canvas cannot compute, such as `name={item[:icon]}` on `chelekom-icon` or core's `<.icon>`, stands in as `hero-sparkles` instead of an id-shaped `pb-<id>-name` that the icon's `"hero-" <> _` head refused, which logged "body did not apply" on every render before the palette arrived and drew a "could not render" box for `<.icon>`
 - The ••• menu scrolls within the screen below the header, so on a short window its last entries (Command palette, Fit to screen, Record history) are no longer cut off
+- The "body" crumb in the canvas bar drops the selection, as Escape does, instead of sending a select with no element and crashing the page and component builders

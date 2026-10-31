@@ -8690,9 +8690,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           data-role="pb-crumbs"
           class="flex min-w-0 items-center gap-[7px] overflow-x-auto font-['Space_Grotesk'] text-[11.5px] font-medium text-[#6d6a63] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[960px]:hidden"
         >
+          <%!-- The document itself is no node, so this crumb drops the selection, as Escape does:
+                `select` needs an id, and there is none to send. --%>
           <button
             type="button"
-            phx-click="select"
+            id="pb-crumb-body"
+            phx-click="clear_selection"
             class={[
               "whitespace-nowrap",
               (@selection && "text-[#6d6a63] hover:text-[#4f4bcc]") || "font-bold text-[#1b1a18]"
