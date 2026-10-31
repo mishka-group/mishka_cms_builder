@@ -432,10 +432,14 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # section that keeps drafts ever has one: a component saves straight to its live record, so
   # pointing its author at that menu pointed them at a control that never appears. The session
   # spells its section with an underscore and `Drafts` with a hyphen, hence the normalize.
+  #
+  # Even there the entry waits for the draft: the top bar draws it only once a draft carries its
+  # shareable link, so before the first autosave the hint says when it appears rather than sending
+  # the author to a menu that is not there yet.
   defp click_through(section) do
     case Drafts.supported?(Section.normalize(section)) do
       true ->
-        gettext("use Preview ▸ Open in a new tab to click through a saved draft.")
+        gettext("once a draft is saved, use Preview ▸ Open in a new tab to click through it.")
 
       false ->
         gettext("they run on the published site once this %{section} is saved.",
