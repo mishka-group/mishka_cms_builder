@@ -3085,6 +3085,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           icon_library={@icon_library}
           group_folds={@group_folds}
           typed={@typed}
+          section={@section}
         />
 
         <%!-- A SLOT AN AUTHOR HAS TO ADD IS NOT A DETAIL. Folded, the row that says "End section +"
@@ -3838,6 +3839,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:group_folds, :map, default: %{}, doc: "the sections the reader has explicitly folded")
   attr(:hidden, :list, default: [], doc: "attributes another section of the panel writes")
   attr(:typed, :map, default: %{}, doc: "what the forms hold, typed and not yet applied")
+  attr(:section, :string, default: "page", doc: "which of the four documents is being edited")
 
   defp props(assigns) do
     assigns =
@@ -3897,6 +3899,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           icon_library={@icon_library}
           widget={Inspector.widget(attr, @entry.features, @entry)}
           waiting_on={waiting_on(@shown_when, attr, @node, @entry)}
+          section={@section}
         />
       </div>
     </section>
@@ -4474,6 +4477,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     doc: "the switch this property shows behind, while off"
   )
 
+  attr(:section, :string,
+    default: "page",
+    doc: "the document that cannot be published without it"
+  )
+
   # One property control, chosen by `MishkaCmsCore.Runtime.Authoring.Inspector.widget/2`.
   #
   # An attribute the author has not set renders the component's own default and serializes nothing —
@@ -4512,6 +4520,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       |> assign(:required?, Inspector.required?(assigns.attr))
       |> then(&assign(&1, :missing?, &1.required? and blank?(&1.value)))
       |> assign(:mistyped?, mistyped?(assigns.attr, assigns.node, assigns.name))
+      |> assign(
+        :noun,
+        String.downcase(translate(Section.label(Section.normalize(assigns.section))))
+      )
 
     ~H"""
     <%!-- One property. It carries its own state rather than leaving it to be inferred: a violet dot
@@ -4600,7 +4612,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </p>
 
       <p :if={@missing?} class="mt-1.5 text-[10px] font-semibold text-[#c0473d]">
-        {gettext("Required — the page cannot be published without it.")}
+        {gettext("Required — the %{noun} cannot be published without it.", noun: @noun)}
       </p>
       <p
         :if={@mistyped?}
@@ -4608,7 +4620,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         class="mt-1.5 text-[10px] font-semibold text-[#c0473d]"
       >
         {gettext(
-          "This holds text where the component takes a list or a map, so the page cannot be published with it. Remove it to go back to the default."
+          "This holds text where the component takes a list or a map, so the %{noun} cannot be published with it. Remove it to go back to the default.",
+          noun: @noun
         )}
       </p>
       <p

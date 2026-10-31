@@ -1289,6 +1289,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
 
       _loaded = render_async(view)
 
+      # The Inspector names the document being edited, not a page.
+      render_click(view, "select", %{"id" => needful_node(view).id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      assert render(view) =~ "Required — the component cannot be published without it."
+      refute render(view) =~ "the page cannot be published"
+
       html = render_click(view, "publish", %{})
 
       assert html =~ "Not published"
