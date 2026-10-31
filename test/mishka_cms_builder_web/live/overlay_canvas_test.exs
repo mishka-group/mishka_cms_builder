@@ -276,6 +276,18 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
       refute chrome =~ ~r/:is\(\.fixed, \.absolute\)/,
              "a carousel's own controls are absolute, and this drops them in the corner"
     end
+
+    # A DRAWER AND `chelekom-sidebar` ARE `fixed h-screen`, and back in the flow the viewport's
+    # height stood a panel of a few links as tall as the screen over the page below it. A drawer is
+    # also slid off the screen with Tailwind v4's `translate` property, which `transform` is not.
+    test "and an opened panel takes its content's height and stays in view", %{chrome: chrome} do
+      assert chrome =~
+               ~r/\)\s*\.fixed \{ position: static !important; transform: none !important; translate: none !important; height: auto !important; \}/,
+             "an opened drawer keeps `h-screen`, or its `-translate-x-full` keeps it off the canvas"
+
+      refute chrome =~ ~r/\.fixed \{[^}]*min-height/,
+             "a panel's own minimum, a modal's `min-h-full` row among them, is left alone"
+    end
   end
 
   # AN OPEN BUTTON THAT DOES NOTHING IS WORSE THAN NO BUTTON. A component may be written as two

@@ -6578,8 +6578,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   # A component that declares a property as required means the page will not render without it, so
-  # saving one that is missing writes a page that is already broken. The fields are marked in the
-  # Inspector; this is the second half of that — it says WHICH, and it does not save.
+  # publishing one that is missing writes a page that is already broken. The fields are marked in the
+  # Inspector; this is the second half of that — it says WHICH, and it does not publish. A draft is
+  # not gated, so the refusal and the Inspector both say publish, the one write it stops.
   # WHAT THE PAGE WAS TOLD IT MUST HAVE. Both of these used to be their own reading of the
   # declaration, and the layers rail had a third — which is to say it had none, and the author found
   # out at Publish. `Inspector.unmet/3` is the one answer all three now take, so the badge on a row
@@ -6620,8 +6621,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       socket,
       :error,
       ngettext(
-        "Not saved — %{fields} holds text where the component takes a list or a map. Remove it in the Inspector to use the default.",
-        "Not saved — %{fields} hold text where the component takes a list or a map. Remove them in the Inspector to use the defaults.",
+        "Not published — %{fields} holds text where the component takes a list or a map. Remove it in the Inspector to use the default.",
+        "Not published — %{fields} hold text where the component takes a list or a map. Remove them in the Inspector to use the defaults.",
         length(mistyped),
         fields: Enum.join(Enum.uniq(mistyped), ", ")
       )
@@ -6640,8 +6641,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       socket,
       :error,
       ngettext(
-        "Not saved — %{fields} is required and empty.",
-        "Not saved — %{fields} are required and empty.",
+        "Not published — %{fields} is required and empty.",
+        "Not published — %{fields} are required and empty.",
         length(missing),
         fields: Enum.join(Enum.uniq(missing), ", ")
       )
@@ -7299,9 +7300,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # holding place is named too, because it is an editing session and not a row: nothing else in the
   # product keeps work there, and an author who is told only "when you publish" would read it as
   # saved.
+  #
+  # AND WHERE IT DOES NOT SHOW YET. The canvas draws the held rule from the session, but the new-tab
+  # draft preview is compiled by the core from the saved stylesheet rows and the draft's markup, and
+  # the hold is in neither until the publish writes it. An author who opened that tab to check the
+  # style found it missing and read the Apply as lost, so the sentence says so.
   defp css_flash(:draft, said),
     do:
-      gettext("%{said} Held in this editing session — it goes live when you publish.",
+      gettext(
+        "%{said} Held in this editing session — it goes live when you publish. The canvas shows it now; the new-tab draft preview shows it only after publishing.",
         said: said
       )
 

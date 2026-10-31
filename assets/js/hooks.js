@@ -752,12 +752,33 @@ export const PB_SHORTCUTS = (event) => {
   return null;
 };
 
-// Typing in a field must stay typing. Undo is the one exception: it means "undo my last edit"
-// everywhere, including mid-text-edit, which is what every editor does.
+// Typing in a field must stay typing.
 const PB_EDITABLE = (target) =>
   target &&
   (target.isContentEditable ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
+// A field that holds typed text: inline words on the canvas, the Code window's CodeMirror, a text
+// input, a textarea. A `<select>` or a checkbox holds none.
+const PB_TEXT_INPUTS = ["text", "search", "url", "tel", "email", "password", "number"];
+
+const PB_TYPED = (target) =>
+  target.isContentEditable ||
+  target.tagName === "TEXTAREA" ||
+  (target.tagName === "INPUT" && PB_TEXT_INPUTS.includes(target.type));
+
+// Whether a field keeps this key for itself, so the editor neither prevents nor sends it.
+//
+// UNDO AND REDO IN TYPED TEXT ARE THE FIELD'S OWN. The words being typed are not in the document
+// yet: inline text is written by `set_text` on blur, so ⌘Z sent to the server undid the structural
+// change before them while they stayed on screen. Left to the field, it is the browser's undo, or
+// CodeMirror's own history in the Code window. With the focus anywhere else, a `<select>` included,
+// ⌘Z still undoes the page.
+const PB_FIELD_KEEPS = (event, shortcut) => {
+  if (!PB_EDITABLE(event.target)) return false;
+  if (shortcut !== "undo" && shortcut !== "redo") return true;
+  return PB_TYPED(event.target);
+};
 
 // A MODAL THAT CLOSES ITSELF OWNS ESCAPE. Each one marked `data-pb-modal` binds
 // `phx-window-keydown` on escape, the one binding that also hears the key inside CodeMirror, where
@@ -950,7 +971,7 @@ const PbShortcuts = {
 
       const shortcut = PB_SHORTCUTS(event);
       if (!shortcut) return;
-      if (PB_EDITABLE(event.target) && shortcut !== "undo" && shortcut !== "redo") return;
+      if (PB_FIELD_KEEPS(event, shortcut)) return;
       if (shortcut === "escape" && PB_MODAL_OPEN()) return;
 
       event.preventDefault();
@@ -1337,7 +1358,7 @@ const PbCanvas = {
 
       const shortcut = PB_SHORTCUTS(event);
       if (!shortcut) return;
-      if (PB_EDITABLE(event.target) && shortcut !== "undo" && shortcut !== "redo") return;
+      if (PB_FIELD_KEEPS(event, shortcut)) return;
 
       event.preventDefault();
 
@@ -1377,7 +1398,13 @@ const PbCanvas = {
     // click re-rendered all ~70 nodes of the document, and a click took over half a second to show
     // anything. Marking the node here is instant, and the server's answer moves nothing that is
     // already right.
-    this.markSelected = (id) => {
+    //
+    // A SLOT IS RINGED ON THE ELEMENT IT BELONGS TO. A component draws its slots inside its own
+    // markup, so a `<:item>` selected in the layers rail has no `[data-node-id]` here, and with
+    // nothing painted the rules that keep an overlay open while something in it is selected let an
+    // opened sidebar fall shut. `anchor` is the server's nearest drawn ancestor (`selection_anchor/2`
+    // in `CanvasLive`), kept so `updated()` paints it again; the selection itself stays the slot.
+    this.markSelected = (id, anchor = null) => {
       const doc = this.el.ownerDocument;
       // THE PANEL BELONGS TO THE ELEMENT IT WAS OPENED ON. It survives a patch — that is what lets
       // someone try six spreads in a row — but a NEW selection is a new question, and carrying the
@@ -1390,11 +1417,13 @@ const PbCanvas = {
         this.typing = false;
       }
       this.selectedId = id || null;
+      this.selectedAnchor = (id && anchor) || null;
       doc
         .querySelectorAll('[data-node-id][data-selected="true"]')
         .forEach((el) => el.removeAttribute("data-selected"));
       if (!id) return this.placeToolbar?.();
-      const node = doc.querySelector(`[data-node-id="${CSS.escape(id)}"]`);
+      const drawn = (nodeId) => doc.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+      const node = drawn(id) || (this.selectedAnchor && drawn(this.selectedAnchor));
       if (node) node.setAttribute("data-selected", "true");
       // A SELECTION MADE SOMEWHERE ELSE HAS TO BE FINDABLE. Clicking a review note anchored to an
       // element three screens down used to ring something nobody could see. A selection made ON the
@@ -1408,7 +1437,7 @@ const PbCanvas = {
     };
 
     // Selections made ANYWHERE — the layers rail, a comment's deep link, undo — arrive here.
-    this.handleEvent("pb:selected", ({ id }) => this.markSelected(id));
+    this.handleEvent("pb:selected", ({ id, anchor }) => this.markSelected(id, anchor));
 
     // The held elements, painted the same way the ring is: an id list the client applies, never
     // `data-marked` rendered per node — that would re-render the whole document on every ⌘-click.
@@ -2218,7 +2247,7 @@ const PbCanvas = {
     //
     // One attribute on the root, read once. Not `data-selected` per node — that is still the
     // client's to paint, and rendering it per node would fight every patch.
-    this.markSelected(this.el.dataset.selection || null);
+    this.markSelected(this.el.dataset.selection || null, this.el.dataset.selectionAnchor || null);
 
     this.placeToolbar();
     window.addEventListener("scroll", this.placeToolbar, { passive: true });
@@ -2334,7 +2363,7 @@ const PbCanvas = {
     // A patch re-renders from the server's HTML, which does not carry the ring — the attribute is
     // client state. Re-applying it here is what keeps a selection visible across an unrelated
     // update. The blank floors are client state too.
-    this.markSelected?.(this.selectedId);
+    this.markSelected?.(this.selectedId, this.selectedAnchor);
     this.placeToolbar?.();
     this.blanks?.();
     announcePainted(this.el);

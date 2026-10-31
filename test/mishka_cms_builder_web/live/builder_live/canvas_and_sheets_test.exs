@@ -29,6 +29,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert has_element?(view, "#pb-redo")
     end
 
+    # THE ••• MENU IS TALLER THAN A SHORT SCREEN. At 623px it stood 674px with nothing to scroll, so
+    # Command palette, Fit to screen and Record history were cut off below the window's edge.
+    test "the ••• menu scrolls within the screen below the header", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      menu = view |> element("#pb-more-menu") |> render() |> opening_tag()
+
+      assert menu =~ "max-h-[calc(100vh-56px)]"
+      assert menu =~ "overflow-y-auto"
+    end
+
     # The editor takes the whole viewport, like the prototype: no admin sidebar, no admin topbar, no
     # 1340px content column. It is a `h-screen` three-column workspace, and nesting it in the admin
     # shell's scrolling, padded, width-capped `<main>` costs it the canvas and adds a second
@@ -1149,6 +1160,87 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       refute html =~ "contact_validate"
     end
 
+    # A FORM'S CLASS IS DRAWN AS THE PAGE DRAWS IT. `<.form>` declares no `class`, so the canvas
+    # gathers it into the form's globals, and it used to drop it there with the `phx-*` bindings: the
+    # field and the button touched on the canvas and stood apart on the published page. A style set
+    # in the inspector reaches the form the same way, and the bindings are still left out.
+    test "a form keeps its class and the inspector's styles, and still drops its bindings", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, tree} =
+        Tree.parse("""
+        <.form :let={f} id="spaced-form" as={:contact} for={assigns[:contact_form]} class="space-y-4" phx-submit="contact_submit">
+          <.input field={f[:email]} type="email" label="Email" />
+          <button type="submit">Send</button>
+        </.form>
+        """)
+
+      {:ok, session} = EditorSession.put_tree(token(view), tree)
+      form = session.tree |> Tree.walk() |> Enum.find(&(&1.tag == ".form"))
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => form.id,
+        "bucket" => "base",
+        "prop" => "padding",
+        "value" => "8px"
+      })
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, ~s(form#spaced-form[class~="space-y-4"])),
+             "the form's own class is what spaces its field from its button"
+
+      assert has_element?(canvas, ~s(form#spaced-form[class~="p-[8px]!"])),
+             "and the inspector's padding reaches it too"
+
+      refute render(canvas) =~ "contact_submit"
+    end
+
+    # AND ITS FIELDS ARE ITS OWN CHILDREN THERE. `space-y-4` reaches the element right inside the
+    # form, which was the editor's box around `<.input>`: the gap landed on the box and the field's
+    # `mb-2` collapsed into it, 16px on the canvas and 8px on the page, where the field's own margin
+    # outranks Tailwind's zero-specificity `:where`. A tag that spaces its children is the same.
+    test "a field under a parent that spaces its children is that parent's own child", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, tree} =
+        Tree.parse("""
+        <.form :let={f} id="spaced-form" as={:contact} for={assigns[:contact_form]} class="space-y-4">
+          <.input field={f[:email]} type="email" label="Email" />
+          <button type="submit">Send</button>
+        </.form>
+        <div id="ruled" class="divide-y"><.input name="ruled" value="" label="Ruled" /></div>
+        <div id="padded" class="p-4"><.input name="padded" value="" label="Padded" /></div>
+        """)
+
+      {:ok, session} = EditorSession.put_tree(token(view), tree)
+      inputs = session.tree |> Tree.walk() |> Enum.filter(&(&1.tag == ".input"))
+
+      [spaced, ruled, padded] =
+        Enum.map(inputs, &~s|[data-node-id="#{&1.id}"]:not([data-pb-frame])|)
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, "form#spaced-form > div.mb-2" <> spaced),
+             "the form's `space-y-4` lands on the editor's box around the field, not on the field"
+
+      assert has_element?(canvas, "div#ruled > div.mb-2" <> ruled)
+
+      assert has_element?(canvas, ~s(div#padded > div[data-pb-frame] > div.mb-2)),
+             "a parent that leaves its children alone keeps the editor's box"
+
+      refute has_element?(canvas, "div#padded > " <> padded)
+    end
+
     # THE OTHER HALF OF THE SAME SURFACE, and the half the installed kit never reaches. All 23 of
     # Chelekom's fields take a `%Phoenix.HTML.FormField{}`, so `field={f[:email]}` is the only thing
     # the editor writes for them. A kit on the documented fallback gets the pair instead —
@@ -1603,6 +1695,57 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert html =~ "<form", "an empty form is still a form"
       assert html =~ "min-height:56px", "and is somewhere to aim at"
       refute html =~ "could not render"
+    end
+
+    # A TEXTAREA'S CONTENT IS ITS VALUE. The browser reads everything up to `</textarea>` as text, so
+    # the `<span data-node-id …>` a text node is drawn as became words in the box.
+    test "a textarea holds its text, not the editor's markup", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="box"><textarea name="note">hello &amp; you</textarea></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      textarea = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "textarea"))
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert [_whole, content] = Regex.run(~r{<textarea[^>]*>(.*?)</textarea>}s, html)
+
+      assert content == "hello &amp; you",
+             "the text node was drawn as a `<span>`, which the browser shows as words in the box"
+
+      assert html =~ ~s(data-node-id="#{textarea.id}")
+    end
+
+    # A BLOCK DROPPED INTO ONE IS STILL NOT DRAWN AS MARKUP. Containment lets it in; the canvas does
+    # not leak it into the field.
+    test "and a child element in a textarea is not drawn into it", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="box"><textarea name="note">hi</textarea></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      textarea = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "textarea"))
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "parent_id" => textarea.id,
+        "index" => "1",
+        "template" => ~s(<p id="inside">inside</p>)
+      })
+
+      assert [_text, _element] = Tree.get(editor(view).tree, textarea.id).children
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert [_whole, content] = Regex.run(~r{<textarea[^>]*>(.*?)</textarea>}s, html)
+      assert content == "hi"
     end
   end
 

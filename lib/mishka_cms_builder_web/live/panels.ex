@@ -777,11 +777,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         >
           <.icon name={:more} size={16} />
         </button>
+        <%!-- Taller than a short screen, so it scrolls within the height below the 56px header
+              (`h-14`) instead of cutting off its last entries. --%>
         <div
           id="pb-more-menu"
           phx-window-keydown={menu_close("#pb-more-menu")}
           phx-key="escape"
-          class="absolute left-0 top-[38px] z-[70] hidden w-[236px] rounded-[13px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
+          class="absolute left-0 top-[38px] z-[70] hidden max-h-[calc(100vh-56px)] w-[236px] overflow-y-auto rounded-[13px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
         >
           <%!-- Stepped in the browser by `PbZoom`, which tells the server through `zoom_set`. --%>
           <div
@@ -4561,7 +4563,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </p>
 
       <p :if={@missing?} class="mt-1.5 text-[10px] font-semibold text-[#c0473d]">
-        {gettext("Required — the page cannot be saved without it.")}
+        {gettext("Required — the page cannot be published without it.")}
       </p>
       <p
         :if={@mistyped?}
@@ -4569,7 +4571,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         class="mt-1.5 text-[10px] font-semibold text-[#c0473d]"
       >
         {gettext(
-          "This holds text where the component takes a list or a map, so the page cannot be saved with it. Remove it to go back to the default."
+          "This holds text where the component takes a list or a map, so the page cannot be published with it. Remove it to go back to the default."
         )}
       </p>
       <p

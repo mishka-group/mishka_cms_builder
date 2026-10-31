@@ -303,6 +303,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     )
     |> assign(:missing?, false)
     |> assign(:selection, nil)
+    |> assign(:selection_anchor, nil)
     |> assign(:preview?, true)
     |> assign(:example?, true)
     |> assign(:page_title, gettext("Example"))
@@ -535,6 +536,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # parent window on every patch where it changed, and the frame's spinner is dismissed by that.
     |> assign(:revision, session.revision)
     |> assign(:selection, session.selection)
+    |> assign(:selection_anchor, selection_anchor(session.tree, session.selection))
     |> assign(:locked, session.locked)
     |> assign(:hidden, session.hidden)
     |> assign(:pinned, session.pinned || MapSet.new())
@@ -885,11 +887,30 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # per-node markup. Rendering `data-marked` on every node would re-render the whole document on
   # every ⌘-click, which is the trap the selection ring already sidesteps.
   defp sync_selection(socket, _previous, %{selection: selection} = session) do
+    socket = assign_session(socket, session)
+
     socket
-    |> assign_session(session)
-    |> push_event("pb:selected", %{id: selection})
+    |> push_event("pb:selected", %{id: selection, anchor: socket.assigns.selection_anchor})
     |> push_event("pb:marked", %{ids: MapSet.to_list(session.marked || MapSet.new())})
   end
+
+  # A SLOT HAS NO ELEMENT OF ITS OWN ON THE CANVAS. A component draws its slots inside its own
+  # markup, so a sidebar's `<:item>` selected in the layers rail named an id no element carries: the
+  # hook painted `data-selected` on nothing, and the rules that keep an overlay open while something
+  # in it is selected let go of it, so an opened sidebar snapped back to `fixed` and the full height
+  # of the screen. The anchor is the nearest ancestor that is not a slot, which the hook rings in
+  # the slot's place; `nil` for anything else, which carries its own `data-node-id`.
+  defp selection_anchor(tree, id) when is_binary(id) do
+    case Tree.get(tree, id) do
+      %Node{kind: :slot} ->
+        tree |> Tree.ancestors(id) |> Enum.find_value(&(&1.kind != :slot && &1.id))
+
+      _drawn_or_gone ->
+        nil
+    end
+  end
+
+  defp selection_anchor(_tree, _id), do: nil
 
   @impl true
   # PREVIEW ANSWERS ONE EVENT: the way out of it. Every other event here belongs to editing, and the
@@ -1276,6 +1297,17 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
          own prev and next buttons and both fell into a heap in the top-left corner — reported as
          "the next and prev button is not obvious how they are and where they are".
 
+         AND ITS HEIGHT GOES WITH ITS PIN. A drawer and `chelekom-sidebar` are `fixed h-screen`: the
+         height of the viewport is right for a panel pinned to it, and back in the flow the same
+         class stood a panel of three links as tall as the screen over the page below it. Height
+         `auto` lets it take its content's, and the panel inside it, which is `h-full`, follows. A
+         modal sets no height on its `fixed` layers, so it is drawn as it was.
+
+         AND SO DOES ITS SLIDE. A drawer is moved off the screen with `-translate-x-full`, and a
+         sidebar on a narrow device with `-translate-x-full md:translate-x-0`. Tailwind v4 writes
+         those as the `translate` property, which `transform: none` does not reach, so a selected
+         drawer opened its own width to the left, off the canvas. `translate: none` puts it back.
+
          IN THE BASE LAYER, because that is where the rule keeping `[hidden]` shut lives: Tailwind's
          preflight writes `[hidden] { display: none !important }` inside `@layer base`, and an
          `!important` in a cascade layer outranks every unlayered one, whatever the selectors. So a
@@ -1304,7 +1336,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
           [data-pb-reveal="true"],
           [data-pb-overlay][data-selected="true"],
           [data-pb-overlay]:has([data-selected="true"])
-        ) .fixed { position: static !important; transform: none !important; }
+        ) .fixed { position: static !important; transform: none !important; translate: none !important; height: auto !important; }
 
         :is(
           [data-pb-reveal="true"],
@@ -1694,7 +1726,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       phx-hook="PbCanvas"
       dir={@dir}
       data-token={@token}
-      {%{"data-selection" => @selection}}
+      {%{"data-selection" => @selection, "data-selection-anchor" => @selection_anchor}}
       data-preview={to_string(@preview?)}
       data-example={to_string(@example?)}
       data-revision={@revision}
@@ -2377,6 +2409,38 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     """
   end
 
+  # A TEXTAREA'S CONTENT IS TEXT, NOT MARKUP. The browser reads everything up to `</textarea>` as the
+  # field's value, so the `<span data-node-id …>` the canvas draws a text node as, and the dev
+  # annotations around it, showed as words in the box. Its text children are written into it as
+  # text, through `text_html/1` like any other run, and nothing else is: an element dropped inside
+  # one keeps its row in the layers rail, and the published page would show its markup as text.
+  # A `<title>` reads its content the same way. `phx-no-format` keeps the formatter from indenting
+  # the content, which would put whitespace in the value.
+  @raw_text_tags ~w(textarea title)
+
+  defp visible_node(%{node: %Node{kind: :tag, tag: tag}} = assigns) when tag in @raw_text_tags do
+    assigns =
+      assigns
+      |> assign(
+        :html_attrs,
+        Map.merge(html_attrs(assigns.node, assigns.tree), form_marks(assigns))
+      )
+      |> assign(:raw_text, raw_text(assigns.node, assigns.tree))
+
+    ~H"""
+    <.dynamic_tag
+      tag_name={@node.tag}
+      draggable="true"
+      data-node-id={@node.id}
+      style={wrapper_style(assigns)}
+      phx-click="select"
+      phx-value-id={@node.id}
+      {@html_attrs}
+      phx-no-format
+    >{text_html(@raw_text)}</.dynamic_tag>
+    """
+  end
+
   defp visible_node(%{node: %Node{meta: %{self_close: true}}} = assigns) do
     assigns =
       assign(
@@ -2444,6 +2508,15 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   defp trailing_in_component?(_assigns, _node), do: false
+
+  defp raw_text(node, tree) do
+    Enum.map_join(node.children, fn id ->
+      case Tree.get(tree, id) do
+        %Node{kind: :text, text: text} when is_binary(text) -> text
+        _element_or_gone -> ""
+      end
+    end)
+  end
 
   # A function the editor cannot resolve, or one missing something it declared required. Both are
   # the editor's own markup rather than the component's, so both keep the box.
@@ -2612,18 +2685,30 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # A KIT SAYS IT IN ITS OWN MARKUP; AN AUTHOR SAYS IT IN A CLASS. `<div class="[&>*]:rounded-none">`
   # is the same promise written by hand, and the canvas has to keep it the same way — otherwise the
-  # editor disagrees with the page over markup the author wrote themselves.
-  defp shapes_children?(%Node{kind: :component} = parent, assigns) do
-    case assigns[:shapers] do
-      nil -> false
-      names -> MapSet.member?(names, Node.component_name(parent))
-    end
-  end
+  # editor disagrees with the page over markup the author wrote themselves. A component's class is
+  # read too: `<.form class="space-y-4">` is a component node, and it spaces its own fields.
+  defp shapes_children?(%Node{kind: :component} = parent, assigns),
+    do: authored_shaping?(parent) or kit_shaping?(parent, assigns[:shapers])
 
-  defp shapes_children?(%Node{kind: :tag} = parent, _assigns),
-    do: PaletteEntry.shapes_children?(Node.attr_text(parent, "class"))
+  defp shapes_children?(%Node{kind: :tag} = parent, _assigns), do: authored_shaping?(parent)
 
   defp shapes_children?(_parent, _assigns), do: false
+
+  defp kit_shaping?(_parent, nil), do: false
+  defp kit_shaping?(parent, names), do: MapSet.member?(names, Node.component_name(parent))
+
+  # `space-y-*`, `space-x-*` and `divide-*` REACH THE CHILD TOO, through Tailwind's
+  # `:where(& > :not(:last-child))`. Around a wrapper the gap landed on the editor's box and the
+  # field's own `mb-2` collapsed into it: 16px under `space-y-4` on the canvas, while on the page the
+  # field's `mb-2` outranks the zero-specificity `:where` and the gap is 8px.
+  @spaces_children ~r/(?<![\w-])-?(?:space-[xy]|divide)-/
+
+  defp authored_shaping?(parent) do
+    case Node.attr_text(parent, "class") do
+      nil -> false
+      class -> PaletteEntry.shapes_children?(class) or Regex.match?(@spaces_children, class)
+    end
+  end
 
   # `data-pb-frame` says the box is the editor's, which is what the canvas hook measures to give a
   # component that draws nothing a floor (`markBlanks` in `hooks.js`). Never on a stamped root, which
@@ -3165,11 +3250,40 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end)
     |> Map.new()
     |> put_globals(node, declared, global)
+    |> put_function_class(node, declared, global)
     |> put_declared_defaults(module, fun)
     |> put_form_fields(node, tree, declared)
     |> put_unresolved(node, module, fun)
     |> Map.merge(slot_assigns(node, tree, assigns))
     |> tracked()
+  end
+
+  # A FUNCTION COMPONENT'S CLASS IS THE AUTHOR'S TOO. `canvas_owned?/1` keeps `class` out of the
+  # globals because the canvas rebuilds it from `meta.styles`, and a tag and a kit component get it
+  # back through `put_class/2` and `put_component_class/3`. A function component got nothing back,
+  # so `<.form class="space-y-4">` drew its field and its button touching on the canvas and spaced
+  # on the published page. Rebuilt the same way, written as the serializer writes it, into the
+  # `class` the component declares, or into its globals when it gathers undeclared attributes there,
+  # as `<.form>` does.
+  defp put_function_class(assigns_map, node, declared, global) do
+    class =
+      Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+        important?: true
+      )
+
+    case {class, Map.get(declared, "class"), global} do
+      {nil, _declared, _global} ->
+        assigns_map
+
+      {class, key, _global} when not is_nil(key) ->
+        Map.put(assigns_map, key, class)
+
+      {_class, nil, nil} ->
+        assigns_map
+
+      {class, nil, global} ->
+        Map.update(assigns_map, global, %{"class" => class}, &Map.put(&1, "class", class))
+    end
   end
 
   # AN EXPRESSION THE CANVAS CANNOT COMPUTE IS STILL SOMETHING THE AUTHOR WROTE.
@@ -3198,18 +3312,38 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     |> declared_attr_specs(fun)
     |> Enum.reduce(assigns_map, fn attr, acc ->
       case Map.get(attr, :required, false) and not Map.has_key?(acc, attr.name) do
-        true -> put_written(acc, node, attr)
+        true -> put_written(acc, node, attr, fun)
         false -> acc
       end
     end)
   end
 
-  defp put_written(assigns_map, node, attr) do
+  defp put_written(assigns_map, node, attr, fun) do
     case Node.attr(node, Atom.to_string(attr.name)) do
-      {:expr, _source} -> Map.put(assigns_map, attr.name, stand_in(attr.type, node, attr.name))
-      _unwritten -> assigns_map
+      {:expr, _source} ->
+        widget = function_widget(attr, fun)
+        Map.put(assigns_map, attr.name, stand_in(attr.type, node, attr.name, widget))
+
+      _unwritten ->
+        assigns_map
     end
   end
+
+  # AN ICON'S NAME IS READ, NOT PRINTED. `chelekom-icon`'s body is `%{name: "hero-" <> _} = assigns`
+  # and core's `<.icon>` has the same head, so the id-shaped stand-in raised in both. Before the
+  # palette arrives the canvas knows no attribute is required, so `name={item[:icon]}` on a kit icon
+  # was handed `pb-<id>-name`, and core logged "body did not apply" on every render; core's own
+  # `<.icon>` drew the "could not render" box. An attribute the Inspector gives its icon picker
+  # stands in as a real icon instead. That is read off the attribute, not off the palette.
+  @icon_stand_in "hero-sparkles"
+
+  defp stand_in(:string, _node, _name, :icon), do: @icon_stand_in
+  defp stand_in(type, node, name, _widget), do: stand_in(type, node, name)
+
+  # Core's `<.icon>` names its icon `name`, which the Inspector reads as an icon only on a component
+  # whose name ends in `-icon`. Any other attribute of a function component is asked by its name.
+  defp function_widget(%{name: :name}, :icon), do: :icon
+  defp function_widget(%{name: name}, _fun), do: Inspector.widget(%{"name" => to_string(name)})
 
   defp stand_in(:string, node, name), do: "pb-#{node.id}-#{name}"
   defp stand_in(:integer, _node, _name), do: 0
@@ -3823,7 +3957,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
            atom when not is_nil(atom) <- Map.get(declared, name),
            false <- Map.has_key?(acc, atom) or defaulted?(attr),
            {:expr, _source} <- Node.attr(node, name) do
-        Map.put(acc, atom, stand_in(kit_type(attr), node, atom))
+        widget = Inspector.widget(attr, %{}, %{name: Node.component_name(node)})
+        Map.put(acc, atom, stand_in(kit_type(attr), node, atom, widget))
       else
         _supplied_defaulted_or_unwritten -> acc
       end
