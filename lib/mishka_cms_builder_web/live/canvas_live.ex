@@ -2612,18 +2612,30 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # A KIT SAYS IT IN ITS OWN MARKUP; AN AUTHOR SAYS IT IN A CLASS. `<div class="[&>*]:rounded-none">`
   # is the same promise written by hand, and the canvas has to keep it the same way — otherwise the
-  # editor disagrees with the page over markup the author wrote themselves.
-  defp shapes_children?(%Node{kind: :component} = parent, assigns) do
-    case assigns[:shapers] do
-      nil -> false
-      names -> MapSet.member?(names, Node.component_name(parent))
-    end
-  end
+  # editor disagrees with the page over markup the author wrote themselves. A component's class is
+  # read too: `<.form class="space-y-4">` is a component node, and it spaces its own fields.
+  defp shapes_children?(%Node{kind: :component} = parent, assigns),
+    do: authored_shaping?(parent) or kit_shaping?(parent, assigns[:shapers])
 
-  defp shapes_children?(%Node{kind: :tag} = parent, _assigns),
-    do: PaletteEntry.shapes_children?(Node.attr_text(parent, "class"))
+  defp shapes_children?(%Node{kind: :tag} = parent, _assigns), do: authored_shaping?(parent)
 
   defp shapes_children?(_parent, _assigns), do: false
+
+  defp kit_shaping?(_parent, nil), do: false
+  defp kit_shaping?(parent, names), do: MapSet.member?(names, Node.component_name(parent))
+
+  # `space-y-*`, `space-x-*` and `divide-*` REACH THE CHILD TOO, through Tailwind's
+  # `:where(& > :not(:last-child))`. Around a wrapper the gap landed on the editor's box and the
+  # field's own `mb-2` collapsed into it: 16px under `space-y-4` on the canvas, while on the page the
+  # field's `mb-2` outranks the zero-specificity `:where` and the gap is 8px.
+  @spaces_children ~r/(?<![\w-])-?(?:space-[xy]|divide)-/
+
+  defp authored_shaping?(parent) do
+    case Node.attr_text(parent, "class") do
+      nil -> false
+      class -> PaletteEntry.shapes_children?(class) or Regex.match?(@spaces_children, class)
+    end
+  end
 
   # `data-pb-frame` says the box is the editor's, which is what the canvas hook measures to give a
   # component that draws nothing a floor (`markBlanks` in `hooks.js`). Never on a stamped root, which
@@ -3165,11 +3177,40 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end)
     |> Map.new()
     |> put_globals(node, declared, global)
+    |> put_function_class(node, declared, global)
     |> put_declared_defaults(module, fun)
     |> put_form_fields(node, tree, declared)
     |> put_unresolved(node, module, fun)
     |> Map.merge(slot_assigns(node, tree, assigns))
     |> tracked()
+  end
+
+  # A FUNCTION COMPONENT'S CLASS IS THE AUTHOR'S TOO. `canvas_owned?/1` keeps `class` out of the
+  # globals because the canvas rebuilds it from `meta.styles`, and a tag and a kit component get it
+  # back through `put_class/2` and `put_component_class/3`. A function component got nothing back,
+  # so `<.form class="space-y-4">` drew its field and its button touching on the canvas and spaced
+  # on the published page. Rebuilt the same way, written as the serializer writes it, into the
+  # `class` the component declares, or into its globals when it gathers undeclared attributes there,
+  # as `<.form>` does.
+  defp put_function_class(assigns_map, node, declared, global) do
+    class =
+      Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+        important?: true
+      )
+
+    case {class, Map.get(declared, "class"), global} do
+      {nil, _declared, _global} ->
+        assigns_map
+
+      {class, key, _global} when not is_nil(key) ->
+        Map.put(assigns_map, key, class)
+
+      {_class, nil, nil} ->
+        assigns_map
+
+      {class, nil, global} ->
+        Map.update(assigns_map, global, %{"class" => class}, &Map.put(&1, "class", class))
+    end
   end
 
   # AN EXPRESSION THE CANVAS CANNOT COMPUTE IS STILL SOMETHING THE AUTHOR WROTE.

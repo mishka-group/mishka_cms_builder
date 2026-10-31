@@ -1149,6 +1149,87 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       refute html =~ "contact_validate"
     end
 
+    # A FORM'S CLASS IS DRAWN AS THE PAGE DRAWS IT. `<.form>` declares no `class`, so the canvas
+    # gathers it into the form's globals, and it used to drop it there with the `phx-*` bindings: the
+    # field and the button touched on the canvas and stood apart on the published page. A style set
+    # in the inspector reaches the form the same way, and the bindings are still left out.
+    test "a form keeps its class and the inspector's styles, and still drops its bindings", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, tree} =
+        Tree.parse("""
+        <.form :let={f} id="spaced-form" as={:contact} for={assigns[:contact_form]} class="space-y-4" phx-submit="contact_submit">
+          <.input field={f[:email]} type="email" label="Email" />
+          <button type="submit">Send</button>
+        </.form>
+        """)
+
+      {:ok, session} = EditorSession.put_tree(token(view), tree)
+      form = session.tree |> Tree.walk() |> Enum.find(&(&1.tag == ".form"))
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => form.id,
+        "bucket" => "base",
+        "prop" => "padding",
+        "value" => "8px"
+      })
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, ~s(form#spaced-form[class~="space-y-4"])),
+             "the form's own class is what spaces its field from its button"
+
+      assert has_element?(canvas, ~s(form#spaced-form[class~="p-[8px]!"])),
+             "and the inspector's padding reaches it too"
+
+      refute render(canvas) =~ "contact_submit"
+    end
+
+    # AND ITS FIELDS ARE ITS OWN CHILDREN THERE. `space-y-4` reaches the element right inside the
+    # form, which was the editor's box around `<.input>`: the gap landed on the box and the field's
+    # `mb-2` collapsed into it, 16px on the canvas and 8px on the page, where the field's own margin
+    # outranks Tailwind's zero-specificity `:where`. A tag that spaces its children is the same.
+    test "a field under a parent that spaces its children is that parent's own child", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, tree} =
+        Tree.parse("""
+        <.form :let={f} id="spaced-form" as={:contact} for={assigns[:contact_form]} class="space-y-4">
+          <.input field={f[:email]} type="email" label="Email" />
+          <button type="submit">Send</button>
+        </.form>
+        <div id="ruled" class="divide-y"><.input name="ruled" value="" label="Ruled" /></div>
+        <div id="padded" class="p-4"><.input name="padded" value="" label="Padded" /></div>
+        """)
+
+      {:ok, session} = EditorSession.put_tree(token(view), tree)
+      inputs = session.tree |> Tree.walk() |> Enum.filter(&(&1.tag == ".input"))
+
+      [spaced, ruled, padded] =
+        Enum.map(inputs, &~s|[data-node-id="#{&1.id}"]:not([data-pb-frame])|)
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, "form#spaced-form > div.mb-2" <> spaced),
+             "the form's `space-y-4` lands on the editor's box around the field, not on the field"
+
+      assert has_element?(canvas, "div#ruled > div.mb-2" <> ruled)
+
+      assert has_element?(canvas, ~s(div#padded > div[data-pb-frame] > div.mb-2)),
+             "a parent that leaves its children alone keeps the editor's box"
+
+      refute has_element?(canvas, "div#padded > " <> padded)
+    end
+
     # THE OTHER HALF OF THE SAME SURFACE, and the half the installed kit never reaches. All 23 of
     # Chelekom's fields take a `%Phoenix.HTML.FormField{}`, so `field={f[:email]}` is the only thing
     # the editor writes for them. A kit on the documented fallback gets the pair instead —
