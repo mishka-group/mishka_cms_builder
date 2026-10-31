@@ -1377,7 +1377,13 @@ const PbCanvas = {
     // click re-rendered all ~70 nodes of the document, and a click took over half a second to show
     // anything. Marking the node here is instant, and the server's answer moves nothing that is
     // already right.
-    this.markSelected = (id) => {
+    //
+    // A SLOT IS RINGED ON THE ELEMENT IT BELONGS TO. A component draws its slots inside its own
+    // markup, so a `<:item>` selected in the layers rail has no `[data-node-id]` here, and with
+    // nothing painted the rules that keep an overlay open while something in it is selected let an
+    // opened sidebar fall shut. `anchor` is the server's nearest drawn ancestor (`selection_anchor/2`
+    // in `CanvasLive`), kept so `updated()` paints it again; the selection itself stays the slot.
+    this.markSelected = (id, anchor = null) => {
       const doc = this.el.ownerDocument;
       // THE PANEL BELONGS TO THE ELEMENT IT WAS OPENED ON. It survives a patch — that is what lets
       // someone try six spreads in a row — but a NEW selection is a new question, and carrying the
@@ -1390,11 +1396,13 @@ const PbCanvas = {
         this.typing = false;
       }
       this.selectedId = id || null;
+      this.selectedAnchor = (id && anchor) || null;
       doc
         .querySelectorAll('[data-node-id][data-selected="true"]')
         .forEach((el) => el.removeAttribute("data-selected"));
       if (!id) return this.placeToolbar?.();
-      const node = doc.querySelector(`[data-node-id="${CSS.escape(id)}"]`);
+      const drawn = (nodeId) => doc.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+      const node = drawn(id) || (this.selectedAnchor && drawn(this.selectedAnchor));
       if (node) node.setAttribute("data-selected", "true");
       // A SELECTION MADE SOMEWHERE ELSE HAS TO BE FINDABLE. Clicking a review note anchored to an
       // element three screens down used to ring something nobody could see. A selection made ON the
@@ -1408,7 +1416,7 @@ const PbCanvas = {
     };
 
     // Selections made ANYWHERE — the layers rail, a comment's deep link, undo — arrive here.
-    this.handleEvent("pb:selected", ({ id }) => this.markSelected(id));
+    this.handleEvent("pb:selected", ({ id, anchor }) => this.markSelected(id, anchor));
 
     // The held elements, painted the same way the ring is: an id list the client applies, never
     // `data-marked` rendered per node — that would re-render the whole document on every ⌘-click.
@@ -2218,7 +2226,7 @@ const PbCanvas = {
     //
     // One attribute on the root, read once. Not `data-selected` per node — that is still the
     // client's to paint, and rendering it per node would fight every patch.
-    this.markSelected(this.el.dataset.selection || null);
+    this.markSelected(this.el.dataset.selection || null, this.el.dataset.selectionAnchor || null);
 
     this.placeToolbar();
     window.addEventListener("scroll", this.placeToolbar, { passive: true });
@@ -2334,7 +2342,7 @@ const PbCanvas = {
     // A patch re-renders from the server's HTML, which does not carry the ring — the attribute is
     // client state. Re-applying it here is what keeps a selection visible across an unrelated
     // update. The blank floors are client state too.
-    this.markSelected?.(this.selectedId);
+    this.markSelected?.(this.selectedId, this.selectedAnchor);
     this.placeToolbar?.();
     this.blanks?.();
     announcePainted(this.el);
