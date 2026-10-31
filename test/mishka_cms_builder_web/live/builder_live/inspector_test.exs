@@ -181,6 +181,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
     # A REFUSED WRITE PUTS THE BAR BACK. Taking it down is a claim that the work is kept, so it may
     # only outlive the press if the draft really was written. The editor says so in words too, but
     # the bar is the thing on screen for the rest of the sitting.
+    @tag :capture_log
     test "and a draft write that fails leaves the bar saying so", %{conn: conn, page: page} do
       refuse_draft_writes()
 
@@ -194,7 +195,55 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
 
       assert Drafts.list("page", page, recorded) == [], "the gate refused, so nothing was written"
       assert has_element?(view, "#pb-publish-bar")
-      assert settled =~ "Autosave is failing"
+      assert settled =~ "Can&#39;t be saved: A plugin refused this draft."
+    end
+
+    # A REFUSED WRITE SAYS WHY. It said "Autosave is failing" and logged nothing, so a plugin's
+    # refusal, a validation and a crash all read the same.
+    test "and a refused draft write is logged and named in the flash", %{conn: conn, page: page} do
+      refuse_draft_writes()
+      {:ok, view, _html} = open_builder(conn, page)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          render_click(view, "op", %{
+            "kind" => "delete",
+            "node_id" => node_with_tag(view, "h1").id
+          })
+
+          send(self(), {:settled, render_async(view)})
+        end)
+
+      assert_received {:settled, settled}
+      assert log =~ "a draft write was refused"
+      assert log =~ "A plugin refused this draft."
+      assert flashes(view) =~ "Can&#39;t be saved: A plugin refused this draft."
+      assert flashes(view) =~ "Your edits are still here"
+      refute settled =~ "Autosave is failing"
+    end
+
+    # ONLY THE WORDS. A refusal can carry an Ash error's header, its breadcrumbs, the value it
+    # refused and a stack trace, and the flash showed every line of it.
+    test "and a refusal's stack trace and Ash wrapping are left out of the flash", %{
+      conn: conn,
+      page: page
+    } do
+      register_plugin(__MODULE__.NoisyDraftGate, "builder:draft:before_save")
+      {:ok, view, _html} = open_builder(conn, page)
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+        _settled = render_async(view)
+      end)
+
+      shown = flashes(view)
+
+      assert shown =~ "Can&#39;t be saved: template: is required."
+      refute shown =~ "Invalid Error"
+      refute shown =~ "Bread Crumbs"
+      refute shown =~ "Value:"
+      refute shown =~ "lib/ash"
+      refute shown =~ "update.ex:"
     end
 
     # AND NOTHING IS CALLED KEPT THAT WAS NOT WRITTEN. The canvas stays live for the whole round
@@ -3772,5 +3821,28 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert by_status[500] =~ "Boom", "the 404 tree was published over the 500 entry"
       assert by_status[404] =~ "Not found"
     end
+  end
+
+  defmodule NoisyDraftGate do
+    @moduledoc false
+    # A draft gate that refuses with an Ash error's own `Exception.message/1`, trace and all.
+    use MishkaInstaller.Event.Hook, event: "builder:draft:before_save"
+
+    @refusal """
+
+    Bread Crumbs:
+      > Error returned from: MishkaCmsCore.Runtime.PageDraft.autosave
+
+    Invalid Error
+
+    * template: is required.
+
+    Value: ""
+        (ash 3.24.0) lib/ash/actions/update/update.ex:212: Ash.Actions.Update.run/4
+        (mishka_cms_core 0.0.4) lib/mishka_cms_core/runtime/authoring/drafts.ex:88: MishkaCmsCore.Runtime.Authoring.Drafts.autosave/8
+    """
+
+    @impl true
+    def call(payload), do: {:reply, %{payload | error: @refusal}}
   end
 end

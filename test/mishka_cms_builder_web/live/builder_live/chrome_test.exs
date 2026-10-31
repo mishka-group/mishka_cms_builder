@@ -1372,6 +1372,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
     # every other one. This handler called `Drafts` itself, so the gate never ran for it: a plugin
     # that refuses draft writes was overruled by the one button that writes on the way out, and the
     # author was sent away believing the work was kept.
+    @tag :capture_log
     test "and a plugin that refuses the write keeps you here with the work", %{
       conn: conn,
       page: page

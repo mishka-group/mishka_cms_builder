@@ -1150,7 +1150,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     # question. Nil is the ordinary state: nothing to lose, or nobody leaving.
     |> assign_new(:leave_to, fn -> nil end)
     |> assign_new(:ai_attachment, fn -> nil end)
-    |> assign_new(:autosave_failed?, fn -> false end)
+    # The sentence the last refused draft write was reported with, `nil` while writes succeed.
+    |> assign_new(:autosave_failure, fn -> nil end)
     # What Publish would refuse, counted by the red dot in the top bar — see `problems/1` — and how
     # many times a refusal has opened its window.
     |> assign_new(:problems, fn -> [] end)
@@ -2703,8 +2704,13 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  def handle_async(:autosave, {:exit, _reason}, socket),
-    do: {:noreply, socket |> assign(:autosaving?, false) |> holding_draft() |> autosave_failed()}
+  def handle_async(:autosave, {:exit, reason}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(:autosaving?, false)
+       |> holding_draft()
+       |> autosave_failed({:exit, reason})}
 
   # A FLUSH THAT FAILS IS NOT SILENT. `History.flush/2` puts the entries back, so the next change
   # retries them; what must not happen is the editor carrying on as though the history were being
@@ -2956,7 +2962,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign(:dirty?, editor.dirty?)
     |> assign(:saved_at, editor.saved_at)
     |> assign(:draft, draft)
-    |> assign(:autosave_failed?, false)
+    |> assign(:autosave_failure, nil)
   end
 
   # NOTHING LEFT TO WRITE by the time this write's turn came: another writer of the session — a
@@ -2966,14 +2972,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign(:editor, editor)
     |> assign(:dirty?, editor.dirty?)
     |> assign(:saved_at, editor.saved_at)
-    |> assign(:autosave_failed?, false)
+    |> assign(:autosave_failure, nil)
   end
 
   # A COMPONENT HAS NO DRAFT RESOURCE, and saying so once a change would be a lie told constantly.
   # Its Save button is its only persistence, which the drafts sheet already says in words.
   defp autosaved(socket, :unsupported), do: socket
 
-  defp autosaved(socket, _unsaved), do: autosave_failed(socket)
+  defp autosaved(socket, {:error, reason}), do: autosave_failed(socket, reason)
+  defp autosaved(socket, unsaved), do: autosave_failed(socket, unsaved)
 
   # THE DRAFT IS MADE ON THE FIRST SAVE, not when the editor opens — so the first changes of a
   # sitting are recorded before there is a draft to attach them to, and would otherwise stay on the
@@ -2987,15 +2994,23 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     bump_history_revision(socket)
   end
 
-  defp autosave_failed(%{assigns: %{autosave_failed?: true}} = socket), do: socket
+  # A REFUSED WRITE SAYS WHY. It said "Autosave is failing" and logged nothing, so neither the author
+  # nor whoever reads the log could tell a plugin's refusal from a validation or a crash. The reason
+  # is logged whole and shown as its words only (`human/1`), and shown again only when it changes:
+  # every edit retries the write, and the same flash on every keystroke would be noise.
+  defp autosave_failed(socket, reason) do
+    Logger.warning("[MishkaCmsBuilder] a draft write was refused: #{inspect(reason)}")
 
-  defp autosave_failed(socket) do
-    socket
-    |> assign(:autosave_failed?, true)
-    |> put_flash(
-      :error,
-      gettext("Autosave is failing. Your edits are still here, but nothing is saved.")
-    )
+    message =
+      gettext(
+        "Can't be saved: %{reason}. Your edits are still here, and the next change tries again.",
+        reason: reason |> human() |> String.trim_trailing(".")
+      )
+
+    case socket.assigns[:autosave_failure] == message do
+      true -> socket
+      false -> socket |> assign(:autosave_failure, message) |> put_flash(:error, message)
+    end
   end
 
   # A destination arrives from the browser, so it is checked before it is used: only a path of this
@@ -7991,7 +8006,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp shadow_value(:inset, value), do: value == "true"
   defp shadow_value(_part, value), do: to_string(value)
 
-  defp human(reason) when is_binary(reason), do: reason
+  defp human(reason) when is_binary(reason), do: plain(reason)
   defp human(:unknown_node), do: gettext("That element is no longer on the page.")
   defp human(:unknown_session), do: gettext("This editing session expired. Reload the builder.")
   defp human(:invalid_parent), do: gettext("That element cannot hold content.")
@@ -8010,13 +8025,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp human(:document_root),
     do: gettext("That is the document itself — put content inside it rather than around it.")
 
-  defp human(%{message: message}) when is_binary(message), do: message
+  defp human(:unserializable), do: gettext("the page's markup could not be written out")
+  defp human({:exit, _reason}), do: gettext("the save stopped before it finished")
 
-  # ASH SAYS WHY IN ITS OWN WORDS. Without this an `Ash.Error.Invalid` reaches the reader as the
-  # struct's `inspect` — a wall of changesets and stacktraces in a flash — when every one of them
-  # already carries a written message.
-  defp human(%Ash.Error.Invalid{} = error), do: Exception.message(error)
-  defp human(%Ash.Error.Forbidden{} = error), do: Exception.message(error)
+  # ASH SAYS WHY IN ITS OWN WORDS, and wraps them. `Exception.message/1` on an error class is a
+  # header ("Invalid Error"), a breadcrumb trail, a bullet per error, the value it refused and, where
+  # stack traces are kept, the trace. Only each error's own words are shown.
+  defp human(%{__exception__: true, errors: [_ | _] = errors}), do: error_words(errors)
+  defp human(%Ash.Error.Invalid{} = error), do: error |> Exception.message() |> plain()
+  defp human(%Ash.Error.Forbidden{} = error), do: error |> Exception.message() |> plain()
+
+  defp human(%{message: message}) when is_binary(message), do: plain(message)
 
   # A FIELD-ERROR LIST IS WRITTEN WORDS ALREADY. `Op.build/1` answers with one for every op naming a
   # kind, a node id or a bucket the editor does not know — the ordinary way an assistant's op fails,
@@ -8035,6 +8054,57 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # worth reading gets a clause above; the rest gets the sentence `CanvasLive.message/1` has always
   # answered with.
   defp human(_other), do: gettext("That change could not be applied.")
+
+  defp error_words(errors) when is_list(errors) do
+    errors
+    |> Enum.map(&error_words/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    |> Enum.join(" ")
+  end
+
+  defp error_words(%{__exception__: true, errors: [_ | _] = errors}), do: error_words(errors)
+  defp error_words(%{__exception__: true} = error), do: error |> Exception.message() |> plain()
+  defp error_words(text) when is_binary(text), do: plain(text)
+  defp error_words(_wordless), do: ""
+
+  # ONLY THE SENTENCES. A refusal can arrive carrying a stack trace, an Ash error's header, its
+  # "Bread Crumbs:" trail and the "Value:" it refused, and a flash showed all of it. Each line that is
+  # one of those goes, a trail or a value runs to the next blank line, and the `* ` Ash puts before
+  # each message comes off.
+  @trace_line ~r/^\s+(\([^)]*\)\s+)?[\w\/.-]+\.(ex|exs|erl):\d+/
+  @error_header ~r/^[A-Z]\w* Error$/
+
+  defp plain(text) do
+    text
+    |> String.split("\n")
+    |> Enum.reduce({[], :keep}, &plain_line/2)
+    |> elem(0)
+    |> Enum.reverse()
+    |> Enum.join(" ")
+  end
+
+  defp plain_line(line, {kept, :skip}) do
+    case String.trim(line) do
+      "" -> {kept, :keep}
+      _dump -> {kept, :skip}
+    end
+  end
+
+  defp plain_line(line, {kept, :keep}) do
+    trimmed = String.trim(line)
+
+    cond do
+      String.starts_with?(trimmed, ["Value:", "Bread Crumbs:"]) -> {kept, :skip}
+      noise?(line, trimmed) -> {kept, :keep}
+      true -> {[String.trim_leading(trimmed, "* ") | kept], :keep}
+    end
+  end
+
+  defp noise?(line, trimmed),
+    do:
+      trimmed == "" or String.starts_with?(trimmed, "> ") or Regex.match?(@trace_line, line) or
+        Regex.match?(@error_header, trimmed)
 
   @doc "The device options the top bar offers, with their canvas widths."
   def devices, do: @devices
