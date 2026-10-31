@@ -3266,9 +3266,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # as `<.form>` does.
   defp put_function_class(assigns_map, node, declared, global) do
     class =
-      Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
-        important?: true
-      )
+      Styles.merge_class(authored_class(node), node.meta[:styles] || %{}, important?: true)
 
     case {class, Map.get(declared, "class"), global} do
       {nil, _declared, _global} ->
@@ -3682,8 +3680,18 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   defp canvas_owned?(_name), do: false
 
+  # THE AUTHOR'S CLASSES, NOT AN EXPRESSION'S SOURCE. `class={["shrink-0", item[:icon_class]]}` read
+  # as text drew `hero-sparkles ["shrink-0", item[:icon_class]]`; `Tree.classes/1` answers the
+  # literal classes and leaves out what only the page can work out.
+  defp authored_class(node) do
+    case Tree.classes(node) do
+      [] -> nil
+      classes -> Enum.join(classes, " ")
+    end
+  end
+
   defp put_class(html_attrs, %Node{} = node) do
-    case Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+    case Styles.merge_class(authored_class(node), node.meta[:styles] || %{},
            important?: node.kind == :component
          ) do
       nil -> html_attrs
@@ -4010,7 +4018,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   defp put_component_class(assigns, node, module) do
     with atom when not is_nil(atom) <- declared_attr(module, "class"),
          class when is_binary(class) <-
-           Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+           Styles.merge_class(authored_class(node), node.meta[:styles] || %{},
              important?: node.kind == :component
            ) do
       Map.put(assigns, atom, class)
@@ -4163,9 +4171,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # 0-2-1 against a plain `p-[8px]`'s 0-1-0 on the very same `<th>`. Without the bang the panel
   # writes a rule that loses to the component's own default, every time.
   defp put_slot_class(assigns, node) do
-    case Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
-           important?: true
-         ) do
+    case Styles.merge_class(authored_class(node), node.meta[:styles] || %{}, important?: true) do
       nil -> assigns
       class -> Map.put(assigns, :class, class)
     end

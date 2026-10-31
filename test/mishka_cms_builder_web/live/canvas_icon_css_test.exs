@@ -271,4 +271,37 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
       |> Enum.find("", &String.contains?(&1, ~s(data-component="acme-mark")))
     end
   end
+
+  # A CLASS WRITTEN AS A LIST KEEPS ITS LITERALS. `chelekom-sidebar` writes its items' icons with
+  # `class={["shrink-0", item[:icon_class]]}`, and the canvas drew the expression's source as the
+  # class, `hero-sparkles ["shrink-0", item[:icon_class]]`. It reads the literal classes now, as
+  # `Tree.classes/1` does, and leaves out what only the page can work out.
+  describe "a class written as a list expression" do
+    test "keeps its literal classes and no brackets", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "acme-classy",
+        template: ~S|<span class={["glyph", @name, @class]}></span>|,
+        body: ~S|%{name: "hero-" <> _} = assigns = assigns|,
+        attrs: [
+          %{"name" => "name", "type" => "string", "opts" => %{"editor" => "icon"}},
+          %{"name" => "class", "type" => "string", "opts" => %{}}
+        ]
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="w8"><.component component_name="acme-classy" site="#{site.name}" name={assigns[:icon]} class={["shrink-0", assigns[:icon_class]]} /><b class={["tag-own", assigns[:tone]]}>x</b></div>)
+        )
+
+      html = canvas_html(conn, page)
+
+      assert html =~ ~s(class="glyph hero-sparkles shrink-0")
+      assert html =~ ~r/<b [^>]*class="tag-own"/
+      refute html =~ "icon_class"
+      refute html =~ "[&quot;"
+    end
+  end
 end
