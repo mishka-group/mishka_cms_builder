@@ -1685,6 +1685,57 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert html =~ "min-height:56px", "and is somewhere to aim at"
       refute html =~ "could not render"
     end
+
+    # A TEXTAREA'S CONTENT IS ITS VALUE. The browser reads everything up to `</textarea>` as text, so
+    # the `<span data-node-id …>` a text node is drawn as became words in the box.
+    test "a textarea holds its text, not the editor's markup", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="box"><textarea name="note">hello &amp; you</textarea></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      textarea = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "textarea"))
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert [_whole, content] = Regex.run(~r{<textarea[^>]*>(.*?)</textarea>}s, html)
+
+      assert content == "hello &amp; you",
+             "the text node was drawn as a `<span>`, which the browser shows as words in the box"
+
+      assert html =~ ~s(data-node-id="#{textarea.id}")
+    end
+
+    # A BLOCK DROPPED INTO ONE IS STILL NOT DRAWN AS MARKUP. Containment lets it in; the canvas does
+    # not leak it into the field.
+    test "and a child element in a textarea is not drawn into it", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="box"><textarea name="note">hi</textarea></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      textarea = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "textarea"))
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "parent_id" => textarea.id,
+        "index" => "1",
+        "template" => ~s(<p id="inside">inside</p>)
+      })
+
+      assert [_text, _element] = Tree.get(editor(view).tree, textarea.id).children
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert [_whole, content] = Regex.run(~r{<textarea[^>]*>(.*?)</textarea>}s, html)
+      assert content == "hi"
+    end
   end
 
   describe "the Studio, Assets and Review sheets" do
