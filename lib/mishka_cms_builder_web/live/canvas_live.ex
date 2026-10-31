@@ -303,6 +303,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     )
     |> assign(:missing?, false)
     |> assign(:selection, nil)
+    |> assign(:selection_anchor, nil)
     |> assign(:preview?, true)
     |> assign(:example?, true)
     |> assign(:page_title, gettext("Example"))
@@ -535,6 +536,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # parent window on every patch where it changed, and the frame's spinner is dismissed by that.
     |> assign(:revision, session.revision)
     |> assign(:selection, session.selection)
+    |> assign(:selection_anchor, selection_anchor(session.tree, session.selection))
     |> assign(:locked, session.locked)
     |> assign(:hidden, session.hidden)
     |> assign(:pinned, session.pinned || MapSet.new())
@@ -885,11 +887,30 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # per-node markup. Rendering `data-marked` on every node would re-render the whole document on
   # every ⌘-click, which is the trap the selection ring already sidesteps.
   defp sync_selection(socket, _previous, %{selection: selection} = session) do
+    socket = assign_session(socket, session)
+
     socket
-    |> assign_session(session)
-    |> push_event("pb:selected", %{id: selection})
+    |> push_event("pb:selected", %{id: selection, anchor: socket.assigns.selection_anchor})
     |> push_event("pb:marked", %{ids: MapSet.to_list(session.marked || MapSet.new())})
   end
+
+  # A SLOT HAS NO ELEMENT OF ITS OWN ON THE CANVAS. A component draws its slots inside its own
+  # markup, so a sidebar's `<:item>` selected in the layers rail named an id no element carries: the
+  # hook painted `data-selected` on nothing, and the rules that keep an overlay open while something
+  # in it is selected let go of it, so an opened sidebar snapped back to `fixed` and the full height
+  # of the screen. The anchor is the nearest ancestor that is not a slot, which the hook rings in
+  # the slot's place; `nil` for anything else, which carries its own `data-node-id`.
+  defp selection_anchor(tree, id) when is_binary(id) do
+    case Tree.get(tree, id) do
+      %Node{kind: :slot} ->
+        tree |> Tree.ancestors(id) |> Enum.find_value(&(&1.kind != :slot && &1.id))
+
+      _drawn_or_gone ->
+        nil
+    end
+  end
+
+  defp selection_anchor(_tree, _id), do: nil
 
   @impl true
   # PREVIEW ANSWERS ONE EVENT: the way out of it. Every other event here belongs to editing, and the
@@ -1705,7 +1726,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       phx-hook="PbCanvas"
       dir={@dir}
       data-token={@token}
-      {%{"data-selection" => @selection}}
+      {%{"data-selection" => @selection, "data-selection-anchor" => @selection_anchor}}
       data-preview={to_string(@preview?)}
       data-example={to_string(@example?)}
       data-revision={@revision}
