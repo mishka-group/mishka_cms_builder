@@ -1888,9 +1888,46 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert scroll =~ ~s(phx-hook="PbZoom")
       assert scroll =~ ~s(data-single-zoom="130")
       assert scroll =~ "--pb-single-zoom:1.3"
-      assert frame =~ "zoom:var(--pb-single-zoom)"
+      assert frame =~ "* var(--pb-single-zoom))"
       refute frame =~ "1.3"
       assert view |> element("[data-role='pb-viewnote']") |> render() =~ "130%"
+    end
+
+    # "DESKTOP" DREW THE TABLET LAYOUT. The single Desktop frame was `100%` of the canvas column, so
+    # with both rails open on a 1440px screen the page measured 738px and its own
+    # `(max-width: 901px)` rules matched; Tablet, at 834px, ran off the side of the same column. Each
+    # frame now lays the page out at its device's width (Desktop at least the frames row's 1180px)
+    # and is scaled to the column, the canvas scroll's `cqw`, times the zoom.
+    test "a single frame is its device's width, scaled to the canvas column", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      room = "(100cqw - 2px)"
+
+      assert view |> element("#pb-canvas-scroll") |> render() |> opening_tag() =~
+               "[container-type:inline-size]"
+
+      for {device, viewport, width} <- [
+            {"desktop", "max(1180px, #{room})", 1180},
+            {"tablet", "834px", 834},
+            {"mobile", "390px", 390}
+          ] do
+        render_click(view, "set_device", %{"device" => device})
+        box = view |> element("[data-role='pb-single-frame']") |> render() |> opening_tag()
+        frame = view |> element("#pb-frame-#{device}") |> render()
+
+        assert box =~ "width:calc(min(#{viewport}, #{room}) * var(--pb-single-zoom) + 2px)",
+               device
+
+        assert frame =~ "width:#{viewport};", device
+
+        assert frame =~
+                 "zoom:calc(min(1, tan(atan2(#{room}, #{width}px))) * var(--pb-single-zoom))",
+               device
+
+        refute box =~ "100%", device
+      end
     end
 
     # The buttons are stepped in the browser; the server hears the settled value once, so they carry

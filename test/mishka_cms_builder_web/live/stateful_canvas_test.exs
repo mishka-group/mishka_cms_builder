@@ -25,7 +25,7 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
   """
   use MishkaCmsCore.ConnCase
 
-  import MishkaCmsBuilder.LiveCase, only: [token: 1]
+  import MishkaCmsBuilder.LiveCase, only: [autosave!: 1, token: 1]
 
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
@@ -538,6 +538,33 @@ defmodule MishkaCmsBuilderWeb.Live.StatefulCanvasTest do
       canvas |> element("#pb-preview-bar-edit") |> render_click()
 
       assert_push_event(canvas, "pb:leave-preview", %{})
+    end
+
+    # THE BAR POINTED AT A MENU THAT WAS NOT THERE. The top bar draws Preview's "Open in a new tab"
+    # only once autosave has written a draft with a shareable link, and the bar named it from the
+    # first second of a page with none. It now says the entry comes with the saved draft, which is
+    # true on either side of the first autosave.
+    test "says the new tab comes with a saved draft, before and after there is one", %{
+      conn: conn,
+      previewed: page
+    } do
+      {view, canvas, _heading} = preview(conn, page)
+
+      refute has_element?(view, "#pb-preview-menu")
+
+      assert has_element?(
+               canvas,
+               "#pb-preview-bar-text",
+               "once a draft is saved, use Preview ▸ Open in a new tab"
+             )
+
+      {:ok, _session} = EditorSession.set_preview(token(view), false)
+      autosave!(view)
+      {:ok, _session} = EditorSession.set_preview(token(view), true)
+      render(canvas)
+
+      assert has_element?(view, "#pb-preview-menu")
+      assert has_element?(canvas, "#pb-preview-bar-text", "once a draft is saved")
     end
 
     # A LAYOUT, AN ERROR PAGE AND A COMPONENT ARE NOT PAGES, and the new-tab entry the bar points to

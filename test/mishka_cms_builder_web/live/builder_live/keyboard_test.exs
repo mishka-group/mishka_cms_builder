@@ -181,4 +181,76 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.KeyboardTest do
       assert has_element?(view, "#pb-pkg-chelekom-datatable")
     end
   end
+
+  # ESCAPE IN A MODAL HAS ONE OWNER. Each modal below closes on its own `phx-window-keydown`, and
+  # the keyboard hook stays out of escape while an element marked `data-pb-modal` is on the page
+  # (`assets/test/pb_modal_escape.test.js`). A modal drawn without the mark heard escape twice, and
+  # the hook's push left the modal's backdrop over the editor, blocking every click.
+  describe "a modal that closes itself on escape" do
+    defp marked?(view, id, event),
+      do: has_element?(view, ~s(##{id}[data-pb-modal][phx-window-keydown="#{event}"]))
+
+    test "the Code window and Find carry the mark", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-code") |> render_click()
+      assert marked?(view, "pb-source-modal", "close_source")
+      view |> element("#pb-source-close") |> render_click()
+
+      render_click(view, "open_find", %{})
+      assert marked?(view, "pb-find", "close_find")
+    end
+
+    test "so do the reload and leave questions", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+
+      view |> element("#pb-reload") |> render_click()
+      assert marked?(view, "pb-reload-modal", "close_reload")
+      view |> element("#pb-reload-cancel") |> render_click()
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+      assert marked?(view, "pb-leave-modal", "stay")
+    end
+
+    test "and the new-folder form, drawn inside the Media sheet", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      render_async(view)
+
+      render_click(view, "new_folder", %{})
+      assert marked?(view, "pb-folder-modal", "close_folder")
+    end
+
+    # Under the Media sheet its SEO tab opened, Settings binds no escape: the sheet is the one to
+    # close, and that is the editor's `shortcut("escape", …)`, so the hook must not stand back.
+    test "Settings carries it only while nothing is over it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-settings-open") |> render_click()
+      _settled = render_async(view)
+      assert marked?(view, "pb-settings-modal", "close_settings")
+
+      view |> element("#pb-settings-tab-seo") |> render_click()
+      _settled = render_async(view)
+      view |> element("#pb-seo-image-pick") |> render_click()
+
+      assert has_element?(view, "#pb-settings-modal.hidden")
+      refute has_element?(view, "[data-pb-modal]")
+    end
+
+    test "and the command palette, which the editor's escape closes, does not", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "toggle_command", %{})
+      assert has_element?(view, "#pb-command")
+      refute has_element?(view, "[data-pb-modal]")
+
+      render_click(view, "shortcut", %{"key" => "escape"})
+      refute has_element?(view, "#pb-command")
+    end
+  end
 end

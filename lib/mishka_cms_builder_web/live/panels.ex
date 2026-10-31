@@ -2349,6 +2349,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-find > section")}
       phx-window-keydown="close_find"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="close_find"
@@ -8786,7 +8787,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </div>
 
       <%!-- The zoom root: both zooms live here as `--pb-single-zoom` and `--pb-frame-zoom`, which
-            the frames below read and `PbZoom` overwrites as the zoom buttons are clicked. --%>
+            the frames below read and `PbZoom` overwrites as the zoom buttons are clicked. It is also
+            the container whose width `single_frame/1` fits its device into (`cqw`). --%>
       <div
         data-role="pb-scroll"
         id="pb-canvas-scroll"
@@ -8798,7 +8800,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         data-frame-zoom={@frame_zoom}
         style={"--pb-single-zoom:#{@zoom / 100};--pb-frame-zoom:#{@frame_zoom / 100}"}
         class={[
-          "flex min-h-0 flex-1 items-start gap-4 overflow-auto p-[22px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "flex min-h-0 flex-1 items-start gap-4 overflow-auto p-[22px] [container-type:inline-size] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           (@device == :frames && "justify-start") || "justify-center"
         ]}
@@ -8920,12 +8922,33 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     """
   end
 
-  # One device frame, scaled by `--pb-single-zoom` from `#pb-canvas-scroll`.
+  # The desktop the all-breakpoints row shows, and the least width a single Desktop frame lays the
+  # page out at.
+  @desktop_width 1180
+
+  # ONE DEVICE AT ITS OWN WIDTH, SCALED TO THE ROOM THERE IS, the way the all-breakpoints row shows
+  # its frames. Desktop used to be `100%` of the canvas column, so with both rails open on a 1440px
+  # screen it was a 738px viewport: the page's own `(max-width: 901px)` rules matched, and "Desktop"
+  # drew the tablet layout, narrower than Tablet. It is now laid out at the row's desktop width, or
+  # the column's when that is wider; Tablet and Mobile keep their widths and shrink instead of
+  # running off the side.
+  #
+  # The box is drawn at the scaled width, and the frame keeps the device's width and takes the scale
+  # as `zoom`, so the page inside measures the device and the canvas's own coordinates stay in it.
+  # The scale is the column's width over the device's, at most 1, times `--pb-single-zoom`. The
+  # height is the column's, so a smaller scale shows more of the page.
   defp single_frame(assigns) do
+    assigns =
+      assign(assigns,
+        viewport: single_viewport(assigns.device),
+        scale: single_scale(assigns.device)
+      )
+
     ~H"""
     <div
+      data-role="pb-single-frame"
       class="relative flex h-full min-h-0 flex-none self-stretch overflow-hidden rounded-[14px] border border-[#e6e4de] bg-white shadow-[0_2px_10px_rgba(20,18,26,.05)]"
-      style={"width:#{frame_width(@device)};zoom:var(--pb-single-zoom)"}
+      style={"width:calc(min(#{@viewport}, #{single_room()}) * var(--pb-single-zoom) + 2px)"}
     >
       <%!-- No `src` until the socket is connected. The static render has no registered session, and
             pointing the frame at one that is about to be replaced is what made it load twice. --%>
@@ -8940,7 +8963,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         id={"pb-frame-#{@device}"}
         title={gettext("Canvas")}
         src={"/admin/dashboard/runtime/builder-canvas/#{@token}"}
-        class={["relative block h-full w-full border-0", document_frame()]}
+        class={["relative block h-full flex-none border-0", document_frame()]}
+        style={"width:#{@viewport};zoom:#{@scale}"}
       ></iframe>
       <.frame_loading :if={!@token} />
     </div>
@@ -9020,7 +9044,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   end
 
   # The viewport height each breakpoint stands for — a laptop, a tablet held upright, a phone.
-  defp frame_viewport(1180), do: 820
+  defp frame_viewport(@desktop_width), do: 820
   defp frame_viewport(900), do: 1024
   defp frame_viewport(560), do: 844
   defp frame_viewport(_width), do: 900
@@ -11265,6 +11289,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-source-modal > section")}
       phx-window-keydown="close_source"
       phx-key="escape"
+      data-pb-modal
     >
       <%!-- `phx-click-away` goes on the PANEL, not the backdrop: on a full-screen backdrop no click
             is ever "away" from it, so the overlay would never close. --%>
@@ -12622,6 +12647,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-reload-modal > section")}
       phx-window-keydown="close_reload"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="close_reload"
@@ -12696,6 +12722,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-leave-modal > section")}
       phx-window-keydown="stay"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="stay"
@@ -12807,6 +12834,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-examples > section")}
       phx-window-keydown="close_examples"
       phx-key="escape"
+      data-pb-modal
     >
       <%!-- A HEIGHT, not a maximum. With only `max-h` the modal was as tall as its content, so the
             two tabs opened at different sizes: Examples listed six variants and filled the screen,
@@ -14646,6 +14674,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-settings-modal > section")}
       phx-window-keydown={!@hidden? && "close_settings"}
       phx-key="escape"
+      data-pb-modal={!@hidden?}
     >
       <section
         phx-click-away={!@hidden? && "close_settings"}
@@ -14811,15 +14840,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   sheet every click in it — including its own Close button — was a click AWAY from the sheet, and
   shutting the form shut the sheet behind it. Rendered inside, those clicks are contained.
 
-  Escape needs the other half, and two handlers reach it: this one, and the editor's keyboard hook
-  through `shortcut("escape", …)`. That is fine BECAUSE THEY AGREE — both close this form and
-  neither touches the sheet. It was not fine when they disagreed: the sheet used to bind escape too,
-  so one press pushed two events, the form's landed first and cleared the flag, and the sheet's
-  arrived to find nothing stopping it. Escape shut both.
-
-  Two are needed because neither covers the other's case. The hook stays quiet while the caret is in
-  a field — correct for ⌘Z, wrong for escape in this form's Name box — and `phx-window-keydown` here
-  answers wherever the caret is.
+  Escape needs the other half, and it has ONE owner: this form's own `phx-window-keydown`, which
+  answers wherever the caret is, the Name box included. `data-pb-modal` keeps the editor's keyboard
+  hook out of it while the form is open. When both answered, one press pushed twice, the hook's push
+  locked the tree this form is drawn in, and LiveView put the form's removal on a detached copy: the
+  form faded and its backdrop stayed over the editor, taking every click. `shortcut("escape", …)`
+  still closes this form before the sheet, for an escape the canvas forwards, so a press never shuts
+  both.
 
   And it is drawn LAST. Inserted as the sheet's first child it shifted every sibling by one, and
   morphdom pairs children by position — so opening the form destroyed and rebuilt the upload
@@ -14839,6 +14866,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-folder-modal > section")}
       phx-window-keydown="close_folder"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="close_folder"
@@ -15594,7 +15622,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   defp frame_widths,
     do: [
-      {gettext_noop("Desktop"), 1180},
+      {gettext_noop("Desktop"), @desktop_width},
       {gettext_noop("Tablet"), 900},
       {gettext_noop("Mobile"), 560}
     ]
@@ -15603,9 +15631,26 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp device_label(:mobile), do: gettext("Mobile · 390px")
   defp device_label(_device), do: gettext("Desktop")
 
-  defp frame_width(:tablet), do: "834px"
-  defp frame_width(:mobile), do: "390px"
-  defp frame_width(_device), do: "100%"
+  # The least CSS width a single frame lays the page out at, and what its scale is measured against.
+  defp single_width(:tablet), do: 834
+  defp single_width(:mobile), do: 390
+  defp single_width(_desktop), do: @desktop_width
+
+  # The width it is laid out at: the device's, and for Desktop the canvas column's when that is
+  # wider, so a wide screen still fills the column.
+  defp single_viewport(device) when device in [:tablet, :mobile], do: "#{single_width(device)}px"
+  defp single_viewport(device), do: "max(#{single_width(device)}px, #{single_room()})"
+
+  # The canvas column's width (`#pb-canvas-scroll` is the container) inside the frame's 1px border.
+  defp single_room, do: "(100cqw - 2px)"
+
+  # The room over the device's width, at most 1, times the author's zoom. `tan(atan2(a, b))` is
+  # `a / b` as a plain number: every current browser computes it, and dividing one length by
+  # another directly is not yet in all of them.
+  defp single_scale(device) do
+    fit = "min(1, tan(atan2(#{single_room()}, #{single_width(device)}px)))"
+    "calc(#{fit} * var(--pb-single-zoom))"
+  end
 
   # WHAT EACH MODE DOES TO THE WORK, said before it is chosen. "Published" over "Visitors can see
   # this page" read as the act, and choosing it did not publish: it stopped the draft and waited for

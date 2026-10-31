@@ -759,6 +759,14 @@ const PB_EDITABLE = (target) =>
   (target.isContentEditable ||
     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
+// A MODAL THAT CLOSES ITSELF OWNS ESCAPE. Each one marked `data-pb-modal` binds
+// `phx-window-keydown` on escape, the one binding that also hears the key inside CodeMirror, where
+// this hook stands back as it does for any field. Pushed from here as well, one press made two
+// pushes, and this hook's locks `#pb-root`, every modal's ancestor: LiveView then patched the
+// modal's removal into a detached copy of the locked tree, so the dialog faded out and its
+// full-screen backdrop stayed, taking every click until a reload.
+const PB_MODAL_OPEN = () => document.querySelector("[data-pb-modal]") !== null;
+
 // ⌘A or Ctrl+A, by the physical key like every other shortcut here, and with nothing else held.
 const selectsAll = (event) => {
   const { letter, key } = PB_KEYS(event);
@@ -943,6 +951,7 @@ const PbShortcuts = {
       const shortcut = PB_SHORTCUTS(event);
       if (!shortcut) return;
       if (PB_EDITABLE(event.target) && shortcut !== "undo" && shortcut !== "redo") return;
+      if (shortcut === "escape" && PB_MODAL_OPEN()) return;
 
       event.preventDefault();
       // The selection this chrome last drew — the highlighted layers row, the Inspector — is the one
