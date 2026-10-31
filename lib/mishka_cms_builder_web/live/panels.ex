@@ -2349,6 +2349,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-find > section")}
       phx-window-keydown="close_find"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="close_find"
@@ -11265,6 +11266,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-source-modal > section")}
       phx-window-keydown="close_source"
       phx-key="escape"
+      data-pb-modal
     >
       <%!-- `phx-click-away` goes on the PANEL, not the backdrop: on a full-screen backdrop no click
             is ever "away" from it, so the overlay would never close. --%>
@@ -12622,6 +12624,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-reload-modal > section")}
       phx-window-keydown="close_reload"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="close_reload"
@@ -12696,6 +12699,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-leave-modal > section")}
       phx-window-keydown="stay"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="stay"
@@ -12807,6 +12811,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-examples > section")}
       phx-window-keydown="close_examples"
       phx-key="escape"
+      data-pb-modal
     >
       <%!-- A HEIGHT, not a maximum. With only `max-h` the modal was as tall as its content, so the
             two tabs opened at different sizes: Examples listed six variants and filled the screen,
@@ -14646,6 +14651,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-settings-modal > section")}
       phx-window-keydown={!@hidden? && "close_settings"}
       phx-key="escape"
+      data-pb-modal={!@hidden?}
     >
       <section
         phx-click-away={!@hidden? && "close_settings"}
@@ -14811,15 +14817,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   sheet every click in it — including its own Close button — was a click AWAY from the sheet, and
   shutting the form shut the sheet behind it. Rendered inside, those clicks are contained.
 
-  Escape needs the other half, and two handlers reach it: this one, and the editor's keyboard hook
-  through `shortcut("escape", …)`. That is fine BECAUSE THEY AGREE — both close this form and
-  neither touches the sheet. It was not fine when they disagreed: the sheet used to bind escape too,
-  so one press pushed two events, the form's landed first and cleared the flag, and the sheet's
-  arrived to find nothing stopping it. Escape shut both.
-
-  Two are needed because neither covers the other's case. The hook stays quiet while the caret is in
-  a field — correct for ⌘Z, wrong for escape in this form's Name box — and `phx-window-keydown` here
-  answers wherever the caret is.
+  Escape needs the other half, and it has ONE owner: this form's own `phx-window-keydown`, which
+  answers wherever the caret is, the Name box included. `data-pb-modal` keeps the editor's keyboard
+  hook out of it while the form is open. When both answered, one press pushed twice, the hook's push
+  locked the tree this form is drawn in, and LiveView put the form's removal on a detached copy: the
+  form faded and its backdrop stayed over the editor, taking every click. `shortcut("escape", …)`
+  still closes this form before the sheet, for an escape the canvas forwards, so a press never shuts
+  both.
 
   And it is drawn LAST. Inserted as the sheet's first child it shifted every sibling by one, and
   morphdom pairs children by position — so opening the form destroyed and rebuilt the upload
@@ -14839,6 +14843,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-remove={modal_out("#pb-folder-modal > section")}
       phx-window-keydown="close_folder"
       phx-key="escape"
+      data-pb-modal
     >
       <section
         phx-click-away="close_folder"

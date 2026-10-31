@@ -5,3 +5,4 @@
 - Two tests that raced the editor's async work now wait for it, so the suite no longer fails when the LiveView is slower than the test
 - The release runs on Erlang 29.1.2 and Elixir 1.20.5, with the temporary OTP 29.0.5 pin removed
 - `igniter_js` is 0.5.2 and every dependency is at its latest release, including `phoenix_html` 4.4.0, which fixes a security advisory
+- Escape closes the Code window, Find, Settings, Examples, the reload and leave questions and the new-folder form without leaving their backdrop over the editor; the editor's keyboard hook leaves Escape to an open modal

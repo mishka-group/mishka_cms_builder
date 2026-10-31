@@ -6337,6 +6337,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   #
   # Topmost first. The form is over the sheet, so the first press closes the form and the second
   # closes the sheet — which is what a reader expects and what one handler can guarantee.
+  #
+  # A modal marked `data-pb-modal` closes itself on escape, and the keyboard hook sends nothing here
+  # while one is open (`PbShortcuts` in `assets/js/hooks.js`): two pushes for one press left the
+  # modal's backdrop over the editor.
   defp shortcut("escape", %{assigns: %{preview_media: media}} = socket) when not is_nil(media),
     do: {:noreply, assign(socket, :preview_media, nil)}
 
