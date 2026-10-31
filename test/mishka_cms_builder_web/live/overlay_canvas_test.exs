@@ -294,6 +294,16 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
       refute chrome =~ ~r/\.fixed \{[^}]*min-height/,
              "a panel's own minimum, a modal's `min-h-full` row among them, is left alone"
     end
+
+    # A DOCKED SIDEBAR IS `fixed` AND STAYS SO, and an opened drawer in the flow beside it was drawn
+    # under it. The wrapper is `position: relative` already, so a z-index is all it takes.
+    test "and an opened overlay is drawn above a docked sidebar", %{chrome: chrome} do
+      assert chrome =~
+               ~r/\)\s*\{ outline: 2px dotted #8580d8; outline-offset: 3px; min-height: 0; z-index: 50; \}/,
+             "an opened drawer is painted under the fixed sidebar docked beside it"
+
+      assert chrome =~ ~r/\[data-pb-overlay\] \{\s*position: relative;/
+    end
   end
 
   # AN OPEN BUTTON THAT DOES NOTHING IS WORSE THAN NO BUTTON. A component may be written as two

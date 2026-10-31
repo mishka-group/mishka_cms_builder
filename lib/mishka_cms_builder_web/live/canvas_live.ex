@@ -1883,6 +1883,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   #     came to fill, so `[data-floating-content]` and anything holding a node is kept.
   #   * One with nothing in it gets a real height and its own words (`data-pb-hollow`), since the
   #     kit's own padding is not a target anybody can hit.
+  #   * It is drawn above a docked `fixed` sidebar beside it, which painted over an opened drawer:
+  #     `z-index: 50` on the wrapper, already `position: relative`, and far under the canvas chrome.
   #
   # IN THE BASE LAYER, because the rule keeping `[hidden]` shut lives there: Tailwind's preflight
   # writes `[hidden] { display: none !important }` inside `@layer base`, and an `!important` in a
@@ -1978,7 +1980,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       }
     }
 
-    #{open} { outline: 2px dotted #8580d8; outline-offset: 3px; min-height: 0; }
+    #{open} { outline: 2px dotted #8580d8; outline-offset: 3px; min-height: 0; z-index: 50; }
 
     #{open}::before { display: none; }
 
