@@ -39,6 +39,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsBuilder.EditorSession
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.Tree
@@ -237,6 +238,15 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     render_click(five, "save_as_draft", %{"label" => "Both", "draft_id" => draft_id})
 
     {five, draft_id}
+  end
+
+  # WHERE A DRAFT-STAGE STYLE IS SAID TO BE: in the draft, with a core whose drafts hold element CSS
+  # (`Drafts.autosave/8`), and in this editing session with one whose drafts do not.
+  defp held_in do
+    case Code.ensure_loaded?(Drafts) and function_exported?(Drafts, :autosave, 8) do
+      true -> "It is in the draft — the preview shows it"
+      false -> "Held in this editing session"
+    end
   end
 
   defp publish!(view) do
@@ -984,7 +994,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       assert html =~ "goes live when you publish", "the flash did not say where the style went"
 
-      assert html =~ "Held in this editing session",
+      assert html =~ held_in(),
              "the flash did not say where the style is until then"
 
       assert ElementCss.all(actor, site.id, owner) == %{}, "draft-stage CSS reached the live row"
@@ -1007,6 +1017,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "color: teal;"})
 
       refute html =~ "goes live when you publish"
+      refute html =~ held_in()
       assert [body] = Map.values(ElementCss.all(actor, site.id, owner))
       assert body =~ "teal", "the live row was not written under a chip reading Publish"
     end
@@ -1037,6 +1048,64 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       assert [body] = Map.values(ElementCss.all(actor, site.id, owner))
       assert body =~ "teal", "the style did not survive to the publish that writes it"
+    end
+
+    # THE DRAFT HOLDS ITS OWN ELEMENT CSS, beside the markup that carries the scope class: the
+    # autosave writes it, the new-tab preview compiles it from there, and a reload — a new editing
+    # session, which holds nothing — gets it back by opening the draft.
+    @tag :draft_css
+    test "draft-stage CSS is written into the draft and comes back with it after a reload", ctx do
+      %{conn: conn, view: view, site: site, owner: owner, actor: actor, heading: heading} = ctx
+
+      render_click(view, "save_element_css", %{
+        "node_id" => heading.id,
+        "css" => "color: crimson;"
+      })
+
+      render_async(view)
+
+      draft_id = editor(view).draft_id
+      assert draft_id, "the Apply was not autosaved into a draft"
+      scope = editor(view) |> Map.fetch!(:tree) |> Tree.scope(heading.id)
+
+      {:ok, draft} = Drafts.get("page", draft_id, actor)
+
+      assert %{^scope => "color: crimson;"} = draft.element_css,
+             "the draft does not hold the style"
+
+      assert ElementCss.all(actor, site.id, owner) == %{}, "draft-stage CSS reached the live row"
+
+      EditorSession.close(token(view))
+      reloaded = open_record(conn, :page, ctx.record)
+
+      refute editor(reloaded).staged_element_css, "a new editing session should hold nothing"
+      render_click(reloaded, "open_draft", %{"id" => draft_id})
+
+      assert editor(reloaded).staged_element_css == %{scope => "color: crimson;"},
+             "opening the draft did not bring its style back"
+
+      assert editor(reloaded).element_css =~ "crimson", "the canvas came back without the style"
+
+      publish!(reloaded)
+
+      assert [body] = Map.values(ElementCss.all(actor, site.id, owner))
+      assert body =~ "crimson", "publishing the reopened draft did not write its style"
+    end
+
+    # A NAMED SAVE IS THE DOCUMENT AS IT STANDS, so the draft it makes holds the style this sitting
+    # applied, whichever document it was copied from.
+    @tag :draft_css
+    test "a named draft holds the style the sitting applied", ctx do
+      %{view: view, actor: actor, heading: heading} = ctx
+
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "color: teal;"})
+      render_async(view)
+      render_click(view, "save_as_draft", %{"label" => "Named"})
+
+      {:ok, named} = Drafts.get("page", editor(view).draft_id, actor)
+
+      assert named.label == "Named"
+      assert Map.values(named.element_css) == ["color: teal;"], "the named draft lost the style"
     end
 
     test "going back to the live page keeps the style for the next publish", ctx do
@@ -1415,11 +1484,11 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     end
   end
 
-  # THE PREVIEW'S STYLESHEET IS CACHED UNDER THE RECORD'S TOKEN and only compiled when that key is
-  # absent, which is what makes opening one cheap. It also meant a document published with new
-  # utility classes went on being previewed against the CSS of the version before it — the new
-  # classes had no rules at all, so the preview looked broken and the markup was blamed.
-  describe "publishing drops the preview stylesheet" do
+  # WHAT A PREVIEW KEEPS UNDER THE RECORD'S TOKEN is dropped by the publish, so the next preview is
+  # of the document as published. The site its JS is served for is kept there by every core; a core
+  # that cached the preview's stylesheet there too (0.0.4) drops that with it, and a newer one
+  # compiles the stylesheet on every open and keeps none.
+  describe "publishing drops what the preview kept" do
     for section <- [:page, :layout, :error_page] do
       test "for a #{section}", %{conn: conn, site: site} do
         {view, record} = open(conn, unquote(section), site)
@@ -1431,9 +1500,9 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
         MishkaCmsCore.Runtime.States.AssetsState.save(%{
           id: loaded.preview_token,
-          type: "css",
-          value: ".stale{}",
-          hash: "deadbeef",
+          type: "site",
+          value: site.id,
+          hash: nil,
           updated_at: DateTime.utc_now()
         })
 
@@ -1446,8 +1515,8 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
         publish!(view)
 
-        refute MishkaCmsCore.Runtime.States.AssetsState.exists?(loaded.preview_token, "css"),
-               "the preview kept the stylesheet of the version before this publish"
+        refute MishkaCmsCore.Runtime.States.AssetsState.exists?(loaded.preview_token, "site"),
+               "the preview kept what it held for the version before this publish"
       end
     end
   end

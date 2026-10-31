@@ -1091,23 +1091,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:source_tab, fn -> :template end)
     # What the Handlers tab puts in front of the reader: `{:entry, index}` or `{:form, node_id}`.
     |> assign_new(:code_focus, fn -> nil end)
-    |> assign_new(:element_css_rules, fn ->
-      # AND INTO THE SESSION, not only into these assigns. The canvas renders this CSS from
-      # `session.element_css`, and nothing but `save_element_css` ever wrote it — so a document
-      # reopened with element CSS already saved showed the author their rules in the panel while the
-      # frame had no `<style>` for them at all. Written where they are read, so the two cannot part.
-      #
-      # THE ROW PLUS WHAT THE SESSION IS HOLDING. Draft-stage CSS is not in the row — that is the
-      # point of it — so a reconnect that read the row alone would show the author the live page's
-      # rules and paint the canvas with them, over an element they styled ten seconds ago.
-      rules =
-        socket.assigns[:current_user]
-        |> ElementCss.all(socket.assigns.editor.site_id, css_owner(socket))
-        |> ElementCss.merge(socket.assigns.editor.staged_element_css)
-
-      EditorSession.set_element_css(socket.assigns.token, ElementCss.css(rules))
-      rules
-    end)
+    |> assign_new(:element_css_rules, fn -> held_rules(socket, socket.assigns.editor) end)
     # COLLECTED ONCE, not per render. Both libraries are merged with whatever extensions contribute
     # here rather than inside the Blocks panel, because that panel is a render function — a plugin's
     # code was running twice on every debounced keystroke in the search box. A plugin set does not
@@ -5077,6 +5061,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:ok, editor} =
           EditorSession.edit_draft(socket.assigns.token, draft, draft_template(socket, draft))
 
+        # The draft's own element CSS is the hold now, so the box and the canvas show it.
+        rules = held_rules(socket, editor)
+
         # The tree is a DIFFERENT tree now — its nodes have their own ids, so the ids the old one was
         # expanded by mean nothing to it and the rail collapsed to a row of closed roots. Opening a
         # draft should leave you looking at its structure, the same way opening the page does.
@@ -5090,7 +5077,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
            sheet: :none,
            draft: draft,
            draft_opened?: true,
-           expanded: default_expanded(editor.tree)
+           expanded: default_expanded(editor.tree),
+           element_css_rules: rules
          )
          # BOTH OFFERS ARE ANSWERED BY OPENING ONE. `resumable` is the autosave bar and
          # `inherited_draft` is the "carry on where you left off" bar; only the first was cleared
@@ -6278,7 +6266,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     section(socket)
     |> Drafts.save_as(
       record,
-      opened_draft(socket),
+      held_source(opened_draft(socket), record, editor),
       editor_html(editor),
       actor,
       draft_id,
@@ -6306,6 +6294,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         put_flash(socket, :error, human(reason))
     end
   end
+
+  # THE OPEN DOCUMENT AS IT STANDS, ITS HELD CSS INCLUDED. `Drafts.save_as/8` takes a draft's
+  # element CSS from its source (mishka_cms_core 0.0.5 on), so the named draft holds the Custom CSS
+  # applied in this sitting; a core whose drafts hold none reads no such field.
+  defp held_source(source, _record, %{staged_element_css: nil}), do: source
+
+  defp held_source(source, record, %{staged_element_css: held}),
+    do: Map.put(source || record, :element_css, held)
 
   defp opened_draft(%{assigns: %{draft_opened?: true, draft: draft}}), do: draft
   defp opened_draft(_live_page), do: nil
@@ -7169,7 +7165,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     case Events.before_draft_save(payload) do
       :ok ->
         result =
-          Drafts.autosave(section, record, heex, actor, editor.draft_id, label, editor.status)
+          apply(
+            Drafts,
+            :autosave,
+            with_held_css(
+              [section, record, heex, actor, editor.draft_id, label, editor.status],
+              editor
+            )
+          )
 
         announce_draft(result, payload)
         result
@@ -7296,17 +7299,61 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   # WHERE THE STYLE WENT, IN THE SENTENCE THAT SAYS IT WAS SAVED. Both stages said "Style applied."
-  # — the same words for a rule held for the next publish and one already on the live page. The
-  # holding place is named too, because it is an editing session and not a row: nothing else in the
-  # product keeps work there, and an author who is told only "when you publish" would read it as
-  # saved.
-  defp css_flash(:draft, said),
-    do:
-      gettext("%{said} Held in this editing session — it goes live when you publish.",
-        said: said
-      )
+  # — the same words for a rule held for the next publish and one already on the live page. A
+  # Draft-stage rule is written into the draft beside its markup, so the new-tab preview, which is
+  # compiled from the draft on every open, shows it too.
+  #
+  # With a core whose drafts hold no element CSS (0.0.4) the rule waits in this editing session
+  # alone, and the sentence names that holding place instead.
+  defp css_flash(:draft, said) do
+    case draft_holds_css?() do
+      true ->
+        gettext(
+          "%{said} It is in the draft — the preview shows it; it goes live when you publish.",
+          said: said
+        )
+
+      false ->
+        gettext("%{said} Held in this editing session — it goes live when you publish.",
+          said: said
+        )
+    end
+  end
 
   defp css_flash(_published, said), do: said
+
+  # THE DRAFT HOLDS THE ELEMENT CSS APPLIED IN DRAFT, beside its markup, from mishka_cms_core 0.0.5
+  # on: `Drafts.autosave/8` takes the session's hold as `element_css:`, and the draft preview
+  # compiles it. With 0.0.4 the hold stays in this session until the publish writes it, as before.
+  # Called through `apply/3` so this compiles against either.
+  defp draft_holds_css?,
+    do: Code.ensure_loaded?(Drafts) and function_exported?(Drafts, :autosave, 8)
+
+  defp with_held_css(args, editor) do
+    case draft_holds_css?() do
+      true -> args ++ [[element_css: editor.staged_element_css]]
+      false -> args
+    end
+  end
+
+  # THE ROW PLUS WHAT THE SESSION IS HOLDING. Draft-stage CSS is not in the row — that is the point
+  # of it — so a reconnect that read the row alone would show the author the live page's rules and
+  # paint the canvas with them, over an element they styled ten seconds ago. Opening a draft makes
+  # its own element CSS the hold, so the rules are read again then too.
+  #
+  # AND INTO THE SESSION, not only into the assigns. The canvas renders this CSS from
+  # `session.element_css`, and nothing but `save_element_css` ever wrote it — so a document reopened
+  # with element CSS already saved showed the author their rules in the panel while the frame had no
+  # `<style>` for them at all. Written where they are read, so the two cannot part.
+  defp held_rules(socket, editor) do
+    rules =
+      socket.assigns[:current_user]
+      |> ElementCss.all(editor.site_id, css_owner(socket))
+      |> ElementCss.merge(editor.staged_element_css)
+
+    EditorSession.set_element_css(socket.assigns.token, ElementCss.css(rules))
+    rules
+  end
 
   # THE CLASS THE RULE WAS JUST WRITTEN UNDER, put on the element as it is stored — or taken off it
   # when the box was cleared — rather than on the copy the panel was drawn from, which would put back
