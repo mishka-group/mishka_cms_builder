@@ -1449,6 +1449,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:expanded, fn -> default_expanded(editor.tree) end)
     |> expand_to_selection(editor)
     |> expand_selected(editor)
+    |> forget_heex_error(editor)
     |> assign(:editor, editor)
     |> assign(:tree, editor.tree)
     |> assign_presets(editor)
@@ -1481,6 +1482,16 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_snippet_source()
     |> draft_the_change(editor)
   end
+
+  # A REFUSED APPLY'S ERROR IS ABOUT THE MARKUP IT REFUSED. An undo, any other edit or another
+  # selection puts other markup in the Code drawer, and the error stayed under it.
+  defp forget_heex_error(
+         %{assigns: %{editor: %{revision: revision, selection: selection}}} = socket,
+         %{revision: revision, selection: selection}
+       ),
+       do: socket
+
+  defp forget_heex_error(socket, _editor), do: assign(socket, :heex_error, nil)
 
   # ASKED AGAIN ONLY WHEN THE ANSWER CAN CHANGE: a new revision of the document, or the palette
   # arriving, which is what `Inspector.unmet/3` reads the declarations from. `assign_editor/2` also

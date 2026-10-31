@@ -9206,8 +9206,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </div>
 
       <div data-role="pb-code2" class="grid min-h-0 flex-1 grid-cols-2">
+        <%!-- `PbCodeEditor` sets `data-dirty` here, in the browser, and the server's markup has none:
+              a patch, such as the one that draws a refused apply's error, took it off and hid
+              Apply and ⌘↵ while the text still differed. --%>
         <div
           data-pane="heex"
+          phx-mounted={JS.ignore_attributes(["data-dirty"])}
           class="group/heex flex min-h-0 min-w-0 flex-col border-r border-[#262429]"
         >
           <div class="flex flex-none items-center gap-2.5 border-b border-[#262429] px-4 py-2.5">

@@ -193,6 +193,57 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize() =~ "Contact Us"
     end
 
+    # THE ERROR IS ABOUT THE MARKUP IT REFUSED. An undo, any other edit or another selection puts
+    # other markup in the pane, and the refusal stayed under it as if it were about that.
+    test "a refusal's error goes when the document or the selection moves", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{"node_id" => heading.id, "source" => "<h1>Talk To Us</h1>"})
+
+      refuse = fn ->
+        heading = node_with_tag(view, "h1")
+
+        view
+        |> element("#pb-drawer-heex-form")
+        |> render_submit(%{"node_id" => heading.id, "source" => "<h1>{@user.name</h1>"})
+
+        assert has_element?(view, "#pb-drawer-heex-error")
+      end
+
+      refuse.()
+      render_click(view, "undo", %{})
+      refute has_element?(view, "#pb-drawer-heex-error"), "it stayed after the undo"
+
+      refuse.()
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+      refute has_element?(view, "#pb-drawer-heex-error"), "it stayed under another element"
+    end
+
+    # APPLY IS SHOWN BY `data-dirty`, which `PbCodeEditor` sets on the pane in the browser. The
+    # server's markup does not have it, so the patch that drew a refusal took it off, and Apply and
+    # ⌘↵ were gone while the text still differed.
+    test "the pane keeps its client-set dirty flag across a server patch", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      assert has_element?(
+               view,
+               ~s([data-pane="heex"][phx-mounted*="ignore_attrs"][phx-mounted*="data-dirty"])
+             )
+    end
+
     # THE TOKENIZER IS NOT THE COMPILER. This tokenizes perfectly — it is a component tag like any
     # other — and 500s the first visitor, so the check that catches it is a real compile.
     @tag :slow
