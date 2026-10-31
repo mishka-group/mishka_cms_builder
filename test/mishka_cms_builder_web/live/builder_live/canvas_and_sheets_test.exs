@@ -1433,7 +1433,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert has_element?(canvas, ~s(form#news-form input#simple-email[name="news[email]"]))
     end
 
-    test "a required `for` that is not the page's own form still says it is needed", %{
+    # WRITTEN IS WRITTEN, as the publish gate counts it (`Inspector.unmet/3`). `for={@changeset}` is
+    # not the page's own form, so the canvas has no form to hand it, but it does not call a property
+    # missing that Publish accepts: it draws the component with a stand-in, and in its own box when
+    # that still raises.
+    test "a required `for` that is not the page's own form is written, as Publish counts it", %{
       conn: conn,
       site: site
     } do
@@ -1451,8 +1455,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       {:ok, canvas, html} =
         live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
 
-      assert has_element?(canvas, ~s([data-incomplete="true"]))
-      assert html =~ "needs for"
+      refute has_element?(canvas, ~s([data-incomplete="true"]))
+      refute html =~ "needs for"
+      refute render_click(view, "publish", %{}) =~ "is required and empty"
     end
 
     # WRITTEN IS SUPPLIED; UNWRITTEN IS NOT. A required attribute the author never wrote is a real

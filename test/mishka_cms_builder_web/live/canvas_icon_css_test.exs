@@ -204,4 +204,71 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
       refute log =~ "did not apply"
     end
   end
+
+  # WRITTEN AS AN EXPRESSION IS WRITTEN. `chelekom-sidebar` draws its items' icons with
+  # `<.component component_name="chelekom-icon" :if={item[:icon]} name={item[:icon]} …>`, and the
+  # canvas drew a red "chelekom-icon needs name" over it because it cannot evaluate `item`, while
+  # Publish accepted the same markup. The canvas now asks the publish gate's question
+  # (`Inspector.unmet/3`): left out or blank is missing, an expression is supplied.
+  describe "a required attribute" do
+    setup %{site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "acme-mark",
+        template: ~S|<span class={["mark", @name]}></span>|,
+        body: ~S|%{name: "hero-" <> _} = assigns = assigns|,
+        attrs: [
+          %{
+            "name" => "name",
+            "type" => "string",
+            "opts" => %{"editor" => "icon", "required" => true}
+          }
+        ]
+      )
+
+      :ok
+    end
+
+    test "written as an expression draws the component with a stand-in icon", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="w6"><.component component_name="acme-mark" site="#{site.name}" :if={assigns[:icon]} name={assigns[:icon]} /></div>)
+        )
+
+      html = canvas_html(conn, page)
+
+      assert html =~ "mark hero-sparkles"
+      refute html =~ "needs name"
+      refute mark_box(html) =~ "data-incomplete"
+    end
+
+    test "left blank or left out is still asked for", %{conn: conn, site: site} do
+      for written <- [~s(name=""), ~s(name="  "), ""] do
+        page =
+          create_page!(
+            site_id: site.id,
+            template:
+              ~s(<div id="w7"><.component component_name="acme-mark" site="#{site.name}" #{written} /></div>)
+          )
+
+        html = canvas_html(conn, page)
+
+        assert html =~ "needs name", "#{inspect(written)} drew the component"
+        assert mark_box(html) =~ ~s(data-incomplete="true")
+      end
+    end
+
+    # The opening tag of the editor's box around the component: the chrome names
+    # `data-incomplete` in its own rules, so the whole document cannot tell.
+    defp mark_box(html) do
+      html
+      |> String.split("<")
+      |> Enum.find("", &String.contains?(&1, ~s(data-component="acme-mark")))
+    end
+  end
 end

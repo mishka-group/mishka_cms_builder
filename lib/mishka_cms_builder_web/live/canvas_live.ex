@@ -2334,7 +2334,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       |> assign(:component_name, Node.component_name(assigns.node))
       |> assign(
         :missing,
-        missing_required(assigns.node, assigns[:required_attrs] || %{}, assigns.tree)
+        missing_required(assigns.node, assigns[:required_attrs] || %{})
       )
 
     render_component_node(assigns)
@@ -3798,10 +3798,24 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # The required attributes this node has not been given. Empty for everything healthy, which is the
   # only path that costs anything on a normal page.
-  defp missing_required(node, required, tree) do
+  #
+  # BY THE PUBLISH GATE'S OWN RULE, `Inspector.unmet/3`: an attribute left out or left blank is
+  # missing, and one written as an expression is supplied, whether or not the canvas can compute it.
+  # The canvas used to call `name={item[:icon]}` missing because it cannot evaluate `item`, and drew
+  # a red "needs name" over a component Publish then accepted. `put_unresolved_kit/4` hands such an
+  # expression a stand-in — `hero-sparkles` for an icon — and `contained/3` keeps a render that
+  # still raises to its own box, so the canvas draws the component the page publishes.
+  defp missing_required(node, required) do
     case Map.get(required, Node.component_name(node), []) do
       [] -> []
-      names -> Enum.reject(names, &filled?(node, &1, tree))
+      names -> Enum.reject(names, &written?(node, &1))
+    end
+  end
+
+  defp written?(node, name) do
+    case Node.attr_text(node, name) do
+      nil -> false
+      text -> String.trim(text) != ""
     end
   end
 
@@ -3817,7 +3831,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # Asked of the ASSEMBLED assigns rather than of the node, because that map is what the component
   # will actually read: a default `put_declared_defaults/3` filled in counts as supplied, and so does
   # a form field `put_form_fields/4` synthesised, without either needing a special case here. It is
-  # the same question `missing_required/3` asks of a kit, so the two paths cannot drift.
+  # the same question `missing_required/2` asks of a kit, so the two paths cannot drift.
   defp missing_given(nil, _given), do: []
 
   defp missing_given({module, fun}, given) do
@@ -3827,16 +3841,11 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         do: Atom.to_string(attr.name)
   end
 
-  # WRITTEN IS NOT THE SAME AS SUPPLIED, and this guard used to conflate them. An expression the
-  # canvas cannot resolve — `@some_assign`, a function call — is dropped by `attr_value/1` and never
-  # reaches the component, so counting it as filled let the render proceed without it and raise.
-  #
-  # Asking the same question `attr_value/1` answers keeps the two in step: anything it would drop is
-  # missing here, and the reader gets the "needs …" placeholder they can act on instead of a canvas
-  # that disappears.
-  # A BINDING IS SUPPLIED TOO, since `put_form_fields/4` synthesises one. `field={f[:email]}` is an
-  # expression `literal/1` refuses, so without this clause a kit field that declares `field`
-  # required showed the "needs field" placeholder on a form that renders perfectly well.
+  # WHETHER THE CANVAS HAS A PICTURE TO DRAW, which is the media well's question and not a required
+  # attribute's (`missing_required/2`). An expression the canvas cannot resolve — `@some_assign`, a
+  # function call — is dropped by `attr_value/1` and draws nothing, so the well stays to aim at. A
+  # binding `put_form_fields/4` synthesises, and a working form's `for`, are values the canvas does
+  # hand the component.
   defp filled?(node, name, tree) do
     case Node.attr(node, name) do
       {:string, value} ->
@@ -3946,8 +3955,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # `put_unresolved/4` for a kit component: an attribute the author wrote as an expression the canvas
   # cannot evaluate, which the kit declares with no default, still reaches the template as a key.
   # Chelekom's form wrapper declares `for` that way, so a wrapper bound to its page form
-  # (`for={assigns[:contact_form]}`) raised `key :for not found` on every render. A required one only
-  # gets this far when `missing_required/3` counts it as supplied, as a working form's `for`.
+  # (`for={assigns[:contact_form]}`) raised `key :for not found` on every render. A required one gets
+  # this far too, since `missing_required/2` counts every written expression as supplied.
   defp put_unresolved_kit(assigns_map, node, specs, declared) do
     Enum.reduce(specs, assigns_map, fn attr, acc ->
       with name when is_binary(name) <- attr_name(attr),
