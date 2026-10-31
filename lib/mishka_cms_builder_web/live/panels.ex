@@ -647,6 +647,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:history_position, :integer, default: 0)
   attr(:history_total, :integer, default: 0)
 
+  attr(:problems, :list,
+    default: [],
+    doc: "what Publish would refuse — `MishkaCmsBuilderWeb.Live.BuilderLive.problems/1`"
+  )
+
   @doc """
   The 56px top bar: identity and save status on the left, every global control on the right.
 
@@ -709,6 +714,25 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 (@dirty? && "bg-[#cf8a24]") || "bg-[#1f9d6b]"
               ]}
             />
+            <%!-- WHAT PUBLISH WOULD REFUSE, BEFORE IT IS PRESSED. Red, with the count, beside the
+                  saved dot; it opens the list of them by element. Counted by the same function the
+                  publish gate refuses with, so the two cannot disagree. --%>
+            <button
+              :if={@problems != []}
+              type="button"
+              id="pb-problems-dot"
+              phx-click={show_problems()}
+              title={
+                ngettext(
+                  "1 problem stops a publish — show it",
+                  "%{count} problems stop a publish — show them",
+                  length(@problems)
+                )
+              }
+              class="inline-flex h-[14px] min-w-[14px] flex-none items-center justify-center rounded-full bg-[#d64545] px-[3px] font-['Space_Grotesk'] text-[9px] font-bold leading-none text-white hover:bg-[#b93a3a]"
+            >
+              {length(@problems)}
+            </button>
             <%!-- THE NAME IS THE WAY IN, which is where a reader already looks for it — and it is a
                   button only when there is a record to change and an address to change about it.
                   Before that, the essentials step is asking for exactly these fields one layer up. --%>
@@ -12791,6 +12815,156 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </section>
     </div>
     """
+  end
+
+  @doc """
+  What Publish would refuse, listed by element: each element's breadcrumb, then its problems.
+
+  Opened by the red dot in the top bar (`#pb-problems-dot`) and by a refused Publish, shown and
+  hidden with `Phoenix.LiveView.JS` — `show_problems/0` and `hide_problems/1` — and marked
+  `data-pb-modal` only while it is open, so Escape is its own and the editor's keyboard hook stands
+  back as it does for every other modal here. A refusal changes `opened`, which mints a new
+  `#pb-problems-open-<n>` whose `phx-mounted` opens it, so the server can open it with no hook.
+
+  Clicking a problem closes the window and selects its element, on the canvas and in Layers, with the
+  Inspector open on the property named. A problem of the whole document — a layout that no longer
+  renders `@inner_content`, markup that will not compile — has no element; one that will not compile
+  opens the Code window instead.
+  """
+  attr(:problems, :list, required: true)
+  attr(:tree, :any, required: true)
+  attr(:opened, :integer, default: 0)
+
+  def problems_modal(assigns) do
+    assigns = assign(assigns, :groups, problem_groups(assigns.problems, assigns.tree))
+
+    ~H"""
+    <div
+      id="pb-problems-modal"
+      class="fixed inset-0 z-[96] hidden items-center justify-center bg-[#17161a]/40 p-6"
+      phx-window-keydown={hide_problems()}
+      phx-key="escape"
+    >
+      <section
+        phx-click-away={hide_problems()}
+        class="flex max-h-[80vh] w-[480px] max-w-[94vw] flex-col overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_30px_80px_rgba(20,18,26,.3)]"
+      >
+        <div class="flex items-start gap-3 border-b border-[#f0efea] px-5 pb-3 pt-[18px]">
+          <span class="grid size-9 flex-none place-items-center rounded-[11px] bg-[#fbe4e4] font-['Space_Grotesk'] text-[14px] font-bold text-[#b93a3a]">
+            {length(@problems)}
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
+              {ngettext(
+                "1 problem stops a publish",
+                "%{count} problems stop a publish",
+                length(@problems)
+              )}
+            </h2>
+            <p class="mt-1.5 text-[11.5px] font-medium leading-[1.55] text-[#6d6a63]">
+              {gettext(
+                "Drafts still save. Click a problem to go to it; Publish works once the list is empty."
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            id="pb-problems-close"
+            phx-click={hide_problems()}
+            title={gettext("Close")}
+            class="grid size-7 flex-none place-items-center rounded-[8px] text-[#6d6a63] hover:bg-[#f2f1ec]"
+          >
+            <.icon name={:close} size={14} />
+          </button>
+        </div>
+
+        <ol
+          id="pb-problems-tree"
+          class="flex min-h-0 flex-col gap-3 overflow-y-auto px-5 py-4 [scrollbar-width:thin]"
+        >
+          <li :for={group <- @groups} data-problem-group={group.id || "document"}>
+            <div class="truncate font-['Space_Grotesk'] text-[11.5px] font-bold text-[#2e2b6b]">
+              {group.label}
+            </div>
+            <ul class="mt-1 flex flex-col gap-1 border-l-2 border-[#f1d6d6] pl-2.5">
+              <li :for={problem <- group.problems}>
+                <button
+                  :if={problem.id || problem.kind == :compile}
+                  type="button"
+                  data-problem-node={problem.id}
+                  data-problem-field={problem.field}
+                  data-problem-kind={problem.kind}
+                  phx-click={go_to_problem(problem)}
+                  class="w-full rounded-[7px] px-2 py-1 text-left text-[11.5px] font-medium leading-[1.45] text-[#8a2f2f] hover:bg-[#fdf3f3]"
+                >
+                  {problem.text}
+                </button>
+                <span
+                  :if={!(problem.id || problem.kind == :compile)}
+                  data-problem-kind={problem.kind}
+                  class="block px-2 py-1 text-[11.5px] font-medium leading-[1.45] text-[#8a2f2f]"
+                >
+                  {problem.text}
+                </span>
+              </li>
+            </ul>
+          </li>
+        </ol>
+      </section>
+      <span
+        :if={@opened > 0}
+        id={"pb-problems-open-#{@opened}"}
+        phx-mounted={show_problems()}
+        class="hidden"
+      />
+    </div>
+    """
+  end
+
+  @doc false
+  def show_problems(js \\ %JS{}) do
+    js
+    |> JS.show(to: "#pb-problems-modal", display: "flex", transition: @scrim_in, time: 200)
+    |> JS.set_attribute({"data-pb-modal", "true"}, to: "#pb-problems-modal")
+    |> JS.focus_first(to: "#pb-problems-modal section")
+  end
+
+  @doc false
+  def hide_problems(js \\ %JS{}) do
+    js
+    |> JS.hide(to: "#pb-problems-modal", transition: @scrim_out, time: 150)
+    |> JS.remove_attribute("data-pb-modal", to: "#pb-problems-modal")
+  end
+
+  # The element's Inspector, on the property named; a slot is added from the component's own.
+  defp go_to_problem(%{id: id, kind: kind, field: field}) when is_binary(id) do
+    value =
+      case kind in [:attr, :type] do
+        true -> %{id: id, prop: field}
+        false -> %{id: id}
+      end
+
+    "inspect" |> JS.push(value: value) |> hide_problems()
+  end
+
+  defp go_to_problem(%{kind: :compile}), do: "open_source" |> JS.push() |> hide_problems()
+
+  # In the order the gate found them, which is the document's: each element once, under its
+  # breadcrumb as the crumb bar writes it, and the document's own problems last.
+  defp problem_groups(problems, tree) do
+    problems
+    |> Enum.chunk_by(& &1.id)
+    |> Enum.map(fn [%{id: id} | _rest] = group ->
+      %{id: id, label: problem_label(tree, id), problems: group}
+    end)
+  end
+
+  defp problem_label(_tree, nil), do: gettext("This document")
+
+  defp problem_label(tree, id) do
+    tree
+    |> Tree.path(id)
+    |> Enum.map_join(" › ", &(FormPlacement.form_name(&1) || node_label(&1)))
   end
 
   @doc """

@@ -1151,6 +1151,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:leave_to, fn -> nil end)
     |> assign_new(:ai_attachment, fn -> nil end)
     |> assign_new(:autosave_failed?, fn -> false end)
+    # What Publish would refuse, counted by the red dot in the top bar — see `problems/1` — and how
+    # many times a refusal has opened its window.
+    |> assign_new(:problems, fn -> [] end)
+    |> assign_new(:problems_opened, fn -> 0 end)
     # Which property the Inspector should land on, set when a property row in the tree is clicked.
     |> assign_new(:focus_attr, fn -> nil end)
     |> assign_studio_settings()
@@ -1454,6 +1458,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> then(&assign(&1, :element_css, selected_css(&1, editor)))
     |> then(&assign(&1, :element_css_advice, ElementCss.advice(&1.assigns.element_css)))
     |> assign(:crumbs, Tree.path(editor.tree, editor.selection))
+    |> assign_problems(editor)
     |> assign(:breakpoint, editor.breakpoint)
     |> assign(:pseudo, editor.pseudo)
     |> assign(:dir, editor.dir)
@@ -1475,6 +1480,27 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_snippet_source()
     |> draft_the_change(editor)
   end
+
+  # ASKED AGAIN ONLY WHEN THE ANSWER CAN CHANGE: a new revision of the document, or the palette
+  # arriving, which is what `Inspector.unmet/3` reads the declarations from. `assign_editor/2` also
+  # runs for a selection, a hover and a breakpoint switch, and none of those move it.
+  defp assign_problems(socket, editor) do
+    key = {editor.revision, length(editor.components), editor.section}
+
+    case socket.assigns[:problems_key] == key do
+      true ->
+        socket
+
+      false ->
+        socket |> assign(:problems_key, key) |> assign_problem_list(problems(editor))
+    end
+  end
+
+  # A LIST THAT EMPTIED FORGETS IT WAS OPENED. The window is drawn only while there is something in
+  # it, so a count left behind would remount its opener the next time a problem appeared and open
+  # the window unasked.
+  defp assign_problem_list(socket, []), do: assign(socket, problems: [], problems_opened: 0)
+  defp assign_problem_list(socket, problems), do: assign(socket, :problems, problems)
 
   # WRITTEN AS IT HAPPENS, not on a clock. A thirty-second timer is a promise to lose up to thirty
   # seconds of work, and a draft row is cheap — no `SendToOban`, no compile, one small update.
@@ -6493,21 +6519,127 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp save(socket, stage) do
-    case {missing_required(socket) ++ missing_slots(socket), mistyped(socket)} do
-      {[], []} -> save_whole(socket, stage)
-      {[], mistyped} -> refuse_mistyped(socket, mistyped)
-      {missing, _mistyped} -> refuse_save(socket, missing)
+    case publish_check(socket.assigns.editor) do
+      {:ok, heex} -> write(socket, stage, heex)
+      {:refused, problems} -> refuse_publish(socket, problems)
     end
   end
 
+  @doc """
+  What stops this document being published, as a list the editor shows and Publish refuses with.
+
+  THE ONE ANSWER, TWO READERS. The red dot beside the status in the top bar counts it, its window
+  lists it by element, and Publish refuses while it is not empty — all three call this, so the dot
+  and the button cannot disagree. Each entry is `%{id:, kind:, field:, text:}`: the node it is about
+  (`nil` for the document as a whole), what is wrong, the property or slot named, and the sentence
+  the refusal and the window both say.
+
+  The checks are the gate's own, in its order:
+
+    * a required property left empty, a required slot never added, and text where a component takes
+      a list or a map — `Inspector.unmet/3`, which the layers badge and the Inspector read too;
+    * a layout that no longer renders `@inner_content`, or hides it from visitors;
+    * markup that will not compile.
+
+  Only Publish is gated. A draft, the autosave and Code Apply still save a document with problems,
+  so an author who cut a chip to paste it elsewhere does not lose the minute in between.
+  """
+  @spec problems(map()) :: [map()]
+  def problems(editor) do
+    case publish_check(editor) do
+      {:ok, _heex} -> []
+      {:refused, problems} -> problems
+    end
+  end
+
+  defp publish_check(editor) do
+    {heex, uncompilable} = compiled(editor.tree)
+
+    case unmet(editor) ++ slotless_layout(editor) ++ uncompilable do
+      [] -> {:ok, heex}
+      problems -> {:refused, problems}
+    end
+  end
+
+  # WHAT EACH COMPONENT WAS TOLD IT MUST HAVE. These used to be their own readings of the
+  # declaration, and the layers rail had a third — which is to say it had none, and the author found
+  # out at Publish. `Inspector.unmet/3` is the one answer all of them take, so the badge on a row and
+  # the refusal on the button cannot disagree about which field is missing.
+  #
+  # A required SLOT is the same promise as a required property: the component will not render without
+  # it. Phoenix allows exactly one option inside a slot block — `:required` — and the kit uses it
+  # twelve times. TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP is a page that arrived holding it — a
+  # hand edit, an import, a draft from before the Inspector refused one — and it renders the
+  # component as a box on the published page.
+  defp unmet(editor) do
+    components = component_lookup(editor)
+
+    for node <- Tree.walk(editor.tree),
+        unmet <- Inspector.unmet(node, editor.tree, components),
+        do: unmet_problem(node, unmet)
+  end
+
+  defp unmet_problem(node, {:attr, name}),
+    do: %{
+      id: node.id,
+      kind: :attr,
+      field: name,
+      text: gettext("%{field} is required and empty", field: "#{owner_label(node)}.#{name}")
+    }
+
+  defp unmet_problem(node, {:slot, name}),
+    do: %{
+      id: node.id,
+      kind: :slot,
+      field: name,
+      text:
+        gettext("%{field} is required and empty", field: "#{Node.component_name(node)}.:#{name}")
+    }
+
+  defp unmet_problem(node, {:type, name}),
+    do: %{
+      id: node.id,
+      kind: :type,
+      field: name,
+      text:
+        gettext("%{field} holds text where the component takes a list or a map",
+          field: "#{owner_label(node)}.#{name}"
+        )
+    }
+
   # THE SAME PROMISE AS A REQUIRED PROPERTY, made by the section rather than by a component. A layout
   # renders the page it wraps through `@inner_content`; one that no longer does compiles, saves and
-  # previews, and quietly empties every page on it. That is a page the author has already broken, so
-  # it is refused here alongside the others rather than reported after the fact.
-  #
-  # Only publishing comes through this. The autosaved draft is written by `autosave/1` and is not
-  # gated — an author who cut the chip to paste it somewhere else must not lose the minute of work
-  # in between.
+  # previews, and quietly empties every page on it.
+  defp slotless_layout(editor) do
+    cond do
+      Section.normalize(editor.section) != "layout" ->
+        []
+
+      LayoutSlot.renders_inner_content?(editor.tree) ->
+        []
+
+      LayoutSlot.holds_inner_content?(editor.tree) ->
+        [
+          document_problem(
+            :layout,
+            gettext(
+              "@inner_content is inside an element hidden from visitors, so every page using this layout would come out empty. Show it first"
+            )
+          )
+        ]
+
+      true ->
+        [
+          document_problem(
+            :layout,
+            gettext(
+              "nothing on this layout renders @inner_content, so every page using it would come out empty"
+            )
+          )
+        ]
+    end
+  end
+
   # THE TOKENIZER IS NOT THE COMPILER, AND NEITHER IS THE SERIALIZER. The document in the editor
   # arrived through `Tree.parse/1`, which takes `{@a + }` — the braces delimit an expression and the
   # expression is a token to it. `to_heex/1` reads every expression on the way out and catches that
@@ -6520,113 +6652,30 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # to have been typed here to be broken: a seed, an import or a hand edit is enough.
   #
   # `CodeCheck.template/1` rather than `check/1`: this is the syntax question, it costs milliseconds
-  # rather than the second a page compile does, and the semantic half belongs to the resource that
-  # owns the module's shape.
-  defp save_whole(socket, stage) do
-    with true <- wraps_a_page?(socket),
-         {:ok, heex} <- Serializer.to_heex(socket.assigns.editor.tree),
+  # rather than the second a page compile does, which is what lets the red dot ask it on every change.
+  defp compiled(tree) do
+    with {:ok, heex} <- Serializer.to_heex(tree),
          :ok <- CodeCheck.template(heex) do
-      write(socket, stage, heex)
+      {heex, []}
     else
-      false -> refuse_slotless_layout(socket)
-      {:error, reason} -> refuse_uncompilable(socket, reason)
+      {:error, reason} -> {nil, [uncompilable(reason)]}
     end
   end
 
-  defp refuse_uncompilable(socket, reason) do
-    put_flash(
-      socket,
-      :error,
-      gettext("Not published — this markup will not compile. %{reason}",
-        reason: compile_reason(reason)
+  defp uncompilable(reason),
+    do:
+      document_problem(
+        :compile,
+        gettext("this markup will not compile. %{reason}", reason: compile_reason(reason))
       )
-    )
-  end
+
+  defp document_problem(kind, text), do: %{id: nil, kind: kind, field: nil, text: text}
 
   # A fault from `CodeCheck`, or the compiler's own sentence from the serializer — which arrives
   # naming a file called `nofile`, so the prose above it is what makes it readable.
   defp compile_reason(fault) when is_map(fault), do: CodeCheck.message(fault)
   defp compile_reason(reason) when is_binary(reason), do: reason
   defp compile_reason(reason), do: inspect(reason)
-
-  defp wraps_a_page?(%{assigns: %{editor: editor}}),
-    do:
-      Section.normalize(editor.section) != "layout" or
-        LayoutSlot.renders_inner_content?(editor.tree)
-
-  defp refuse_slotless_layout(socket) do
-    case LayoutSlot.holds_inner_content?(socket.assigns.editor.tree) do
-      true ->
-        put_flash(
-          socket,
-          :error,
-          gettext(
-            "Not published — @inner_content is inside an element hidden from visitors, so every page using this layout would come out empty. Show it first."
-          )
-        )
-
-      false ->
-        put_flash(
-          socket,
-          :error,
-          gettext(
-            "Not published — nothing on this layout renders @inner_content, so every page using it would come out empty."
-          )
-        )
-    end
-  end
-
-  # A component that declares a property as required means the page will not render without it, so
-  # publishing one that is missing writes a page that is already broken. The fields are marked in the
-  # Inspector; this is the second half of that — it says WHICH, and it does not publish. A draft is
-  # not gated, so the refusal and the Inspector both say publish, the one write it stops.
-  # WHAT THE PAGE WAS TOLD IT MUST HAVE. Both of these used to be their own reading of the
-  # declaration, and the layers rail had a third — which is to say it had none, and the author found
-  # out at Publish. `Inspector.unmet/3` is the one answer all three now take, so the badge on a row
-  # and the refusal on the button cannot disagree about which field is missing.
-  #
-  # A required SLOT is the same promise as a required property: the component will not render without
-  # it, so a page that never filled it is not savable either. Phoenix allows exactly one option
-  # inside a slot block — `:required` — and the kit uses it twelve times.
-  defp missing_required(%{assigns: %{editor: editor}}) do
-    components = component_lookup(editor)
-
-    for node <- Tree.walk(editor.tree),
-        {:attr, name} <- Inspector.unmet(node, editor.tree, components),
-        do: "#{owner_label(node)}.#{name}"
-  end
-
-  defp missing_slots(%{assigns: %{editor: editor}}) do
-    components = component_lookup(editor)
-
-    for node <- Tree.walk(editor.tree),
-        {:slot, name} <- Inspector.unmet(node, editor.tree, components),
-        do: "#{Node.component_name(node)}.:#{name}"
-  end
-
-  # TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP. The Inspector refuses to write one, so this is
-  # a page that arrived holding it — a hand edit, an import, a draft from before the refusal — and it
-  # renders the component as a box on the published page.
-  defp mistyped(%{assigns: %{editor: editor}}) do
-    components = component_lookup(editor)
-
-    for node <- Tree.walk(editor.tree),
-        {:type, name} <- Inspector.unmet(node, editor.tree, components),
-        do: "#{owner_label(node)}.#{name}"
-  end
-
-  defp refuse_mistyped(socket, mistyped) do
-    put_flash(
-      socket,
-      :error,
-      ngettext(
-        "Not published — %{fields} holds text where the component takes a list or a map. Remove it in the Inspector to use the default.",
-        "Not published — %{fields} hold text where the component takes a list or a map. Remove them in the Inspector to use the defaults.",
-        length(mistyped),
-        fields: Enum.join(Enum.uniq(mistyped), ", ")
-      )
-    )
-  end
 
   defp component_lookup(%{components: components}) when is_list(components),
     do: Map.new(components, &{&1.name, &1})
@@ -6635,15 +6684,24 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp owner_label(node), do: Node.component_name(node) || ":#{Node.slot_name(node)}"
 
-  defp refuse_save(socket, missing) do
-    put_flash(
-      socket,
+  # SAID ONCE, LISTED ONCE. The flash names how many and says each one, in the order the red dot's
+  # window lists them, and the window opens on the same list: `problems_opened` changes the id of the
+  # element whose `phx-mounted` shows it (`Panels.problems_modal/1`), so it opens with
+  # `Phoenix.LiveView.JS` and no hook. A draft is not gated, so the refusal says publish, the one
+  # write it stops.
+  defp refuse_publish(socket, problems) do
+    texts = problems |> Enum.map(&String.trim_trailing(&1.text, ".")) |> Enum.uniq()
+
+    socket
+    |> assign(:problems, problems)
+    |> update(:problems_opened, &(&1 + 1))
+    |> put_flash(
       :error,
       ngettext(
-        "Not published — %{fields} is required and empty.",
-        "Not published — %{fields} are required and empty.",
-        length(missing),
-        fields: Enum.join(Enum.uniq(missing), ", ")
+        "Not published — %{problems}. The red dot beside the status lists it.",
+        "Not published — %{count} problems: %{problems}. The red dot beside the status lists them.",
+        length(texts),
+        problems: Enum.join(texts, "; ")
       )
     )
   end
@@ -8045,6 +8103,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         studio_badge={@studio_badge}
         history_position={@history_position}
         history_total={@history_total}
+        problems={@problems}
       />
       <Panels.mobile_bar mob_panel={@mob_panel} dir={@dir} />
 
@@ -8148,6 +8207,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
       <Panels.command_palette :if={@command_open} {assigns} />
       <Panels.reload_modal :if={@reload_confirm} />
+      <Panels.problems_modal
+        :if={@problems != []}
+        problems={@problems}
+        tree={@tree}
+        opened={@problems_opened}
+      />
       <Panels.leave_modal :if={@leave_to} />
       <Panels.source_modal
         :if={@source_modal}
