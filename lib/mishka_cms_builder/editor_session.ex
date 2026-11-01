@@ -1044,26 +1044,67 @@ defmodule MishkaCmsBuilder.EditorSession do
   def drop_hints(token, params) do
     with {:ok, session} <- fetch_session(token),
          {:ok, dragged, dragged_tree} <- subject(session, params) do
-      {:ok,
-       session
-       |> arrivals(params)
-       |> Enum.map(fn {head, tree} -> hints_for(session, head, tree, params) end)
-       |> Enum.reduce(
-         hints_for(session, dragged, dragged_tree, params),
-         &Map.merge(&2, &1, fn _id, one, other -> one or other end)
-       )}
+      {:ok, accepted(session, dragged, dragged_tree, params)}
     end
   end
 
+  defp accepted(session, dragged, dragged_tree, params) do
+    session
+    |> arrivals(params)
+    |> Enum.map(fn {head, tree} -> hints_for(session, head, tree, params) end)
+    |> Enum.reduce(
+      hints_for(session, dragged, dragged_tree, params),
+      &Map.merge(&2, &1, fn _id, one, other -> one or other end)
+    )
+  end
+
   defp hints_for(session, dragged, dragged_tree, params),
-    do:
-      Placement.hints(session.tree, dragged,
-        components: session.components,
-        dragged_tree: dragged_tree,
-        fragment?: TablePlacement.fragment?(session),
-        locked: session.locked,
-        dragged_id: params["node_id"]
-      )
+    do: Placement.hints(session.tree, dragged, placement_opts(session, dragged_tree, params))
+
+  defp placement_opts(session, dragged_tree, params),
+    do: [
+      components: session.components,
+      dragged_tree: dragged_tree,
+      fragment?: TablePlacement.fragment?(session),
+      locked: session.locked,
+      dragged_id: params["node_id"]
+    ]
+
+  @doc """
+  Everything the canvas needs at `dragstart`, in one answer: `drop_hints/2`'s map as `accepts`, why
+  each node that refuses refuses as `refusals` (`Placement.refusals/4`), and whether a field is being
+  dragged as `field` (`drop_field?/2`).
+
+  The reasons ride with the verdict, and are not asked for per hover, so the canvas can name the
+  rule the moment the pointer is aimed into a node that will not take the drag, with no round trip.
+  """
+  @spec drop_verdict(String.t(), map()) ::
+          {:ok,
+           %{
+             accepts: %{String.t() => boolean()},
+             refusals: %{String.t() => String.t()},
+             field: boolean()
+           }}
+          | {:error, term()}
+  def drop_verdict(token, params) do
+    with {:ok, session} <- fetch_session(token),
+         {:ok, dragged, dragged_tree} <- subject(session, params) do
+      accepts = accepted(session, dragged, dragged_tree, params)
+
+      {:ok,
+       %{
+         accepts: accepts,
+         refusals:
+           Placement.refusals(
+             session.tree,
+             dragged,
+             accepts,
+             placement_opts(session, dragged_tree, params)
+           ),
+         field: drop_field?(token, params)
+       }}
+    end
+  end
 
   defp arrivals(_session, %{"node_id" => id}) when is_binary(id), do: []
 

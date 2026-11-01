@@ -42,10 +42,38 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DarkThemeTest do
     end
   end
 
+  # The inverse reaches what a frame paints and nothing else. A document that sets no background, such
+  # as a page without a layout, paints nothing under its text and icons, so the stage behind the frame
+  # shows through, and the root's filter turns the stage near-black: black text on a dark ground. The
+  # frame's own background is inside its filter, so it comes out as the white a published page has.
+  test "the canvas draws on the page's white, not on the stage behind it", %{
+    conn: conn,
+    page: page
+  } do
+    {:ok, view, _html} = open_builder(conn, page)
+
+    assert "bg-white" in classes(view, "#pb-frame-desktop")
+
+    view |> element("#pb-device-frames") |> render_click()
+
+    for width <- [1180, 900, 560] do
+      assert "bg-white" in classes(view, "#pb-frame-#{width}"), "the #{width}px frame"
+    end
+  end
+
   test "so does the preview a palette card opens", %{conn: conn, page: page} do
     {:ok, view, _html} = open_builder(conn, page)
 
     assert @frame_filter in classes(view, "[data-role=pb-card-preview-frame]")
+  end
+
+  # The same cause as the canvas: the card's preview is a document with no background of its own, so
+  # the card's body behind it, which the root's filter turns near-black, showed through under the
+  # component's dark text.
+  test "and the preview draws on white too", %{conn: conn, page: page} do
+    {:ok, view, _html} = open_builder(conn, page)
+
+    assert "bg-white" in classes(view, "[data-role=pb-card-preview-frame]")
   end
 
   # THE INVERSE OF THE AMOUNT THE ROOT SETS, not of a number copied beside it. `invert(p)` maps a tone

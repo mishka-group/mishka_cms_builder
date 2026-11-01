@@ -297,10 +297,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # happened to use the same one. `chelekom-alert`'s maintenance example asks for
     # `hero-wrench-screwdriver`, no page used it, and the reader saw a heading with a blank space
     # where the icon belongs — the class was in the code pane and had no rule behind it.
-    |> assign(
-      :icon_css,
-      Icons.css(Enum.uniq(icons_set_by(rewritten) ++ icons_defaulted_by(session.components)))
-    )
+    |> assign(:icon_css, icon_css(rewritten, icons_defaulted_by(session.components)))
     |> assign(:missing?, false)
     |> assign(:selection, nil)
     |> assign(:selection_anchor, nil)
@@ -456,6 +453,17 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end
   end
 
+  # The stylesheet rules for the icons the frame draws: the ones the document could render
+  # (`icons_set_by/1`, `icons_defaulted_by/1`), the stand-in for an icon name the canvas cannot
+  # compute (`stand_in/4`), and the no-symbol the drag draws beside a box that will not take what is
+  # dragged (`PbCanvas` in `hooks.js`). No page names either, so the site's stylesheet has no rule
+  # for them and an icon drawn with one would be 0x0.
+  @icon_stand_in "hero-sparkles"
+  @icon_refusal "hero-no-symbol"
+
+  defp icon_css(tree, defaults),
+    do: Icons.css(Enum.uniq([@icon_stand_in, @icon_refusal | icons_set_by(tree) ++ defaults]))
+
   # Every heroicon class this document could render: the ones its nodes SET, and the default of every
   # icon-typed attribute on every component it uses — a component renders its default when the page
   # says nothing, and that value appears nowhere in the tree.
@@ -547,13 +555,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # WHERE THE FRAME'S LINK POINTS NOW. The root layout linked `canvas_css_hrefs`, and a root
     # layout is never patched, so a rebuild moves the link from the browser (`follow_css/2`).
     |> assign_new(:canvas_css_linked, fn assigns -> assigns.canvas_css_hrefs end)
-    |> then(
-      &assign(
-        &1,
-        :icon_css,
-        Icons.css(Enum.uniq(icons_set_by(session.tree) ++ &1.assigns.icon_defaults))
-      )
-    )
+    |> then(&assign(&1, :icon_css, icon_css(session.tree, &1.assigns.icon_defaults)))
     |> assign_new(:canvas_theme, fn -> theme_source(session.site_id) end)
     |> assign(:element_css, session.element_css || "")
     # `suppress_site_js` keeps the site's own bundle (and its LiveSocket) out — a second LiveSocket
@@ -1097,16 +1099,9 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # Answered once, when the drag STARTS: the whole tree's verdict for this one thing being dragged, so
   # the blue line is a local lookup for the rest of the gesture. See `EditorSession.drop_hints/2`.
   def handle_event("drag_start", params, socket) do
-    case EditorSession.drop_hints(socket.assigns.token, params) do
-      {:ok, accepts} ->
-        {:noreply,
-         push_event(socket, "pb:drop-hints", %{
-           accepts: accepts,
-           field: EditorSession.drop_field?(socket.assigns.token, params)
-         })}
-
-      {:error, _reason} ->
-        {:noreply, socket}
+    case EditorSession.drop_verdict(socket.assigns.token, params) do
+      {:ok, verdict} -> {:noreply, push_event(socket, "pb:drop-hints", verdict)}
+      {:error, _reason} -> {:noreply, socket}
     end
   end
 
@@ -1298,6 +1293,14 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         text-overflow: ellipsis;
         pointer-events: none;
       }
+
+      /* A BOX IN A LINE HAS NO FLOOR. A component standing where words run is boxed in a `<span>`
+         (`frame_tag/1`), and an inline box ignores `min-height` and `width`: the floor above, the
+         media well and the hollow of an empty container would all be nothing to point at. Those
+         three are inline blocks, which keep their place in the line and have a size. */
+      span[data-pb-frame][data-pb-blank],
+      span[data-pb-frame][data-wants-media],
+      span[data-pb-frame][data-pb-hollow] { display: inline-block; }
 
       /* A LIVE COMPONENT SAYS WHAT IT IS, where the pointer is. It is drawn with real data and
          looks like any other markup, so without this the only place that said it runs on the
@@ -2550,7 +2553,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # the editor's own markup rather than the component's, so both keep the box.
   defp unresolved_component(assigns) do
     ~H"""
-    <div {marker_attrs(assigns)}>
+    <.dynamic_tag tag_name={frame_tag(assigns)} {marker_attrs(assigns)}>
       <%= case @missing do %>
         <% [needed | _rest] -> %>
           <strong>{@node.tag}</strong>
@@ -2561,7 +2564,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         <% [] -> %>
           <span data-pb-token="true" {wrapper_attrs(assigns)}>{@node.tag}</span>
       <% end %>
-    </div>
+    </.dynamic_tag>
     """
   end
 
@@ -2574,7 +2577,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # fixed. Saving is already refused while it is empty.
   defp render_component_node(%{missing: [_ | _]} = assigns) do
     ~H"""
-    <div
+    <.dynamic_tag
+      tag_name={frame_tag(assigns)}
       draggable="true"
       data-node-id={@node.id}
       data-kind="component"
@@ -2590,7 +2594,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         fields: Enum.map_join(@missing, ", ", &"#{&1}"),
         needed: hd(@missing)
       )}
-    </div>
+    </.dynamic_tag>
     """
   end
 
@@ -2744,10 +2748,54 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # is the component's own element.
   defp wrapped_frame(assigns) do
     ~H"""
-    <div {Map.merge(marker_attrs(assigns), %{"data-pb-live" => assigns[:live], "data-pb-frame" => "true"})}>
-      {@body}
-    </div>
+    <.dynamic_tag
+      tag_name={frame_tag(assigns)}
+      {Map.merge(marker_attrs(assigns), %{"data-pb-live" => assigns[:live], "data-pb-frame" => "true"})}
+      phx-no-format
+    >{@body}</.dynamic_tag>
     """
+  end
+
+  # A BOX WHERE WORDS RUN IS A `<span>`. A `<div>` inside a `<p>` is markup the parser answers by
+  # closing the paragraph in front of it: the words after a button dropped into one became a node of
+  # their own at the root of the page and an empty `<p>` stayed behind, while the published page,
+  # which has no box, was whole. A `<span>` may stand wherever phrasing content does, and it keeps the
+  # inline flow of what is inside it, so the box no longer breaks the line either.
+  #
+  # The element it stands in is the nearest one that says what it holds (`host_tag/3`), so a component
+  # inside a kit's own `<p>` is read the same way as one inside a `<p>` written in the page.
+  defp frame_tag(%{node: node, tree: tree} = assigns) do
+    case Containment.phrasing_only?(host_tag(tree, assigns[:holders] || %{}, node)) do
+      true -> "span"
+      false -> "div"
+    end
+  end
+
+  # The element the nearest ancestor puts its children in: a tag is itself and a component is the one
+  # its markup renders its content in (`holders/1`). A link holds what its parent holds, so it is
+  # looked through, and so is a component whose content cannot be read. A slot, or the top of the
+  # document, is a box of its own and holds anything.
+  defp host_tag(tree, holders, %Node{parent_id: parent_id}) do
+    case Tree.get(tree, parent_id) do
+      %Node{kind: :tag, tag: tag} = parent when is_binary(tag) ->
+        hosting(tag, tree, holders, parent)
+
+      %Node{kind: :component} = parent ->
+        case Map.get(holders, Node.component_name(parent)) do
+          {_root, content} when is_binary(content) -> hosting(content, tree, holders, parent)
+          _unread -> host_tag(tree, holders, parent)
+        end
+
+      _slot_or_top ->
+        nil
+    end
+  end
+
+  defp hosting(tag, tree, holders, parent) do
+    case Containment.transparent?(tag) do
+      true -> host_tag(tree, holders, parent)
+      false -> tag
+    end
   end
 
   # A LIVE COMPONENT SAYS SO ON THE CANVAS, which nothing did. `data-stateful` has been on the node
@@ -2951,13 +2999,12 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         components: [entry]
       )
 
-  # And where every component's content lands, by name: for one whose content lands in a table's own
-  # element — a kit row's in its `<tr>`, a kit table's in its `<tbody>` — that element and the one its
-  # markup opens with, so a cell inside one is stamped; `:elsewhere` for every other component, so a
-  # cell inside one keeps its box. A component the palette does not carry is not in it at all, and is
-  # read as it always was. Only a template that writes one of those tags is parsed.
-  @table_tags ~w(<table <thead <tbody <tfoot <tr <colgroup)
-
+  # And where every component's content lands, by name: the element its markup opens with and the one
+  # it renders its content in. A cell inside one whose content lands in a table's own element — a kit
+  # row's in its `<tr>`, a kit table's in its `<tbody>` — is stamped, and a cell inside any other
+  # keeps its box; a box inside one whose content lands in a paragraph or another element that holds
+  # words only is a `<span>` (`frame_tag/1`). `:elsewhere` for a component whose content cannot be
+  # read. A component the palette does not carry is not in it at all, and is read as it always was.
   defp holders(components) do
     for %{name: name} = entry <- components || [], is_binary(name), into: %{} do
       {name, holder_of(entry)}
@@ -2965,9 +3012,9 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   defp holder_of(%{template: template} = entry) when is_binary(template) do
-    case String.contains?(template, @table_tags) and holder(entry) do
+    case holder(entry) do
       {_root, content} = held when is_binary(content) -> held
-      _no_table_part -> :elsewhere
+      _unreadable -> :elsewhere
     end
   end
 
@@ -3376,8 +3423,6 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # was handed `pb-<id>-name`, and core logged "body did not apply" on every render; core's own
   # `<.icon>` drew the "could not render" box. An attribute the Inspector gives its icon picker
   # stands in as a real icon instead. That is read off the attribute, not off the palette.
-  @icon_stand_in "hero-sparkles"
-
   defp stand_in(:string, _node, _name, :icon), do: @icon_stand_in
   defp stand_in(type, node, name, _widget), do: stand_in(type, node, name)
 

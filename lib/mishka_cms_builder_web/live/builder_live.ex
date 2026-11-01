@@ -1024,7 +1024,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp assign_defaults(socket) do
     socket
     |> assign_new(:left_tab, fn -> :components end)
-    |> assign_new(:left_chosen?, fn -> false end)
     |> assign_new(:icon_picker, fn -> nil end)
     |> assign_new(:aim_target, fn -> nil end)
     |> assign_new(:act_action, fn -> nil end)
@@ -1283,7 +1282,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   # The mobile bar names a panel, not a tab, so the panel it opens has to be showing the right one.
   defp assign_panel_tab(socket, panel) when panel in [:components, :inspector],
-    do: assign(socket, left_tab: panel, left_chosen?: true)
+    do: assign(socket, :left_tab, panel)
 
   defp assign_panel_tab(socket, panel) when panel in [:layers, :assistant, :audit],
     do: assign(socket, :right_tab, panel)
@@ -1296,34 +1295,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp assign_panel_tab(socket, _panel), do: socket
-
-  # A CLICK ON THE PAGE OPENS THE INSPECTOR, UNLESS THE AUTHOR IS USING THE PALETTE. Clicking an
-  # element means "work on this", so the left rail swings to its form — but the palette shares that
-  # rail, and a selection is also the palette's answer to "where" (`arm_or_place/2`). An author who
-  # clicked the navbar to aim the next card found the rail turned into the Inspector under the
-  # pointer, and the next drag picked up a run of Inspector text instead of a card.
-  #
-  # So the rail stays on Components or Blocks while the author is using it: when they put it there
-  # themselves (`left_chosen?`), or while its search or a category narrows what it shows, which is
-  # the palette in the middle of being used. The Inspector is one click away on its tab. The tab the
-  # editor opens on is nobody's choice, so on it a click still opens the Inspector — the click that
-  # follows placing a card is usually about that card — and so does any click while the rail is
-  # folded away.
-  defp follow_selection(%{assigns: %{left_hidden: false, left_tab: tab} = assigns} = socket)
-       when tab in [:components, :blocks] do
-    case assigns.left_chosen? or narrowed?(assigns, tab) do
-      true -> socket
-      false -> assign(socket, :left_tab, :inspector)
-    end
-  end
-
-  defp follow_selection(socket), do: assign(socket, left_hidden: false, left_tab: :inspector)
-
-  defp narrowed?(assigns, :components),
-    do: assigns.palette_query not in [nil, ""] or assigns.palette_cat not in [nil, "all"]
-
-  defp narrowed?(assigns, :blocks),
-    do: assigns.block_query not in [nil, ""] or assigns.block_cat not in [nil, "all"]
 
   # Read back on every write and on mount, so the switches show what is stored rather than what was
   # clicked.
@@ -2295,7 +2266,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   # Clicking an element in the canvas is how you say "this is the one I want to work on", so the
   # left panel comes back and lands on its form — the same thing a layers row does through
-  # `inspect` — unless the author is using the palette there (`follow_selection/1`). Only a CANVAS
+  # `inspect` — whichever tab it was on and however the palette was last used. Only a CANVAS
   # selection does this: selecting from the tree is navigation, and swapping the panel out from
   # under someone who is browsing the tree loses their place.
   # THE FORM ANNOUNCES; THIS PAGE ACTS. The essentials step is the resource's own Gervaz form, so it
@@ -2347,8 +2318,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     do: {:noreply, assign(socket, settings_open?: false, seo_form?: false)}
 
   def handle_info({:builder_session, token, {:selection, id, :canvas}}, socket)
-      when is_binary(id),
-      do: {:noreply, socket |> sync_session(token) |> follow_selection()}
+      when is_binary(id) do
+    {:noreply, socket |> sync_session(token) |> assign(left_hidden: false, left_tab: :inspector)}
+  end
 
   # CLICKED ON THE THING THAT SAYS WHAT IS MISSING. A component that cannot render without a value
   # draws "needs src — click to choose src" in its place, and the attribute travels with the click,
@@ -3130,11 +3102,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   @impl true
   def handle_event("set_left_tab", %{"tab" => tab}, socket) do
-    {:noreply,
-     assign(socket,
-       left_tab: tab_atom(tab, [:components, :blocks, :inspector]),
-       left_chosen?: true
-     )}
+    {:noreply, assign(socket, :left_tab, tab_atom(tab, [:components, :blocks, :inspector]))}
   end
 
   # THE RAILS THAT EXIST, not the three the core ships. A whitelist of atoms rejected a contributed
@@ -4671,16 +4639,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # canvas across the frame boundary) the whole tree's verdict for this one drag, so its drop line is
   # a lookup rather than a round trip. See `EditorSession.drop_hints/2`.
   def handle_event("drag_start", params, socket) do
-    case EditorSession.drop_hints(socket.assigns.token, params) do
-      {:ok, accepts} ->
-        {:noreply,
-         push_event(socket, "pb:drop-hints", %{
-           accepts: accepts,
-           field: EditorSession.drop_field?(socket.assigns.token, params)
-         })}
-
-      {:error, _reason} ->
-        {:noreply, socket}
+    case EditorSession.drop_verdict(socket.assigns.token, params) do
+      {:ok, verdict} -> {:noreply, push_event(socket, "pb:drop-hints", verdict)}
+      {:error, _reason} -> {:noreply, socket}
     end
   end
 
@@ -7246,6 +7207,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # which replaces the whole document too, ran the tokenizer and nothing else.
   defp apply_source(socket, source) do
     with {:ok, tree} <- Tree.parse(source),
+         :ok <- placement_ok(socket, source),
          :ok <- compiles(socket, tree) do
       EditorSession.put_tree(socket.assigns.token, tree, reason: :source_edit)
       {:noreply, assign(socket, source_modal: false, source_error: nil, source_draft: nil)}
@@ -8469,6 +8431,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp write_document_heex(socket, source) do
     with {:ok, tree} <- Tree.parse(source),
+         :ok <- placement_ok(socket, source),
          :ok <- compiles(socket, tree) do
       EditorSession.put_tree(socket.assigns.token, tree, reason: :source_edit)
       {:noreply, assign(socket, :heex_error, nil)}
@@ -8536,6 +8499,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp replace(socket, tree, %Node{} = node, source) do
     with index when is_integer(index) <- Tree.index_of(tree, node.id),
+         :ok <- placement_ok(socket, source),
          {:ok, proposed} <- splice(tree, node, index, source),
          :ok <- compiles(socket, proposed) do
       replace_node(socket, node, index, source)
@@ -8551,6 +8515,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       Tree.insert(without, Tree.refresh_ids(subtree), node.parent_id || :root, index)
     end
   end
+
+  # The placement rules, asked of the markup that was typed. The compiler takes `<p>words <.form>…
+  # </.form></p>` and a browser closes the `<p>` in front of the form, so the canvas and the Layers
+  # and Code views would disagree. A refusal is a fault with a line and a column, which
+  # `source_message/1` prints like the tokenizer's. The editor's components are handed over so a kit
+  # form is read as the `<form>` its markup opens with.
+  defp placement_ok(socket, source),
+    do: CodeCheck.placement(source, components: socket.assigns.editor.components)
 
   # THE REAL COMPILER, not the tokenizer. `Tree.parse` answers "is this markup" — it is the HTML
   # tokenizer, and it is happy with `{@user.name` and with a component attribute that no component

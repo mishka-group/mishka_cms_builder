@@ -57,12 +57,17 @@ const TEMPLATE_MIME = "application/x-pb-template";
 //
 // The breakpoint view draws SIX frames of one document, which is why this is a sweep rather than a
 // hand-off to the frame the drag started in.
-function spreadHints(accepts, field = false) {
+//
+// The verdict carries WHY each box that refuses does (`refusals`, by node id), so a frame can name the
+// rule beside a box the pointer is aimed into, and they travel together for the same reason.
+function spreadHints(accepts, field = false, refusals = null) {
   window.__pbDropHints = accepts;
+  window.__pbDropRefusals = refusals;
   window.__pbFieldDrag = !!field;
 
   canvasFrames().forEach((frame) => {
     frame.contentWindow.__pbDropHints = accepts;
+    frame.contentWindow.__pbDropRefusals = refusals;
     frame.contentWindow.__pbFieldDrag = !!field;
     markFieldDrag(frame.contentDocument, field);
     // A frame the pointer is already over redraws its line from the verdict (`PbCanvas`).
@@ -960,7 +965,7 @@ const PbShortcuts = {
     // and will never ask — so the answer is handed on to each of them as well.
     this.handleEvent(
       "pb:drop-hints",
-      ({ accepts, field }) => hintsAwaited && spreadHints(accepts, field),
+      ({ accepts, field, refusals }) => hintsAwaited && spreadHints(accepts, field, refusals),
     );
 
     this.onKey = (event) => {
@@ -1023,7 +1028,8 @@ const PbShortcuts = {
         document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       }
 
-      if (event.data.kind === "hints") spreadHints(event.data.accepts, event.data.field);
+      if (event.data.kind === "hints")
+        spreadHints(event.data.accepts, event.data.field, event.data.refusals);
 
       if (event.data.kind === "dragend") endDrag();
     };
@@ -1676,6 +1682,36 @@ const PbCanvas = {
     document.body.appendChild(indicator);
     this.indicator = indicator;
 
+    // THE BOX THAT WILL NOT TAKE IT, outlined in the red the problems dot uses, with a chip naming
+    // the rule the server gave (`refusals`, from `Placement.refusals/4`). The line says where the drop
+    // goes; this says why it is not going in. A hairline of white round both keeps them readable on a
+    // red section. The no-symbol is the frame's own rule for `hero-no-symbol`, set beside the
+    // stand-in icon's in `CanvasLive`.
+    const refusal = document.createElement("div");
+    refusal.style.cssText =
+      "position:absolute;left:0;top:0;z-index:2147483647;pointer-events:none;display:none;" +
+      "box-sizing:border-box;border:2px dashed #d64545;border-radius:8px;" +
+      "background:rgba(214,69,69,.07);box-shadow:0 0 0 1px rgba(255,255,255,.9);will-change:transform;";
+
+    const refusalChip = document.createElement("span");
+    refusalChip.style.cssText =
+      "position:absolute;display:flex;align-items:center;gap:4px;max-width:360px;" +
+      "padding:2px 7px 2px 5px;border-radius:5px;background:#d64545;color:#fff;" +
+      "box-shadow:0 0 0 1px rgba(255,255,255,.9);" +
+      "font:600 10px/1.5 ui-sans-serif,system-ui;white-space:nowrap;";
+
+    const refusalIcon = document.createElement("span");
+    refusalIcon.className = "hero-no-symbol";
+    refusalIcon.style.cssText = "flex:none;width:12px;height:12px;";
+
+    const refusalText = document.createElement("span");
+    refusalText.style.cssText = "overflow:hidden;text-overflow:ellipsis;";
+
+    refusalChip.append(refusalIcon, refusalText);
+    refusal.appendChild(refusalChip);
+    document.body.appendChild(refusal);
+    this.refusal = refusal;
+
     let rects = new Map();
     const rectOf = (el) => {
       let rect = rects.get(el);
@@ -1821,6 +1857,7 @@ const PbCanvas = {
     const hideIndicator = () => {
       painted = null;
       indicator.style.display = "none";
+      refusal.style.display = "none";
     };
 
     // The server's verdict when it has arrived, an optimistic yes when it has not. Unknown ids —
@@ -1834,6 +1871,13 @@ const PbCanvas = {
       const hints = window.__pbDropHints;
       if (hints) return hints[node.dataset.nodeId] === true;
       return node.dataset.kind !== "text" && node.dataset.kind !== "eex";
+    };
+
+    // Why the server refused this box, when the verdict has arrived and the box is one that could
+    // hold children. A text run or an image has no reason, because nobody aims a drop into them.
+    const refusalOf = (id) => {
+      const hints = window.__pbDropHints;
+      return hints && hints[id] === false ? (window.__pbDropRefusals || {})[id] : undefined;
     };
 
     const parentOf = (node) => node.parentElement?.closest("[data-node-id]") || null;
@@ -1867,6 +1911,7 @@ const PbCanvas = {
       labelOf,
       accepts,
       nests,
+      refuses: (el) => !!refusalOf(el.dataset.nodeId),
     };
 
     // What a field drag reads off the canvas: the forms the server marked (`data-pb-form`, their
@@ -1936,9 +1981,11 @@ const PbCanvas = {
     const paint = (target) => {
       const field = target.rect && window.__pbFieldDrag ? formLanding(target, formLookup) : null;
       const joins = field && formCaption(field);
+      const why = target.redirected ? refusalOf(target.anchor_id) : undefined;
       const key = target.rect
         ? `${target.parent_id}|${target.index}|${!!target.inside}|${!!target.redirected}|` +
-          `${joins ? joins.text : ""}|${field && field.landing ? field.landing.dataset.nodeId : ""}`
+          `${joins ? joins.text : ""}|${field && field.landing ? field.landing.dataset.nodeId : ""}|` +
+          `${why || ""}`
         : null;
       if (key === painted) return;
       painted = key;
@@ -1973,6 +2020,20 @@ const PbCanvas = {
       captionForm.style.display = joins ? "inline-block" : "none";
       captionForm.style.background = joins ? tones[joins.tone] : colour;
       caption.style.display = base || joins ? "flex" : "none";
+
+      // The box the drop goes after, when it is one the server refused: outlined, with the reason.
+      // Near the top of the page the chip sits inside the box, where there is room for it.
+      const fence = why ? indicatorBox({ rect: target.rect, inside: true }, GROW) : null;
+      refusal.style.display = fence ? "block" : "none";
+      if (!fence) return;
+
+      refusal.style.transform =
+        `translate3d(${fence.left + window.scrollX}px, ${fence.top + window.scrollY}px, 0)`;
+      refusal.style.width = `${fence.width}px`;
+      refusal.style.height = `${fence.height}px`;
+      refusalText.textContent = why;
+      refusalChip.style.top = fence.top >= 26 ? "-26px" : "4px";
+      refusalChip.style.left = fence.top >= 26 ? "-2px" : "4px";
     };
 
     // One request per drag, not per hover. The answer is stored on `window` rather than on the hook
@@ -2013,6 +2074,7 @@ const PbCanvas = {
       if (!node) return;
       this.dragging = node.dataset.nodeId;
       window.__pbDropHints = null;
+      window.__pbDropRefusals = null;
       fieldDrag(false);
       this.forgetRects();
       lift(node);
@@ -2177,12 +2239,13 @@ const PbCanvas = {
     // The line is drawn again the moment the verdict lands, here or handed in by the chrome
     // (`pb:hints`, from `spreadHints`): drawn before it, it was the optimistic guess, and a pointer
     // held still would have kept showing that guess until it moved.
-    this.handleEvent("pb:drop-hints", ({ accepts, field }) => {
+    this.handleEvent("pb:drop-hints", ({ accepts, field, refusals }) => {
       if (!this.dragging) return;
       window.__pbDropHints = accepts;
+      window.__pbDropRefusals = refusals;
       fieldDrag(field);
       this.reaimDrop();
-      toParent({ kind: "hints", accepts, field: !!field });
+      toParent({ kind: "hints", accepts, field: !!field, refusals });
     });
 
     this.onHints = () => this.reaimDrop();
@@ -2402,6 +2465,7 @@ const PbCanvas = {
     window.removeEventListener("pb:hints", this.onHints);
     this.el.ownerDocument.removeEventListener("load", this.blanks, true);
     this.indicator?.remove();
+    this.refusal?.remove();
   },
 };
 
