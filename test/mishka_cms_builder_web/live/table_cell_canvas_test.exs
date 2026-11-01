@@ -377,11 +377,13 @@ defmodule MishkaCmsBuilderWeb.Live.TableCellCanvasTest do
       end
     end
 
-    # THE ONE PLACE THE TWO MEET. `#pb-canvas-chrome`'s overlay rules are written as descendant
-    # selectors — `data-pb-overlay` on the editor's wrapper, the `hidden` on the component's own
-    # root a level down — so a component that is BOTH concealed and stamped would have both on the
-    # same element and the rule would no longer reach it. No kit ships one, and this says so rather
-    # than leaving it to be discovered when one does.
+    # THE ONE PLACE THE TWO MEET. `#pb-canvas-chrome`'s overlay rules (`CanvasLive.overlay_rules/0`)
+    # are written as descendant selectors — `data-pb-overlay`, `data-pb-reveal` and
+    # `data-pb-persistent` on the editor's wrapper, the `hidden` on the component's own root a level
+    # down — so a component that is BOTH concealed and stamped would have both on the same element:
+    # opened with "Open on canvas", the rule would no longer reach it, and a docked sidebar's chip
+    # would not be the wrapper's to hide. No kit ships one, and this says so rather than leaving it
+    # to be discovered when one does.
     test "nothing that gets stamped is an overlay", do: assert(stamped_overlays() == [])
 
     defp stamped_overlays do

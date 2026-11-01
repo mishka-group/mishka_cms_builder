@@ -510,8 +510,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       descriptor("toggle_visibility", :command, gettext_noop("Hide or show for visitors"), 55,
         shortcut: "⇧⌘H",
         icon: "eye_off",
-        description:
-          gettext_noop("Keep the selection in the page, shown to nobody, or show it again")
+        description: gettext_noop("Keep the selection but show it to nobody, or show it again")
       ),
       descriptor("delete", :command, gettext_noop("Delete selection"), 60,
         shortcut: "⌫",
@@ -647,6 +646,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:history_position, :integer, default: 0)
   attr(:history_total, :integer, default: 0)
 
+  attr(:problems, :list,
+    default: [],
+    doc: "what Publish would refuse — `MishkaCmsBuilderWeb.Live.BuilderLive.problems/1`"
+  )
+
   @doc """
   The 56px top bar: identity and save status on the left, every global control on the right.
 
@@ -709,6 +713,25 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 (@dirty? && "bg-[#cf8a24]") || "bg-[#1f9d6b]"
               ]}
             />
+            <%!-- WHAT PUBLISH WOULD REFUSE, BEFORE IT IS PRESSED. Red, with the count, beside the
+                  saved dot; it opens the list of them by element. Counted by the same function the
+                  publish gate refuses with, so the two cannot disagree. --%>
+            <button
+              :if={@problems != []}
+              type="button"
+              id="pb-problems-dot"
+              phx-click={show_problems()}
+              title={
+                ngettext(
+                  "1 problem stops a publish — show it",
+                  "%{count} problems stop a publish — show them",
+                  length(@problems)
+                )
+              }
+              class="inline-flex h-[14px] min-w-[14px] flex-none items-center justify-center rounded-full bg-[#d64545] px-[3px] font-['Space_Grotesk'] text-[9px] font-bold leading-none text-white hover:bg-[#b93a3a]"
+            >
+              {length(@problems)}
+            </button>
             <%!-- THE NAME IS THE WAY IN, which is where a reader already looks for it — and it is a
                   button only when there is a record to change and an address to change about it.
                   Before that, the essentials step is asking for exactly these fields one layer up. --%>
@@ -777,11 +800,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         >
           <.icon name={:more} size={16} />
         </button>
+        <%!-- Taller than a short screen, so it scrolls within the height below the 56px header
+              (`h-14`) instead of cutting off its last entries. --%>
         <div
           id="pb-more-menu"
           phx-window-keydown={menu_close("#pb-more-menu")}
           phx-key="escape"
-          class="absolute left-0 top-[38px] z-[70] hidden w-[236px] rounded-[13px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
+          class="absolute left-0 top-[38px] z-[70] hidden max-h-[calc(100vh-56px)] w-[236px] overflow-y-auto rounded-[13px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
         >
           <%!-- Stepped in the browser by `PbZoom`, which tells the server through `zoom_set`. --%>
           <div
@@ -1183,7 +1208,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-stage"
             type="button"
             phx-click={(@stage == @applied_stage && menu_toggle("#pb-stage-ways")) || "apply_stage"}
-            title={stage_button_title(@stage, @applied_stage)}
+            title={stage_tooltip(@section, @stage, @applied_stage)}
             class={[
               "inline-flex h-8 items-center gap-[7px] rounded-l-[9px] border-r-0 px-[13px] text-[12px] font-bold max-[1000px]:px-2.5",
               ((@stage == :published or @stage != @applied_stage) &&
@@ -1246,7 +1271,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                   {gettext("Publish now")}
                 </span>
                 <span class="mt-0.5 block text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
-                  {gettext("Puts what you see on the live page, for every visitor.")}
+                  {gettext("Puts what you see live, for every visitor.")}
                 </span>
               </span>
             </button>
@@ -1275,7 +1300,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               {gettext("While you work")}
             </span>
             <button
-              :for={{key, label, hint} <- stages()}
+              :for={{key, label, hint} <- stages(@section)}
               type="button"
               id={"pb-stage-#{key}"}
               phx-click={menu_close("#pb-stage-ways") |> JS.push("set_stage")}
@@ -1667,6 +1692,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     doc: "the verb in the On-click action select right now, which decides what box sits under it"
   )
 
+  attr(:device, :atom,
+    default: :desktop,
+    doc: "the canvas device, which says whether a sidebar is docked at the width being edited"
+  )
+
   def left_panel(assigns) do
     ~H"""
     <%!-- One wrapper that is ALWAYS in the DOM. The rail and the panel swap inside it, so the number
@@ -1800,6 +1830,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           aim_target={@aim_target}
           act_action={@act_action}
           current_user={@current_user}
+          device={@device}
         />
       </aside>
 
@@ -2374,7 +2405,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               value={@find}
               autocomplete="off"
               phx-debounce="150"
-              placeholder={gettext("Find in the page's text…")}
+              placeholder={gettext("Find text on the canvas…")}
               class="peer h-[38px] w-full rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] pl-[34px] pr-[30px] text-[12.5px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white"
             />
             <%!-- One form, two fields, one handler that reads both — so clearing either has to
@@ -2413,13 +2444,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-find-none"
             class="px-2.5 py-8 text-center text-[12px] font-medium text-[#6d6a63]"
           >
-            {gettext("No text on this page says that.")}
+            {gettext("No text on the canvas says that.")}
           </p>
           <p
             :if={String.trim(@find) == ""}
             class="px-2.5 py-8 text-center text-[12px] font-medium text-[#a8a5a0]"
           >
-            {gettext("Type to search the words on this page.")}
+            {gettext("Type to search the words on the canvas.")}
           </p>
           <button
             :for={hit <- @hits}
@@ -2905,7 +2936,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       <.icon name={:eye_off} size={14} class="flex-none text-[#8a877f]" />
       <span class="min-w-0 flex-1 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]">
         {(@hider.id == @node.id &&
-            gettext("Hidden from visitors. It stays in the page, with everything inside it.")) ||
+            gettext("Hidden from visitors. It stays in the markup, with everything inside it.")) ||
           gettext("Hidden from visitors with the element around it.")}
       </span>
       <button
@@ -2990,6 +3021,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               {selection_meta(@selected_node)}
             </div>
             <.form_part part={Inspector.form_part(@editor, @selected_node)} />
+            <.overlay_open
+              :if={@selected_node.kind == :component and overlay?(component_entry(assigns))}
+              id={@selected_node.id}
+              open?={pinned?(@editor, @selected_node.id)}
+              breakpoint={PaletteEntry.optional(component_entry(assigns), :persistent_at)}
+              docked={docked(component_entry(assigns), @device)}
+            />
             <%!-- WHERE THE AUTHOR IS LOOKING. The only way into a component's own editor was an icon
                   on its layers row that shows on hover, so someone looking at a live list in the
                   Inspector had no way to change what it draws. Same tab, with the way back in the
@@ -3046,6 +3084,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           icon_library={@icon_library}
           group_folds={@group_folds}
           typed={@typed}
+          section={@section}
         />
 
         <%!-- A SLOT AN AUTHOR HAS TO ADD IS NOT A DETAIL. Folded, the row that says "End section +"
@@ -3799,6 +3838,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:group_folds, :map, default: %{}, doc: "the sections the reader has explicitly folded")
   attr(:hidden, :list, default: [], doc: "attributes another section of the panel writes")
   attr(:typed, :map, default: %{}, doc: "what the forms hold, typed and not yet applied")
+  attr(:section, :string, default: "page", doc: "which of the four documents is being edited")
 
   defp props(assigns) do
     assigns =
@@ -3858,6 +3898,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           icon_library={@icon_library}
           widget={Inspector.widget(attr, @entry.features, @entry)}
           waiting_on={waiting_on(@shown_when, attr, @node, @entry)}
+          section={@section}
         />
       </div>
     </section>
@@ -4435,6 +4476,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     doc: "the switch this property shows behind, while off"
   )
 
+  attr(:section, :string,
+    default: "page",
+    doc: "the document that cannot be published without it"
+  )
+
   # One property control, chosen by `MishkaCmsCore.Runtime.Authoring.Inspector.widget/2`.
   #
   # An attribute the author has not set renders the component's own default and serializes nothing —
@@ -4473,6 +4519,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       |> assign(:required?, Inspector.required?(assigns.attr))
       |> then(&assign(&1, :missing?, &1.required? and blank?(&1.value)))
       |> assign(:mistyped?, mistyped?(assigns.attr, assigns.node, assigns.name))
+      |> assign(:noun, doc_noun(assigns.section))
 
     ~H"""
     <%!-- One property. It carries its own state rather than leaving it to be inferred: a violet dot
@@ -4496,7 +4543,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
           <span
             :if={!is_nil(@value)}
-            title={gettext("Set on this page")}
+            title={gettext("Set on this %{noun}", noun: @noun)}
             class="size-[7px] flex-none rounded-full bg-[#4f4bcc]"
           />
 
@@ -4561,7 +4608,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </p>
 
       <p :if={@missing?} class="mt-1.5 text-[10px] font-semibold text-[#c0473d]">
-        {gettext("Required — the page cannot be saved without it.")}
+        {gettext("Required — the %{noun} cannot be published without it.", noun: @noun)}
       </p>
       <p
         :if={@mistyped?}
@@ -4569,7 +4616,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         class="mt-1.5 text-[10px] font-semibold text-[#c0473d]"
       >
         {gettext(
-          "This holds text where the component takes a list or a map, so the page cannot be saved with it. Remove it to go back to the default."
+          "This holds text where the component takes a list or a map, so the %{noun} cannot be published with it. Remove it to go back to the default.",
+          noun: @noun
         )}
       </p>
       <p
@@ -5163,7 +5211,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           title={
             (@icon_map? &&
                gettext("Not in any installed icon set. Pick one, or choose Text for words.")) ||
-              gettext("Not in any installed icon set — it will still be written as you typed it")
+              gettext(
+                "Not in any installed icon set — it will still be written as you typed it. {…} keeps an expression."
+              )
           }
         >
           ?
@@ -8315,9 +8365,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
           <div class="min-w-0">
             <h1 class="font-['Space_Grotesk'] text-[17px] font-bold text-[#17161a]">
-              {gettext("This %{section} could not be opened",
-                section: String.downcase(translate(Section.label(Section.normalize(@section))))
-              )}
+              {gettext("This %{section} could not be opened", section: doc_noun(@section))}
             </h1>
             <p class="mt-1 text-[12.5px] font-medium leading-[1.6] text-[#6d6a63]">
               {gettext(
@@ -8661,7 +8709,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         </span>
         <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
           {gettext(
-            "Publish mode: these changes are not on the live page or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
+            "Publish mode: these changes are not live or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
           )}
         </span>
         <%!-- The bar names Publish, so it carries it: the same press as the top bar's button. --%>
@@ -8688,9 +8736,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           data-role="pb-crumbs"
           class="flex min-w-0 items-center gap-[7px] overflow-x-auto font-['Space_Grotesk'] text-[11.5px] font-medium text-[#6d6a63] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[960px]:hidden"
         >
+          <%!-- The document itself is no node, so this crumb drops the selection, as Escape does:
+                `select` needs an id, and there is none to send. --%>
           <button
             type="button"
-            phx-click="select"
+            id="pb-crumb-body"
+            phx-click="clear_selection"
             class={[
               "whitespace-nowrap",
               (@selection && "text-[#6d6a63] hover:text-[#4f4bcc]") || "font-bold text-[#1b1a18]"
@@ -9149,8 +9200,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       </div>
 
       <div data-role="pb-code2" class="grid min-h-0 flex-1 grid-cols-2">
+        <%!-- `PbCodeEditor` sets `data-dirty` here, in the browser, and the server's markup has none:
+              a patch, such as the one that draws a refused apply's error, took it off and hid
+              Apply and ⌘↵ while the text still differed. --%>
         <div
           data-pane="heex"
+          phx-mounted={JS.ignore_attributes(["data-dirty"])}
           class="group/heex flex min-h-0 min-w-0 flex-col border-r border-[#262429]"
         >
           <div class="flex flex-none items-center gap-2.5 border-b border-[#262429] px-4 py-2.5">
@@ -9192,7 +9247,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               type="submit"
               form="pb-drawer-heex-form"
               id="pb-drawer-heex-save"
-              title={gettext("Apply this markup to the page (⌘↵)")}
+              title={gettext("Apply this markup (⌘↵)")}
               class="hidden h-[22px] flex-none items-center gap-1.5 rounded-[7px] bg-[#2f7d5b] px-2.5 font-['Space_Grotesk'] text-[10.5px] font-bold text-white hover:bg-[#37916a] group-data-[dirty=true]/heex:inline-flex"
             >
               {gettext("Apply")} <span class="text-[9.5px] font-medium opacity-70">⌘↵</span>
@@ -9410,7 +9465,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp code_scope(:html, nil), do: gettext("# the whole document")
   defp code_scope(:html, node), do: "# " <> node_label(node)
   defp code_scope(:css, _node), do: gettext("# selected element")
-  defp code_scope(_js, _node), do: gettext("# page hooks")
+  defp code_scope(_js, _node), do: gettext("# hooks")
 
   # Source lines are left in one colour rather than tinted by a guess at what each one is. The one
   # distinction worth drawing is a comment, which is not code at all.
@@ -9640,7 +9695,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         current_user={@current_user}
       />
       <p :if={@tree.roots == []} class="py-8 text-center text-[12px] font-medium text-[#a8a5a0]">
-        {gettext("Nothing on this page yet.")}
+        {gettext("Nothing here yet.")}
       </p>
 
       <%!-- THE END OF THE PAGE, which the rail could not otherwise offer. Every other target here is
@@ -9661,7 +9716,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           <.icon name={:plus} size={11} />
         </span>
         <span class="min-w-0 flex-1 truncate text-[11.5px] font-semibold">
-          {gettext("drop at the end of the page")}
+          {gettext("drop at the end")}
         </span>
       </div>
     </div>
@@ -10055,24 +10110,24 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         >
           <.icon name={(@folded? && :eye_off) || :eye} size={12} />
         </button>
-        <%!-- ONLY WHERE THERE IS SOMETHING TO PIN. An overlay opens on the canvas while it is
-              selected and shuts when the selection moves on, which is what an author wants nine
-              times in ten. This is the tenth: keeping a dialog open while working on the page
-              behind it. Every other row has no closed state, so it gets no pin. --%>
+        <%!-- ONLY WHERE THERE IS SOMETHING TO OPEN, AND ALWAYS THERE. Selecting an overlay's chip
+              on the canvas selects it and nothing more, so this pin and the Inspector's "Open on
+              canvas" are how it opens, and a way in has to be in view, not behind the pointer. It
+              stays open until it is pressed again. Every other row has no closed state, so it gets
+              no pin. --%>
         <button
           :if={overlay?(@entry)}
           type="button"
+          id={"pb-layer-pin-#{@id}"}
           phx-click="toggle_pinned"
           phx-value-id={@id}
+          aria-pressed={to_string(pinned?(@editor, @id))}
           title={
-            (pinned?(@editor, @id) && gettext("Let it close again")) ||
-              gettext("Keep it open on the canvas")
+            (pinned?(@editor, @id) && gettext("Close it on the canvas")) ||
+              gettext("Open it on the canvas")
           }
           class={[
-            "size-5 flex-none place-items-center rounded-[6px] hover:bg-[#f2f1ec]",
-            "group-hover:grid group-focus-within:grid",
-            (pinned?(@editor, @id) || @id == @selection) && "grid",
-            !(pinned?(@editor, @id) || @id == @selection) && "hidden",
+            "grid size-5 flex-none place-items-center rounded-[6px] hover:bg-[#f2f1ec]",
             (pinned?(@editor, @id) && "text-[#8580d8]") || "text-[#a8a5a0]"
           ]}
         >
@@ -10530,7 +10585,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           class="text-[11.5px] font-medium leading-[1.55] text-[#5c5a54]"
         >
           {gettext(
-            "I can edit this page for you — describe a change, or select an element and use “Ask AI” to scope it."
+            "I can edit this for you — describe a change, or select an element and use “Ask AI” to scope it."
           )}
         </p>
 
@@ -10728,7 +10783,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                       {gettext("Capture template")}
                     </span>
                     <span class="block text-[10px] font-medium text-[#6d6a63]">
-                      {gettext("The whole page canvas")}
+                      {gettext("The whole canvas")}
                     </span>
                   </span>
                 </button>
@@ -10756,7 +10811,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             <span class="inline-flex min-w-0 flex-1 items-center gap-1.5">
               <span class="size-[5px] flex-none rounded-full bg-[#5b57d6]" />
               <span class="truncate font-['Space_Grotesk'] text-[10.5px] font-semibold text-[#6d6a63]">
-                {(@selected_node && selection_tag(@selected_node)) || gettext("whole page")}
+                {(@selected_node && selection_tag(@selected_node)) || gettext("whole document")}
               </span>
             </span>
             <button
@@ -10884,7 +10939,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
         </span>
         <div class="min-w-0">
-          <div class="text-[12.5px] font-bold text-[#1b1a18]">{gettext("Page score")}</div>
+          <div class="text-[12.5px] font-bold text-[#1b1a18]">
+            {gettext("%{section} score",
+              section: translate(Section.label(Section.normalize(@editor.section)))
+            )}
+          </div>
           <div id="pb-audit-summary" class="mt-0.5 text-[10.5px] font-medium text-[#6d6a63]">
             {audit_summary(@findings)}
           </div>
@@ -11414,7 +11473,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               id="pb-source-apply"
               class="flex-none rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white hover:bg-[#2a282f]"
             >
-              {gettext("Apply to the page")}
+              {gettext("Apply")}
             </button>
           </footer>
         </form>
@@ -11561,7 +11620,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     >
       <p :if={@rows == []} class="text-[12px] font-medium text-[#6d6a63]">
         {gettext(
-          "No element on this page has CSS of its own yet. Select one and open Custom CSS in the inspector to give it some."
+          "No element has CSS of its own yet. Select one and open Custom CSS in the inspector to give it some."
         )}
       </p>
 
@@ -11756,7 +11815,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       class="mb-4 rounded-[12px] border border-[#ecebe6] bg-[#faf9f6] px-4 py-3"
     >
       <h3 class="mb-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
-        {gettext("Forms on this page")}
+        {gettext("Forms in the template")}
       </h3>
       <div class="flex flex-col gap-2.5">
         <div
@@ -12253,7 +12312,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         <span
           :if={@state != :none}
           class="size-[6px] flex-none rounded-full bg-[#8580d8]"
-          title={gettext("This element is only on the page sometimes")}
+          title={gettext("This element is only shown sometimes")}
         ></span>
       </button>
 
@@ -12301,7 +12360,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
           <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
             {gettext(
-              "The canvas always draws it, so it stays editable. The published page is where the condition decides."
+              "The canvas always draws it, so it stays editable. On the live site, the condition decides."
             )}
           </p>
         </form>
@@ -12542,6 +12601,81 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     end
   end
 
+  # OPENING AN OVERLAY IS ASKED FOR, here and on its layers row. Its chip on the canvas is a handle:
+  # a click selects it and a drag moves it. This opens it in the flow, where the chip stood, until it
+  # is closed again, and nothing of it is saved — see `EditorSession.toggle_pinned/2`.
+  #
+  # A SIDEBAR THAT STAYS ON THE SCREEN has nothing to open at a width where it is docked: the canvas
+  # draws it as the fixed column it is there, edited in place. Below that width it is a drawer, and
+  # with the three frames side by side it is both.
+  attr(:id, :string, required: true)
+  attr(:open?, :boolean, default: false)
+  attr(:breakpoint, :string, default: nil)
+  attr(:docked, :atom, default: :none, values: [:none, :some, :all])
+
+  defp overlay_open(assigns) do
+    ~H"""
+    <p
+      :if={@docked == :all}
+      id="pb-overlay-docked"
+      class="mt-1.5 text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]"
+    >
+      {gettext("Always visible at this width — edit it on the page")}
+    </p>
+    <button
+      :if={@docked != :all}
+      type="button"
+      id="pb-overlay-open"
+      phx-click="toggle_pinned"
+      phx-value-id={@id}
+      aria-pressed={to_string(@open?)}
+      title={
+        (@open? && gettext("Close it on the canvas")) ||
+          gettext("Open it on the canvas, in the flow of the page, until you close it")
+      }
+      class={[
+        "mt-1.5 inline-flex h-6 items-center gap-1.5 rounded-[7px] border px-2 text-[10.5px] font-bold",
+        (@open? && "border-[#8580d8] bg-[#f2f1fc] text-[#4f4bcc]") ||
+          "border-[#dcdbf5] bg-white text-[#4f4bcc] hover:bg-[#f7f6ff]"
+      ]}
+    >
+      <.icon name={:pin} size={11} /> {(@open? && gettext("Close on canvas")) ||
+        gettext("Open on canvas")}
+    </button>
+    <p
+      :if={@docked == :some}
+      id="pb-overlay-docked"
+      class="mt-1 text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+    >
+      {gettext("From %{breakpoint} up it is always visible — edit it on the page there.",
+        breakpoint: @breakpoint
+      )}
+    </p>
+    """
+  end
+
+  # The canvas widths each device lays a page out at, as `BuilderLive.devices/0` and
+  # `BuilderLive.frame_widths/0` draw them, and Tailwind's own breakpoints in pixels.
+  @device_widths %{desktop: [1180], tablet: [834], mobile: [390], frames: [1180, 900, 560]}
+  @breakpoint_px %{"sm" => 640, "md" => 768, "lg" => 1024, "xl" => 1280, "2xl" => 1536}
+
+  # Whether a sidebar that stays on the screen from a breakpoint up is docked on the canvas being
+  # edited: at every width it is drawn at, at some of them, or at none.
+  defp docked(entry, device) do
+    with breakpoint when is_binary(breakpoint) <- PaletteEntry.optional(entry, :persistent_at),
+         px when is_integer(px) <- Map.get(@breakpoint_px, breakpoint) do
+      widths = Map.get(@device_widths, device, [1180])
+
+      cond do
+        Enum.all?(widths, &(&1 >= px)) -> :all
+        Enum.any?(widths, &(&1 >= px)) -> :some
+        true -> :none
+      end
+    else
+      _always_an_overlay -> :none
+    end
+  end
+
   @doc "Whether this row's component renders its own content closed — a dialog, a drawer, a dropdown."
   @spec overlay?(map() | nil) :: boolean()
   def overlay?(entry) when is_map(entry), do: Map.get(entry, :concealed?, false) == true
@@ -12597,10 +12731,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     do: gettext("No handlers yet. One answers a phx-click, a form submit or a key press.")
 
   defp empty_note(:infos),
-    do:
-      gettext(
-        "No messages yet. One answers something the server sends this page — a tick, a broadcast."
-      )
+    do: gettext("No messages yet. One answers something the server sends — a tick, a broadcast.")
 
   defp empty_note(:helpers),
     do: gettext("No helpers yet. One is a function the template can call.")
@@ -12608,7 +12739,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp empty_note(:state),
     do:
       gettext(
-        "No state yet. Each value is an assign the page starts with, so @count is there from the first render."
+        "No state yet. Each value is a starting assign, so @count is there from the first render."
       )
 
   # Whether the record being edited compiles to a `Phoenix.LiveComponent` — read off the row rather
@@ -12618,12 +12749,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp live_record?(_record), do: false
 
   defp scope_note(:helpers),
-    do: gettext("Helpers belong to this page and its template can call them.")
+    do: gettext("Helpers belong here, and the template can call them.")
 
   defp scope_note(:state),
     do:
       gettext(
-        "Worked out for each visitor when the page opens. A handler changes a value with assign(socket, :count, 1)."
+        "Worked out for each visitor on the first render. A handler changes a value with assign(socket, :count, 1)."
       )
 
   defp scope_note(_tab), do: gettext("Code is written on its own, not with the document.")
@@ -12663,7 +12794,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             </h2>
             <p class="mt-1.5 text-[11.5px] font-medium leading-[1.55] text-[#6d6a63]">
               {gettext(
-                "This page has changes that are not in a draft or published yet. They stay in this editing session and will be drawn again — but anything you are typing on the canvas right now is lost when the frame reloads."
+                "Your changes are not in a draft or published yet. They stay in this editing session and will be drawn again — but anything you are typing on the canvas right now is lost when the frame reloads."
               )}
             </p>
           </div>
@@ -12702,6 +12833,156 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   end
 
   @doc """
+  What Publish would refuse, listed by element: each element's breadcrumb, then its problems.
+
+  Opened by the red dot in the top bar (`#pb-problems-dot`) and by a refused Publish, shown and
+  hidden with `Phoenix.LiveView.JS` — `show_problems/0` and `hide_problems/1` — and marked
+  `data-pb-modal` only while it is open, so Escape is its own and the editor's keyboard hook stands
+  back as it does for every other modal here. A refusal changes `opened`, which mints a new
+  `#pb-problems-open-<n>` whose `phx-mounted` opens it, so the server can open it with no hook.
+
+  Clicking a problem closes the window and selects its element, on the canvas and in Layers, with the
+  Inspector open on the property named. A problem of the whole document — a layout that no longer
+  renders `@inner_content`, markup that will not compile — has no element; one that will not compile
+  opens the Code window instead.
+  """
+  attr(:problems, :list, required: true)
+  attr(:tree, :any, required: true)
+  attr(:opened, :integer, default: 0)
+
+  def problems_modal(assigns) do
+    assigns = assign(assigns, :groups, problem_groups(assigns.problems, assigns.tree))
+
+    ~H"""
+    <div
+      id="pb-problems-modal"
+      class="fixed inset-0 z-[96] hidden items-center justify-center bg-[#17161a]/40 p-6"
+      phx-window-keydown={hide_problems()}
+      phx-key="escape"
+    >
+      <section
+        phx-click-away={hide_problems()}
+        class="flex max-h-[80vh] w-[480px] max-w-[94vw] flex-col overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_30px_80px_rgba(20,18,26,.3)]"
+      >
+        <div class="flex items-start gap-3 border-b border-[#f0efea] px-5 pb-3 pt-[18px]">
+          <span class="grid size-9 flex-none place-items-center rounded-[11px] bg-[#fbe4e4] font-['Space_Grotesk'] text-[14px] font-bold text-[#b93a3a]">
+            {length(@problems)}
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
+              {ngettext(
+                "1 problem stops a publish",
+                "%{count} problems stop a publish",
+                length(@problems)
+              )}
+            </h2>
+            <p class="mt-1.5 text-[11.5px] font-medium leading-[1.55] text-[#6d6a63]">
+              {gettext(
+                "Drafts still save. Click a problem to go to it; Publish works once the list is empty."
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            id="pb-problems-close"
+            phx-click={hide_problems()}
+            title={gettext("Close")}
+            class="grid size-7 flex-none place-items-center rounded-[8px] text-[#6d6a63] hover:bg-[#f2f1ec]"
+          >
+            <.icon name={:close} size={14} />
+          </button>
+        </div>
+
+        <ol
+          id="pb-problems-tree"
+          class="flex min-h-0 flex-col gap-3 overflow-y-auto px-5 py-4 [scrollbar-width:thin]"
+        >
+          <li :for={group <- @groups} data-problem-group={group.id || "document"}>
+            <div class="truncate font-['Space_Grotesk'] text-[11.5px] font-bold text-[#2e2b6b]">
+              {group.label}
+            </div>
+            <ul class="mt-1 flex flex-col gap-1 border-l-2 border-[#f1d6d6] pl-2.5">
+              <li :for={problem <- group.problems}>
+                <button
+                  :if={problem.id || problem.kind == :compile}
+                  type="button"
+                  data-problem-node={problem.id}
+                  data-problem-field={problem.field}
+                  data-problem-kind={problem.kind}
+                  phx-click={go_to_problem(problem)}
+                  class="w-full rounded-[7px] px-2 py-1 text-left text-[11.5px] font-medium leading-[1.45] text-[#8a2f2f] hover:bg-[#fdf3f3]"
+                >
+                  {problem.text}
+                </button>
+                <span
+                  :if={!(problem.id || problem.kind == :compile)}
+                  data-problem-kind={problem.kind}
+                  class="block px-2 py-1 text-[11.5px] font-medium leading-[1.45] text-[#8a2f2f]"
+                >
+                  {problem.text}
+                </span>
+              </li>
+            </ul>
+          </li>
+        </ol>
+      </section>
+      <span
+        :if={@opened > 0}
+        id={"pb-problems-open-#{@opened}"}
+        phx-mounted={show_problems()}
+        class="hidden"
+      />
+    </div>
+    """
+  end
+
+  @doc false
+  def show_problems(js \\ %JS{}) do
+    js
+    |> JS.show(to: "#pb-problems-modal", display: "flex", transition: @scrim_in, time: 200)
+    |> JS.set_attribute({"data-pb-modal", "true"}, to: "#pb-problems-modal")
+    |> JS.focus_first(to: "#pb-problems-modal section")
+  end
+
+  @doc false
+  def hide_problems(js \\ %JS{}) do
+    js
+    |> JS.hide(to: "#pb-problems-modal", transition: @scrim_out, time: 150)
+    |> JS.remove_attribute("data-pb-modal", to: "#pb-problems-modal")
+  end
+
+  # The element's Inspector, on the property named; a slot is added from the component's own.
+  defp go_to_problem(%{id: id, kind: kind, field: field}) when is_binary(id) do
+    value =
+      case kind in [:attr, :type] do
+        true -> %{id: id, prop: field}
+        false -> %{id: id}
+      end
+
+    "inspect" |> JS.push(value: value) |> hide_problems()
+  end
+
+  defp go_to_problem(%{kind: :compile}), do: "open_source" |> JS.push() |> hide_problems()
+
+  # In the order the gate found them, which is the document's: each element once, under its
+  # breadcrumb as the crumb bar writes it, and the document's own problems last.
+  defp problem_groups(problems, tree) do
+    problems
+    |> Enum.chunk_by(& &1.id)
+    |> Enum.map(fn [%{id: id} | _rest] = group ->
+      %{id: id, label: problem_label(tree, id), problems: group}
+    end)
+  end
+
+  defp problem_label(_tree, nil), do: gettext("This document")
+
+  defp problem_label(tree, id) do
+    tree
+    |> Tree.path(id)
+    |> Enum.map_join(" › ", &(FormPlacement.form_name(&1) || node_label(&1)))
+  end
+
+  @doc """
   The question asked when someone leaves the editor in publish mode with changes.
 
   Every other mode saves as you work, so leaving is free and nothing asks. Publish mode deliberately
@@ -12734,11 +13015,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
           <div class="min-w-0">
             <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
-              {gettext("This isn’t on the page yet")}
+              {gettext("This isn’t live yet")}
             </h2>
             <p class="mt-1.5 text-[11.5px] font-medium leading-[1.55] text-[#6d6a63]">
               {gettext(
-                "The chip is on Publish, so this is recorded in the page’s history but is not on the live page and not in a draft. What should happen to it?"
+                "The chip is on Publish, so this is recorded in the editing history but is not live and not in a draft. What should happen to it?"
               )}
             </p>
           </div>
@@ -12778,7 +13059,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             <span class="min-w-0 flex-1">
               <span class="block text-[12.5px] font-bold text-white">{gettext("Publish it now")}</span>
               <span class="mt-0.5 block text-[11px] font-medium leading-[1.5] text-white/80">
-                {gettext("Goes live on the site straight away, and the page is rebuilt.")}
+                {gettext("Goes live on the site straight away and is rebuilt.")}
               </span>
             </span>
           </button>
@@ -15518,7 +15799,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp history_sheet(assigns) do
     ~H"""
     <p class="-mt-1 mb-3 text-[11px] font-medium text-[#6d6a63]">
-      {gettext("Every change to this page")}
+      {gettext("Every change to this %{noun}", noun: doc_noun(@section))}
     </p>
 
     <%!-- A change is written when it settles, so one just made appears a moment later rather than
@@ -15554,12 +15835,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         phx-click="history_clear"
         data-confirm={
           gettext(
-            "Deletes every recorded change for this page, including what can be restored from them. The page itself is untouched. This cannot be undone."
+            "Deletes every recorded change for this %{noun}, including what can be restored from them. The %{noun} itself is untouched. This cannot be undone.",
+            noun: doc_noun(@section)
           )
         }
         class="h-[26px] rounded-[8px] border border-[#f0dcd8] bg-white px-2.5 text-[10px] font-bold text-[#a3554f] hover:bg-[#fdf2f1]"
       >
-        {gettext("Clear this page’s editing history")}
+        {gettext("Clear the editing history")}
       </button>
     </div>
     """
@@ -15656,6 +15938,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # this page" read as the act, and choosing it did not publish: it stopped the draft and waited for
   # a press. So the two are named as the modes they are, each with what happens next; publishing is
   # "Publish now", above them.
+  # A component has no drafts, so its menu offers no Draft mode.
+  defp stages("component"), do: Enum.reject(stages(), &match?({:draft, _label, _hint}, &1))
+  defp stages(_section), do: stages()
+
   defp stages do
     [
       {:published, gettext("Publish mode"),
@@ -15723,13 +16009,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     Enum.join([gettext("%{name} (you)", name: me) | Enum.map(editors, & &1.name)], ", ")
   end
 
-  defp avatars_title([]), do: gettext("Only you are editing this page")
+  defp avatars_title([]), do: gettext("Only you are editing this")
 
   defp avatars_title(editors),
     do:
       ngettext(
-        "You and %{count} other editing this page",
-        "You and %{count} others editing this page",
+        "You and %{count} other editing this",
+        "You and %{count} others editing this",
         length(editors)
       )
 
@@ -15739,13 +16025,19 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp stage_button_label(:published, _applied), do: gettext("Publish")
   defp stage_button_label(_draft, _applied), do: gettext("Save draft")
 
+  # A component has no drafts, so its Draft stage promises nothing kept aside.
+  defp stage_tooltip("component", :draft, _applied),
+    do: gettext("A component has no drafts — use Publish to save it.")
+
+  defp stage_tooltip(_section, stage, applied), do: stage_button_title(stage, applied)
+
   defp stage_button_title(stage, stage), do: stage_title(stage)
 
   defp stage_button_title(:published, _applied),
-    do: gettext("Publish — this will make the page visible to visitors")
+    do: gettext("Publish — this will make it visible to visitors")
 
   defp stage_button_title(_draft, _applied),
-    do: gettext("Save draft — kept aside; the live page is untouched until you publish")
+    do: gettext("Save draft — kept aside; what is live is untouched until you publish")
 
   defp stage_icon(stage, stage), do: (stage == :published && :check) || :draft
   defp stage_icon(:published, _applied), do: :rocket
@@ -15754,7 +16046,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp stage_label(:published), do: gettext("Published")
   defp stage_label(_draft), do: gettext("Draft")
 
-  defp stage_title(:published), do: gettext("Published — visitors can see this page")
+  defp stage_title(:published), do: gettext("Published — visitors can see this")
   defp stage_title(_draft), do: gettext("Draft — kept aside, not in front of visitors")
 
   # The dot is the draft light, so its tooltip is what the last write did.
@@ -15952,11 +16244,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # WHAT THE CHIP IS OFFERING TO LEAVE. "Live page" was written into the markup, so a layout, a
   # component and an error page all called their live record a page — in the one control whose whole
   # job is to say which document a save lands on. The section already names itself.
-  defp live_label(section),
-    do:
-      gettext("Live %{section}",
-        section: String.downcase(translate(Section.label(Section.normalize(section))))
-      )
+  defp live_label(section), do: gettext("Live %{section}", section: doc_noun(section))
+
+  # The document's name in a sentence: "page", "component", read off the section table.
+  defp doc_noun(section),
+    do: String.downcase(translate(Section.label(Section.normalize(section))))
 
   # "Page builder" over a page, "Component builder" over a component. The noun comes from the same
   # table the back link and the flash messages read, so there is one place to change a name.

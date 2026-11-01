@@ -55,7 +55,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.PublishFlowTest do
 
     html = render_click(view, "set_stage", %{"stage" => "published"})
 
-    assert html =~ "Press Publish to put your changes on the live page"
+    assert html =~ "Press Publish to put your changes live"
     refute html =~ "recorded but not saved to the page"
   end
 

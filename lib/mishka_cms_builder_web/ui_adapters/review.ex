@@ -201,7 +201,7 @@ defmodule MishkaCmsBuilderWeb.UIAdapters.Review do
       {@rest}
     >
       <p class="text-[12px] font-medium text-[#a8a5a0]">
-        {@message || gettext("No notes on this page yet")}
+        {@message || gettext("No notes here yet")}
       </p>
     </div>
     """

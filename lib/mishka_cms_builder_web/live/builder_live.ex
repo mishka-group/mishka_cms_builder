@@ -1091,23 +1091,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:source_tab, fn -> :template end)
     # What the Handlers tab puts in front of the reader: `{:entry, index}` or `{:form, node_id}`.
     |> assign_new(:code_focus, fn -> nil end)
-    |> assign_new(:element_css_rules, fn ->
-      # AND INTO THE SESSION, not only into these assigns. The canvas renders this CSS from
-      # `session.element_css`, and nothing but `save_element_css` ever wrote it — so a document
-      # reopened with element CSS already saved showed the author their rules in the panel while the
-      # frame had no `<style>` for them at all. Written where they are read, so the two cannot part.
-      #
-      # THE ROW PLUS WHAT THE SESSION IS HOLDING. Draft-stage CSS is not in the row — that is the
-      # point of it — so a reconnect that read the row alone would show the author the live page's
-      # rules and paint the canvas with them, over an element they styled ten seconds ago.
-      rules =
-        socket.assigns[:current_user]
-        |> ElementCss.all(socket.assigns.editor.site_id, css_owner(socket))
-        |> ElementCss.merge(socket.assigns.editor.staged_element_css)
-
-      EditorSession.set_element_css(socket.assigns.token, ElementCss.css(rules))
-      rules
-    end)
+    |> assign_new(:element_css_rules, fn -> held_rules(socket, socket.assigns.editor) end)
     # COLLECTED ONCE, not per render. Both libraries are merged with whatever extensions contribute
     # here rather than inside the Blocks panel, because that panel is a render function — a plugin's
     # code was running twice on every debounced keystroke in the search box. A plugin set does not
@@ -1166,7 +1150,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     # question. Nil is the ordinary state: nothing to lose, or nobody leaving.
     |> assign_new(:leave_to, fn -> nil end)
     |> assign_new(:ai_attachment, fn -> nil end)
-    |> assign_new(:autosave_failed?, fn -> false end)
+    # The sentence the last refused draft write was reported with, `nil` while writes succeed.
+    |> assign_new(:autosave_failure, fn -> nil end)
+    # What Publish would refuse, counted by the red dot in the top bar — see `problems/1` — and how
+    # many times a refusal has opened its window.
+    |> assign_new(:problems, fn -> [] end)
+    |> assign_new(:problems_opened, fn -> 0 end)
     # Which property the Inspector should land on, set when a property row in the tree is clicked.
     |> assign_new(:focus_attr, fn -> nil end)
     |> assign_studio_settings()
@@ -1460,6 +1449,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_new(:expanded, fn -> default_expanded(editor.tree) end)
     |> expand_to_selection(editor)
     |> expand_selected(editor)
+    |> forget_heex_error(editor)
+    |> forget_element_css_error(editor)
     |> assign(:editor, editor)
     |> assign(:tree, editor.tree)
     |> assign_presets(editor)
@@ -1470,6 +1461,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> then(&assign(&1, :element_css, selected_css(&1, editor)))
     |> then(&assign(&1, :element_css_advice, ElementCss.advice(&1.assigns.element_css)))
     |> assign(:crumbs, Tree.path(editor.tree, editor.selection))
+    |> assign_problems(editor)
     |> assign(:breakpoint, editor.breakpoint)
     |> assign(:pseudo, editor.pseudo)
     |> assign(:dir, editor.dir)
@@ -1491,6 +1483,48 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign_snippet_source()
     |> draft_the_change(editor)
   end
+
+  # A REFUSED APPLY'S ERROR IS ABOUT THE MARKUP IT REFUSED. An undo, any other edit or another
+  # selection puts other markup in the Code drawer, and the error stayed under it.
+  defp forget_heex_error(
+         %{assigns: %{editor: %{revision: revision, selection: selection}}} = socket,
+         %{revision: revision, selection: selection}
+       ),
+       do: socket
+
+  defp forget_heex_error(socket, _editor), do: assign(socket, :heex_error, nil)
+
+  # A REFUSED CUSTOM CSS IS ABOUT THE ELEMENT IT WAS TYPED FOR. Another selection puts that
+  # element's own CSS in the box, and the refusal stayed under it. Only the selection clears it: a
+  # save from another tab moves the revision, and the author has not fixed the CSS yet.
+  defp forget_element_css_error(
+         %{assigns: %{editor: %{selection: selection}}} = socket,
+         %{selection: selection}
+       ),
+       do: socket
+
+  defp forget_element_css_error(socket, _editor), do: assign(socket, :element_css_error, nil)
+
+  # ASKED AGAIN ONLY WHEN THE ANSWER CAN CHANGE: a new revision of the document, or the palette
+  # arriving, which is what `Inspector.unmet/3` reads the declarations from. `assign_editor/2` also
+  # runs for a selection, a hover and a breakpoint switch, and none of those move it.
+  defp assign_problems(socket, editor) do
+    key = {editor.revision, length(editor.components), editor.section}
+
+    case socket.assigns[:problems_key] == key do
+      true ->
+        socket
+
+      false ->
+        socket |> assign(:problems_key, key) |> assign_problem_list(problems(editor))
+    end
+  end
+
+  # A LIST THAT EMPTIED FORGETS IT WAS OPENED. The window is drawn only while there is something in
+  # it, so a count left behind would remount its opener the next time a problem appeared and open
+  # the window unasked.
+  defp assign_problem_list(socket, []), do: assign(socket, problems: [], problems_opened: 0)
+  defp assign_problem_list(socket, problems), do: assign(socket, :problems, problems)
 
   # WRITTEN AS IT HAPPENS, not on a clock. A thirty-second timer is a promise to lose up to thirty
   # seconds of work, and a draft row is cheap — no `SendToOban`, no compile, one small update.
@@ -1667,10 +1701,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       # The old implicit rule, kept as the PRESELECTED choice rather than the only one: a selection
       # belongs to its own page, a whole page has nowhere else to go but shared.
       visibility: (selected && record && "page") || "shared",
-      selection_tag: (selected && Panels.selection_tag(selected)) || gettext("whole page"),
+      selection_tag:
+        (selected && Panels.selection_tag(selected)) ||
+          gettext("whole %{noun}", noun: noun(editor.section)),
       save_label:
         (selected && gettext("Save selection as snippet")) ||
-          gettext("Save this page as a snippet")
+          gettext("Save this %{noun} as a snippet", noun: noun(editor.section))
     })
   end
 
@@ -2194,6 +2230,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       # Answered once here, beside `reads`, because the template it is read from is the thing the
       # palette deliberately does not carry.
       concealed?: PaletteEntry.concealed?(component),
+      # And the breakpoint from which it stays on the screen, as `chelekom-sidebar` does from `md`
+      # up — see `PaletteEntry.persistent_at/1`. Read from the same source for the same reason.
+      persistent_at: PaletteEntry.persistent_at(component),
       # Whether this component reaches for the elements an author puts inside it — see
       # `PaletteEntry.shapes_children?/1`. Read from the same template and helper bodies, for the
       # same reason, and the canvas uses it to decide whether it may put a box of its own between
@@ -2690,8 +2729,13 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  def handle_async(:autosave, {:exit, _reason}, socket),
-    do: {:noreply, socket |> assign(:autosaving?, false) |> holding_draft() |> autosave_failed()}
+  def handle_async(:autosave, {:exit, reason}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(:autosaving?, false)
+       |> holding_draft()
+       |> autosave_failed({:exit, reason})}
 
   # A FLUSH THAT FAILS IS NOT SILENT. `History.flush/2` puts the entries back, so the next change
   # retries them; what must not happen is the editor carrying on as though the history were being
@@ -2745,7 +2789,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
        |> assign(:history_reverting?, false)
        |> put_flash(
          :info,
-         gettext("Restored in the editor. The live page does not change until you publish.")
+         gettext("Restored in the editor. What is live does not change until you publish.")
        )}
 
   def handle_async(:history_revert, {:ok, {:error, :gone}}, socket),
@@ -2943,7 +2987,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign(:dirty?, editor.dirty?)
     |> assign(:saved_at, editor.saved_at)
     |> assign(:draft, draft)
-    |> assign(:autosave_failed?, false)
+    |> assign(:autosave_failure, nil)
   end
 
   # NOTHING LEFT TO WRITE by the time this write's turn came: another writer of the session — a
@@ -2953,14 +2997,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> assign(:editor, editor)
     |> assign(:dirty?, editor.dirty?)
     |> assign(:saved_at, editor.saved_at)
-    |> assign(:autosave_failed?, false)
+    |> assign(:autosave_failure, nil)
   end
 
   # A COMPONENT HAS NO DRAFT RESOURCE, and saying so once a change would be a lie told constantly.
   # Its Save button is its only persistence, which the drafts sheet already says in words.
   defp autosaved(socket, :unsupported), do: socket
 
-  defp autosaved(socket, _unsaved), do: autosave_failed(socket)
+  defp autosaved(socket, {:error, reason}), do: autosave_failed(socket, reason)
+  defp autosaved(socket, unsaved), do: autosave_failed(socket, unsaved)
 
   # THE DRAFT IS MADE ON THE FIRST SAVE, not when the editor opens — so the first changes of a
   # sitting are recorded before there is a draft to attach them to, and would otherwise stay on the
@@ -2974,15 +3019,23 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     bump_history_revision(socket)
   end
 
-  defp autosave_failed(%{assigns: %{autosave_failed?: true}} = socket), do: socket
+  # A REFUSED WRITE SAYS WHY. It said "Autosave is failing" and logged nothing, so neither the author
+  # nor whoever reads the log could tell a plugin's refusal from a validation or a crash. The reason
+  # is logged whole and shown as its words only (`human/1`), and shown again only when it changes:
+  # every edit retries the write, and the same flash on every keystroke would be noise.
+  defp autosave_failed(socket, reason) do
+    Logger.warning("[MishkaCmsBuilder] a draft write was refused: #{inspect(reason)}")
 
-  defp autosave_failed(socket) do
-    socket
-    |> assign(:autosave_failed?, true)
-    |> put_flash(
-      :error,
-      gettext("Autosave is failing. Your edits are still here, but nothing is saved.")
-    )
+    message =
+      gettext(
+        "Can't be saved: %{reason}. Your edits are still here, and the next change tries again.",
+        reason: reason |> human() |> String.trim_trailing(".")
+      )
+
+    case socket.assigns[:autosave_failure] == message do
+      true -> socket
+      false -> socket |> assign(:autosave_failure, message) |> put_flash(:error, message)
+    end
   end
 
   # A destination arrives from the browser, so it is checked before it is used: only a path of this
@@ -2998,7 +3051,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         socket,
         :info,
         gettext(
-          "Publish mode: nothing is saved as you work now. Press Publish to put your changes on the live page; until then they are only recorded in the page’s history."
+          "Publish mode: nothing is saved as you work now. Press Publish to put your changes live; until then they are only recorded in the editing history."
         )
       )
 
@@ -3751,14 +3804,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
          |> assign(sheet: :none, left_hidden: false, left_tab: :inspector)}
 
       :page ->
-        {:noreply, put_flash(socket, :info, gettext("That note is about the whole page."))}
+        {:noreply, put_flash(socket, :info, gettext("That note is about the whole document."))}
 
       :gone ->
         {:noreply,
          put_flash(
            socket,
            :error,
-           gettext("The element that note was on is no longer on this page.")
+           gettext("The element that note was on is no longer there.")
          )}
     end
   end
@@ -4746,7 +4799,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     case Tree.get(editor.tree, node_id) do
       %Node{kind: :tag} -> FormPlacement.replace_ops(editor, node_id, events: events)
       %Node{} = node -> FormPlacement.wiring(editor.tree, node, editor.components, events: events)
-      nil -> {:error, gettext("That form is no longer on the page.")}
+      nil -> {:error, gettext("That form is no longer there.")}
     end
     |> wired(socket)
   end
@@ -5077,6 +5130,13 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:ok, editor} =
           EditorSession.edit_draft(socket.assigns.token, draft, draft_template(socket, draft))
 
+        # THE DRAFT'S SETTINGS ARE THE ONES DRAWN NOW, its layout among them. A canvas that opened
+        # on the live page kept the page's layout around the draft until it was reloaded.
+        EditorSession.announce(socket.assigns.token, {:layout, :draft})
+
+        # The draft's own element CSS is the hold now, so the box and the canvas show it.
+        rules = held_rules(socket, editor)
+
         # The tree is a DIFFERENT tree now — its nodes have their own ids, so the ids the old one was
         # expanded by mean nothing to it and the rail collapsed to a row of closed roots. Opening a
         # draft should leave you looking at its structure, the same way opening the page does.
@@ -5090,7 +5150,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
            sheet: :none,
            draft: draft,
            draft_opened?: true,
-           expanded: default_expanded(editor.tree)
+           expanded: default_expanded(editor.tree),
+           element_css_rules: rules
          )
          # BOTH OFFERS ARE ANSWERED BY OPENING ONE. `resumable` is the autosave bar and
          # `inherited_draft` is the "carry on where you left off" bar; only the first was cleared
@@ -5347,7 +5408,16 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> Map.put("value_kind", "expr")
   end
 
-  defp icon_op(_params, op, value), do: Map.put(op, "value", value)
+  # BRACES ARE AN EXPRESSION, as in HEEx. The box shows a bound icon's source without them, so a
+  # name typed over it is text, and `{item[:icon]}` typed into it stays bound.
+  defp icon_op(_params, op, value) do
+    with [_braces, source] <- Regex.run(~r/\A\s*\{(.*)\}\s*\z/s, value),
+         source when source != "" <- String.trim(source) do
+      Map.merge(op, %{"value" => source, "value_kind" => "expr"})
+    else
+      _text -> Map.put(op, "value", value)
+    end
+  end
 
   defp unknown_in_map?(%{"shape" => "map"}, value),
     do: value != "" and Icons.available?() and not Icons.known?(value)
@@ -5514,7 +5584,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp set_condition(tree, node_id, source),
     do: Tree.set_attr(tree, node_id, Conditions.attribute(), {:expr, source})
 
-  defp condition_flash(nil), do: gettext("This element is always on the page.")
+  defp condition_flash(nil), do: gettext("This element is always shown.")
   defp condition_flash(_source), do: gettext("Condition set.")
 
   # THE SCOPE, THE AIM AND THE COMMAND ARE ALL READ OFF THE STORED TREE, because all three are the
@@ -5561,7 +5631,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp save_interaction(socket, _gone, _action),
-    do: {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
+    do: {:noreply, put_flash(socket, :error, gettext("That element is no longer there."))}
 
   # The rail's Fix, for every finding whose answer is a sentence rather than an edit. A Forms
   # finding reaches this only when the document has moved on under the click, or when the answer is
@@ -5581,7 +5651,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
     socket
     |> assign(right_tab: :assistant, right_hidden: false)
-    |> ask_assistant(audit_prompt(rule))
+    |> ask_assistant(audit_prompt(rule, noun(section(socket))))
     |> then(&{:noreply, &1})
   end
 
@@ -5917,6 +5987,21 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp audit_label(rule), do: gettext("Fixed %{rule}", rule: rule)
 
+  # The document's own noun, so a component's prompt does not ask about a page.
+  defp audit_prompt("no-h1", noun),
+    do: gettext("Make the first heading on this %{noun} an h1.", noun: noun)
+
+  defp audit_prompt("no-heading", noun),
+    do: gettext("Add a top-level heading to this %{noun}.", noun: noun)
+
+  defp audit_prompt("form-duplicate-token", noun),
+    do: gettext("Give this form event names no other form on this %{noun} shares.", noun: noun)
+
+  defp audit_prompt(rule, noun),
+    do:
+      audit_prompt(rule) ||
+        gettext("Fix the %{rule} issue on this %{noun}.", rule: rule, noun: noun)
+
   defp audit_prompt("img-alt"), do: gettext("Write an alt attribute describing this image.")
 
   defp audit_prompt("img-alt-empty"),
@@ -5927,9 +6012,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp audit_prompt("heading-skip"),
     do: gettext("Fix the heading order so it does not skip a level.")
-
-  defp audit_prompt("no-h1"), do: gettext("Make the first heading on this page an h1.")
-  defp audit_prompt("no-heading"), do: gettext("Add a top-level heading to this page.")
 
   defp audit_prompt("nested-html"),
     do: gettext("Remove the nested <html> element from this template.")
@@ -5948,9 +6030,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp audit_prompt("form-duplicate-seed"),
     do: gettext("Rename this form so no other form shares its name.")
 
-  defp audit_prompt("form-duplicate-token"),
-    do: gettext("Give this form event names no other form on this page shares.")
-
   defp audit_prompt("form-duplicate-source"),
     do: gettext("Give this form its own place to keep what is typed into it.")
 
@@ -5961,7 +6040,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp audit_prompt("form-no-submit"), do: gettext("Add a submit button to this form.")
   defp audit_prompt("submit-no-form"), do: gettext("Put this submit button inside a form.")
-  defp audit_prompt(rule), do: gettext("Fix the %{rule} issue on this page.", rule: rule)
+  defp audit_prompt(_rule), do: nil
 
   defp ask_assistant(socket, text) do
     scope = %{
@@ -6278,7 +6357,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     section(socket)
     |> Drafts.save_as(
       record,
-      opened_draft(socket),
+      held_source(opened_draft(socket), record, editor),
       editor_html(editor),
       actor,
       draft_id,
@@ -6306,6 +6385,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         put_flash(socket, :error, human(reason))
     end
   end
+
+  # THE OPEN DOCUMENT AS IT STANDS, ITS HELD CSS INCLUDED. `Drafts.save_as/8` takes a draft's
+  # element CSS from its source (mishka_cms_core 0.0.5 on), so the named draft holds the Custom CSS
+  # applied in this sitting; a core whose drafts hold none reads no such field.
+  defp held_source(source, _record, %{staged_element_css: nil}), do: source
+
+  defp held_source(source, record, %{staged_element_css: held}),
+    do: Map.put(source || record, :element_css, held)
 
   defp opened_draft(%{assigns: %{draft_opened?: true, draft: draft}}), do: draft
   defp opened_draft(_live_page), do: nil
@@ -6435,7 +6522,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp needs_selection(socket),
-    do: put_flash(socket, :info, gettext("Select an element on the page first."))
+    do: put_flash(socket, :info, gettext("Select an element on the canvas first."))
 
   # Runtime components are placed in their wrapper form, which is what every stored template uses
   # and what the compilers emit: the name is data, and a hyphenated one could not be a tag at all.
@@ -6494,21 +6581,127 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp save(socket, stage) do
-    case {missing_required(socket) ++ missing_slots(socket), mistyped(socket)} do
-      {[], []} -> save_whole(socket, stage)
-      {[], mistyped} -> refuse_mistyped(socket, mistyped)
-      {missing, _mistyped} -> refuse_save(socket, missing)
+    case publish_check(socket.assigns.editor) do
+      {:ok, heex} -> write(socket, stage, heex)
+      {:refused, problems} -> refuse_publish(socket, problems)
     end
   end
 
+  @doc """
+  What stops this document being published, as a list the editor shows and Publish refuses with.
+
+  THE ONE ANSWER, TWO READERS. The red dot beside the status in the top bar counts it, its window
+  lists it by element, and Publish refuses while it is not empty — all three call this, so the dot
+  and the button cannot disagree. Each entry is `%{id:, kind:, field:, text:}`: the node it is about
+  (`nil` for the document as a whole), what is wrong, the property or slot named, and the sentence
+  the refusal and the window both say.
+
+  The checks are the gate's own, in its order:
+
+    * a required property left empty, a required slot never added, and text where a component takes
+      a list or a map — `Inspector.unmet/3`, which the layers badge and the Inspector read too;
+    * a layout that no longer renders `@inner_content`, or hides it from visitors;
+    * markup that will not compile.
+
+  Only Publish is gated. A draft, the autosave and Code Apply still save a document with problems,
+  so an author who cut a chip to paste it elsewhere does not lose the minute in between.
+  """
+  @spec problems(map()) :: [map()]
+  def problems(editor) do
+    case publish_check(editor) do
+      {:ok, _heex} -> []
+      {:refused, problems} -> problems
+    end
+  end
+
+  defp publish_check(editor) do
+    {heex, uncompilable} = compiled(editor.tree)
+
+    case unmet(editor) ++ slotless_layout(editor) ++ uncompilable do
+      [] -> {:ok, heex}
+      problems -> {:refused, problems}
+    end
+  end
+
+  # WHAT EACH COMPONENT WAS TOLD IT MUST HAVE. These used to be their own readings of the
+  # declaration, and the layers rail had a third — which is to say it had none, and the author found
+  # out at Publish. `Inspector.unmet/3` is the one answer all of them take, so the badge on a row and
+  # the refusal on the button cannot disagree about which field is missing.
+  #
+  # A required SLOT is the same promise as a required property: the component will not render without
+  # it. Phoenix allows exactly one option inside a slot block — `:required` — and the kit uses it
+  # twelve times. TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP is a page that arrived holding it — a
+  # hand edit, an import, a draft from before the Inspector refused one — and it renders the
+  # component as a box on the published page.
+  defp unmet(editor) do
+    components = component_lookup(editor)
+
+    for node <- Tree.walk(editor.tree),
+        unmet <- Inspector.unmet(node, editor.tree, components),
+        do: unmet_problem(node, unmet)
+  end
+
+  defp unmet_problem(node, {:attr, name}),
+    do: %{
+      id: node.id,
+      kind: :attr,
+      field: name,
+      text: gettext("%{field} is required and empty", field: "#{owner_label(node)}.#{name}")
+    }
+
+  defp unmet_problem(node, {:slot, name}),
+    do: %{
+      id: node.id,
+      kind: :slot,
+      field: name,
+      text:
+        gettext("%{field} is required and empty", field: "#{Node.component_name(node)}.:#{name}")
+    }
+
+  defp unmet_problem(node, {:type, name}),
+    do: %{
+      id: node.id,
+      kind: :type,
+      field: name,
+      text:
+        gettext("%{field} holds text where the component takes a list or a map",
+          field: "#{owner_label(node)}.#{name}"
+        )
+    }
+
   # THE SAME PROMISE AS A REQUIRED PROPERTY, made by the section rather than by a component. A layout
   # renders the page it wraps through `@inner_content`; one that no longer does compiles, saves and
-  # previews, and quietly empties every page on it. That is a page the author has already broken, so
-  # it is refused here alongside the others rather than reported after the fact.
-  #
-  # Only publishing comes through this. The autosaved draft is written by `autosave/1` and is not
-  # gated — an author who cut the chip to paste it somewhere else must not lose the minute of work
-  # in between.
+  # previews, and quietly empties every page on it.
+  defp slotless_layout(editor) do
+    cond do
+      Section.normalize(editor.section) != "layout" ->
+        []
+
+      LayoutSlot.renders_inner_content?(editor.tree) ->
+        []
+
+      LayoutSlot.holds_inner_content?(editor.tree) ->
+        [
+          document_problem(
+            :layout,
+            gettext(
+              "@inner_content is inside an element hidden from visitors, so every page using this layout would come out empty. Show it first"
+            )
+          )
+        ]
+
+      true ->
+        [
+          document_problem(
+            :layout,
+            gettext(
+              "nothing on this layout renders @inner_content, so every page using it would come out empty"
+            )
+          )
+        ]
+    end
+  end
+
   # THE TOKENIZER IS NOT THE COMPILER, AND NEITHER IS THE SERIALIZER. The document in the editor
   # arrived through `Tree.parse/1`, which takes `{@a + }` — the braces delimit an expression and the
   # expression is a token to it. `to_heex/1` reads every expression on the way out and catches that
@@ -6521,112 +6714,30 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # to have been typed here to be broken: a seed, an import or a hand edit is enough.
   #
   # `CodeCheck.template/1` rather than `check/1`: this is the syntax question, it costs milliseconds
-  # rather than the second a page compile does, and the semantic half belongs to the resource that
-  # owns the module's shape.
-  defp save_whole(socket, stage) do
-    with true <- wraps_a_page?(socket),
-         {:ok, heex} <- Serializer.to_heex(socket.assigns.editor.tree),
+  # rather than the second a page compile does, which is what lets the red dot ask it on every change.
+  defp compiled(tree) do
+    with {:ok, heex} <- Serializer.to_heex(tree),
          :ok <- CodeCheck.template(heex) do
-      write(socket, stage, heex)
+      {heex, []}
     else
-      false -> refuse_slotless_layout(socket)
-      {:error, reason} -> refuse_uncompilable(socket, reason)
+      {:error, reason} -> {nil, [uncompilable(reason)]}
     end
   end
 
-  defp refuse_uncompilable(socket, reason) do
-    put_flash(
-      socket,
-      :error,
-      gettext("Not published — this markup will not compile. %{reason}",
-        reason: compile_reason(reason)
+  defp uncompilable(reason),
+    do:
+      document_problem(
+        :compile,
+        gettext("this markup will not compile. %{reason}", reason: compile_reason(reason))
       )
-    )
-  end
+
+  defp document_problem(kind, text), do: %{id: nil, kind: kind, field: nil, text: text}
 
   # A fault from `CodeCheck`, or the compiler's own sentence from the serializer — which arrives
   # naming a file called `nofile`, so the prose above it is what makes it readable.
   defp compile_reason(fault) when is_map(fault), do: CodeCheck.message(fault)
   defp compile_reason(reason) when is_binary(reason), do: reason
   defp compile_reason(reason), do: inspect(reason)
-
-  defp wraps_a_page?(%{assigns: %{editor: editor}}),
-    do:
-      Section.normalize(editor.section) != "layout" or
-        LayoutSlot.renders_inner_content?(editor.tree)
-
-  defp refuse_slotless_layout(socket) do
-    case LayoutSlot.holds_inner_content?(socket.assigns.editor.tree) do
-      true ->
-        put_flash(
-          socket,
-          :error,
-          gettext(
-            "Not published — @inner_content is inside an element hidden from visitors, so every page using this layout would come out empty. Show it first."
-          )
-        )
-
-      false ->
-        put_flash(
-          socket,
-          :error,
-          gettext(
-            "Not published — nothing on this layout renders @inner_content, so every page using it would come out empty."
-          )
-        )
-    end
-  end
-
-  # A component that declares a property as required means the page will not render without it, so
-  # saving one that is missing writes a page that is already broken. The fields are marked in the
-  # Inspector; this is the second half of that — it says WHICH, and it does not save.
-  # WHAT THE PAGE WAS TOLD IT MUST HAVE. Both of these used to be their own reading of the
-  # declaration, and the layers rail had a third — which is to say it had none, and the author found
-  # out at Publish. `Inspector.unmet/3` is the one answer all three now take, so the badge on a row
-  # and the refusal on the button cannot disagree about which field is missing.
-  #
-  # A required SLOT is the same promise as a required property: the component will not render without
-  # it, so a page that never filled it is not savable either. Phoenix allows exactly one option
-  # inside a slot block — `:required` — and the kit uses it twelve times.
-  defp missing_required(%{assigns: %{editor: editor}}) do
-    components = component_lookup(editor)
-
-    for node <- Tree.walk(editor.tree),
-        {:attr, name} <- Inspector.unmet(node, editor.tree, components),
-        do: "#{owner_label(node)}.#{name}"
-  end
-
-  defp missing_slots(%{assigns: %{editor: editor}}) do
-    components = component_lookup(editor)
-
-    for node <- Tree.walk(editor.tree),
-        {:slot, name} <- Inspector.unmet(node, editor.tree, components),
-        do: "#{Node.component_name(node)}.:#{name}"
-  end
-
-  # TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP. The Inspector refuses to write one, so this is
-  # a page that arrived holding it — a hand edit, an import, a draft from before the refusal — and it
-  # renders the component as a box on the published page.
-  defp mistyped(%{assigns: %{editor: editor}}) do
-    components = component_lookup(editor)
-
-    for node <- Tree.walk(editor.tree),
-        {:type, name} <- Inspector.unmet(node, editor.tree, components),
-        do: "#{owner_label(node)}.#{name}"
-  end
-
-  defp refuse_mistyped(socket, mistyped) do
-    put_flash(
-      socket,
-      :error,
-      ngettext(
-        "Not saved — %{fields} holds text where the component takes a list or a map. Remove it in the Inspector to use the default.",
-        "Not saved — %{fields} hold text where the component takes a list or a map. Remove them in the Inspector to use the defaults.",
-        length(mistyped),
-        fields: Enum.join(Enum.uniq(mistyped), ", ")
-      )
-    )
-  end
 
   defp component_lookup(%{components: components}) when is_list(components),
     do: Map.new(components, &{&1.name, &1})
@@ -6635,15 +6746,24 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp owner_label(node), do: Node.component_name(node) || ":#{Node.slot_name(node)}"
 
-  defp refuse_save(socket, missing) do
-    put_flash(
-      socket,
+  # SAID ONCE, LISTED ONCE. The flash names how many and says each one, in the order the red dot's
+  # window lists them, and the window opens on the same list: `problems_opened` changes the id of the
+  # element whose `phx-mounted` shows it (`Panels.problems_modal/1`), so it opens with
+  # `Phoenix.LiveView.JS` and no hook. A draft is not gated, so the refusal says publish, the one
+  # write it stops.
+  defp refuse_publish(socket, problems) do
+    texts = problems |> Enum.map(&String.trim_trailing(&1.text, ".")) |> Enum.uniq()
+
+    socket
+    |> assign(:problems, problems)
+    |> update(:problems_opened, &(&1 + 1))
+    |> put_flash(
       :error,
       ngettext(
-        "Not saved — %{fields} is required and empty.",
-        "Not saved — %{fields} are required and empty.",
-        length(missing),
-        fields: Enum.join(Enum.uniq(missing), ", ")
+        "Not published — %{problems}. The red dot beside the status lists it.",
+        "Not published — %{count} problems: %{problems}. The red dot beside the status lists them.",
+        length(texts),
+        problems: Enum.join(texts, "; ")
       )
     )
   end
@@ -6710,7 +6830,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       document: heex,
       note:
         gettext(
-          "Published to the live page, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own."
+          "Published, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own."
         )
     }
 
@@ -7001,7 +7121,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:noreply, put_flash(socket, :info, flash)}
 
       _gone ->
-        {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
+        {:noreply, put_flash(socket, :error, gettext("That element is no longer there."))}
     end
   end
 
@@ -7168,7 +7288,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     case Events.before_draft_save(payload) do
       :ok ->
         result =
-          Drafts.autosave(section, record, heex, actor, editor.draft_id, label, editor.status)
+          apply(
+            Drafts,
+            :autosave,
+            with_held_css(
+              [section, record, heex, actor, editor.draft_id, label, editor.status],
+              editor
+            )
+          )
 
         announce_draft(result, payload)
         result
@@ -7276,10 +7403,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  # Draft stage checks the CSS and keeps it, and `prune_element_css/3` writes it with the markup
-  # carrying the class it is keyed on.
-  defp staged_or_written(%{assigns: %{stage: :draft}} = socket, scope, css),
-    do: ElementCss.place(socket.assigns.element_css_rules, scope, css)
+  # Draft stage checks the CSS as `put/5` does and keeps it, and `prune_element_css/3` writes it
+  # with the markup carrying the class it is keyed on.
+  defp staged_or_written(%{assigns: %{stage: :draft}} = socket, scope, css) do
+    apply(
+      ElementCss,
+      :place,
+      for_site([socket.assigns.element_css_rules, scope, css], socket.assigns.editor.site_id)
+    )
+  end
 
   # Publish stage writes the row — pressing Apply under a chip reading Publish asks for the live page
   # — and `put/5` reads the row to write it, so the rule lands beside whatever else is in there now
@@ -7294,18 +7426,74 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     )
   end
 
+  # TAILWIND BUILDS AN `@apply` AT APPLY. The parser takes `@apply not-a-real-class;`, so with the
+  # parser's check alone it was held and handed to the canvas, whose in-browser build then failed on
+  # it. `ElementCss.place/4` also builds a body that holds an `@apply` for the editor's site and
+  # refuses it in Tailwind's words; a core without it has `place/3`, the parser's check alone.
+  # Called through `apply/3` so this compiles against either.
+  defp for_site(args, site_id) do
+    case Code.ensure_loaded?(ElementCss) and function_exported?(ElementCss, :place, 4) do
+      true -> args ++ [site_id]
+      false -> args
+    end
+  end
+
   # WHERE THE STYLE WENT, IN THE SENTENCE THAT SAYS IT WAS SAVED. Both stages said "Style applied."
-  # — the same words for a rule held for the next publish and one already on the live page. The
-  # holding place is named too, because it is an editing session and not a row: nothing else in the
-  # product keeps work there, and an author who is told only "when you publish" would read it as
-  # saved.
-  defp css_flash(:draft, said),
-    do:
-      gettext("%{said} Held in this editing session — it goes live when you publish.",
-        said: said
-      )
+  # — the same words for a rule held for the next publish and one already on the live page. A
+  # Draft-stage rule is written into the draft beside its markup, so the new-tab preview, which is
+  # compiled from the draft on every open, shows it too.
+  #
+  # With a core whose drafts hold no element CSS (0.0.4) the rule waits in this editing session
+  # alone, and the sentence names that holding place instead.
+  defp css_flash(:draft, said) do
+    case draft_holds_css?() do
+      true ->
+        gettext(
+          "%{said} It is in the draft — the preview shows it; it goes live when you publish.",
+          said: said
+        )
+
+      false ->
+        gettext("%{said} Held in this editing session — it goes live when you publish.",
+          said: said
+        )
+    end
+  end
 
   defp css_flash(_published, said), do: said
+
+  # THE DRAFT HOLDS THE ELEMENT CSS APPLIED IN DRAFT, beside its markup, from mishka_cms_core 0.0.5
+  # on: `Drafts.autosave/8` takes the session's hold as `element_css:`, and the draft preview
+  # compiles it. With 0.0.4 the hold stays in this session until the publish writes it, as before.
+  # Called through `apply/3` so this compiles against either.
+  defp draft_holds_css?,
+    do: Code.ensure_loaded?(Drafts) and function_exported?(Drafts, :autosave, 8)
+
+  defp with_held_css(args, editor) do
+    case draft_holds_css?() do
+      true -> args ++ [[element_css: editor.staged_element_css]]
+      false -> args
+    end
+  end
+
+  # THE ROW PLUS WHAT THE SESSION IS HOLDING. Draft-stage CSS is not in the row — that is the point
+  # of it — so a reconnect that read the row alone would show the author the live page's rules and
+  # paint the canvas with them, over an element they styled ten seconds ago. Opening a draft makes
+  # its own element CSS the hold, so the rules are read again then too.
+  #
+  # AND INTO THE SESSION, not only into the assigns. The canvas renders this CSS from
+  # `session.element_css`, and nothing but `save_element_css` ever wrote it — so a document reopened
+  # with element CSS already saved showed the author their rules in the panel while the frame had no
+  # `<style>` for them at all. Written where they are read, so the two cannot part.
+  defp held_rules(socket, editor) do
+    rules =
+      socket.assigns[:current_user]
+      |> ElementCss.all(editor.site_id, css_owner(socket))
+      |> ElementCss.merge(editor.staged_element_css)
+
+    EditorSession.set_element_css(socket.assigns.token, ElementCss.css(rules))
+    rules
+  end
 
   # THE CLASS THE RULE WAS JUST WRITTEN UNDER, put on the element as it is stored — or taken off it
   # when the box was cleared — rather than on the copy the panel was drawn from, which would put back
@@ -7882,8 +8070,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp shadow_value(:inset, value), do: value == "true"
   defp shadow_value(_part, value), do: to_string(value)
 
-  defp human(reason) when is_binary(reason), do: reason
-  defp human(:unknown_node), do: gettext("That element is no longer on the page.")
+  defp human(reason) when is_binary(reason), do: plain(reason)
+  defp human(:unknown_node), do: gettext("That element is no longer there.")
   defp human(:unknown_session), do: gettext("This editing session expired. Reload the builder.")
   defp human(:invalid_parent), do: gettext("That element cannot hold content.")
 
@@ -7901,13 +8089,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp human(:document_root),
     do: gettext("That is the document itself — put content inside it rather than around it.")
 
-  defp human(%{message: message}) when is_binary(message), do: message
+  defp human(:unserializable), do: gettext("the markup could not be written out")
+  defp human({:exit, _reason}), do: gettext("the save stopped before it finished")
 
-  # ASH SAYS WHY IN ITS OWN WORDS. Without this an `Ash.Error.Invalid` reaches the reader as the
-  # struct's `inspect` — a wall of changesets and stacktraces in a flash — when every one of them
-  # already carries a written message.
-  defp human(%Ash.Error.Invalid{} = error), do: Exception.message(error)
-  defp human(%Ash.Error.Forbidden{} = error), do: Exception.message(error)
+  # ASH SAYS WHY IN ITS OWN WORDS, and wraps them. `Exception.message/1` on an error class is a
+  # header ("Invalid Error"), a breadcrumb trail, a bullet per error, the value it refused and, where
+  # stack traces are kept, the trace. Only each error's own words are shown.
+  defp human(%{__exception__: true, errors: [_ | _] = errors}), do: error_words(errors)
+  defp human(%Ash.Error.Invalid{} = error), do: error |> Exception.message() |> plain()
+  defp human(%Ash.Error.Forbidden{} = error), do: error |> Exception.message() |> plain()
+
+  defp human(%{message: message}) when is_binary(message), do: plain(message)
 
   # A FIELD-ERROR LIST IS WRITTEN WORDS ALREADY. `Op.build/1` answers with one for every op naming a
   # kind, a node id or a bucket the editor does not know — the ordinary way an assistant's op fails,
@@ -7926,6 +8118,57 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # worth reading gets a clause above; the rest gets the sentence `CanvasLive.message/1` has always
   # answered with.
   defp human(_other), do: gettext("That change could not be applied.")
+
+  defp error_words(errors) when is_list(errors) do
+    errors
+    |> Enum.map(&error_words/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    |> Enum.join(" ")
+  end
+
+  defp error_words(%{__exception__: true, errors: [_ | _] = errors}), do: error_words(errors)
+  defp error_words(%{__exception__: true} = error), do: error |> Exception.message() |> plain()
+  defp error_words(text) when is_binary(text), do: plain(text)
+  defp error_words(_wordless), do: ""
+
+  # ONLY THE SENTENCES. A refusal can arrive carrying a stack trace, an Ash error's header, its
+  # "Bread Crumbs:" trail and the "Value:" it refused, and a flash showed all of it. Each line that is
+  # one of those goes, a trail or a value runs to the next blank line, and the `* ` Ash puts before
+  # each message comes off.
+  @trace_line ~r/^\s+(\([^)]*\)\s+)?[\w\/.-]+\.(ex|exs|erl):\d+/
+  @error_header ~r/^[A-Z]\w* Error$/
+
+  defp plain(text) do
+    text
+    |> String.split("\n")
+    |> Enum.reduce({[], :keep}, &plain_line/2)
+    |> elem(0)
+    |> Enum.reverse()
+    |> Enum.join(" ")
+  end
+
+  defp plain_line(line, {kept, :skip}) do
+    case String.trim(line) do
+      "" -> {kept, :keep}
+      _dump -> {kept, :skip}
+    end
+  end
+
+  defp plain_line(line, {kept, :keep}) do
+    trimmed = String.trim(line)
+
+    cond do
+      String.starts_with?(trimmed, ["Value:", "Bread Crumbs:"]) -> {kept, :skip}
+      noise?(line, trimmed) -> {kept, :keep}
+      true -> {[String.trim_leading(trimmed, "* ") | kept], :keep}
+    end
+  end
+
+  defp noise?(line, trimmed),
+    do:
+      trimmed == "" or String.starts_with?(trimmed, "> ") or Regex.match?(@trace_line, line) or
+        Regex.match?(@error_header, trimmed)
 
   @doc "The device options the top bar offers, with their canvas widths."
   def devices, do: @devices
@@ -7994,6 +8237,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         studio_badge={@studio_badge}
         history_position={@history_position}
         history_total={@history_total}
+        problems={@problems}
       />
       <Panels.mobile_bar mob_panel={@mob_panel} dir={@dir} />
 
@@ -8038,6 +8282,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
           aim_target={@aim_target}
           act_action={@act_action}
           current_user={@current_user}
+          device={@device}
         />
         <Panels.center
           editor={@editor}
@@ -8096,6 +8341,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
       <Panels.command_palette :if={@command_open} {assigns} />
       <Panels.reload_modal :if={@reload_confirm} />
+      <Panels.problems_modal
+        :if={@problems != []}
+        problems={@problems}
+        tree={@tree}
+        opened={@problems_opened}
+      />
       <Panels.leave_modal :if={@leave_to} />
       <Panels.source_modal
         :if={@source_modal}
@@ -8245,7 +8496,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:noreply, assign(socket, :heex_error, source_message(reason))}
 
       nil ->
-        {:noreply, assign(socket, :heex_error, gettext("That element is no longer on the page."))}
+        {:noreply, assign(socket, :heex_error, gettext("That element is no longer there."))}
     end
   end
 

@@ -104,7 +104,7 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewCommentForm do
           type="button"
           id="pb-comment-whole-page"
           phx-click="comment_on_page"
-          title={gettext("Write about the whole page instead")}
+          title={gettext("Write about the whole document instead")}
           class="grid size-[18px] flex-none place-items-center rounded-[5px] text-[#a8a5a0] hover:bg-[#f4f3ee] hover:text-[#3a382f]"
         >
           <svg
@@ -194,7 +194,7 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewCommentForm do
   defp scope(%{defaults: %{node_label: label}}) when is_binary(label) and label != "",
     do: "<" <> label <> ">"
 
-  defp scope(_state), do: gettext("the whole page")
+  defp scope(_state), do: gettext("the whole document")
 
   defp field_errors(%{errors: errors}, field) when is_map(errors),
     do: Map.get(errors, field, []) |> List.wrap()

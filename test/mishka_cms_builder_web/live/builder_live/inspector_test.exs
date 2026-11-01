@@ -181,6 +181,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
     # A REFUSED WRITE PUTS THE BAR BACK. Taking it down is a claim that the work is kept, so it may
     # only outlive the press if the draft really was written. The editor says so in words too, but
     # the bar is the thing on screen for the rest of the sitting.
+    @tag :capture_log
     test "and a draft write that fails leaves the bar saying so", %{conn: conn, page: page} do
       refuse_draft_writes()
 
@@ -194,7 +195,55 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
 
       assert Drafts.list("page", page, recorded) == [], "the gate refused, so nothing was written"
       assert has_element?(view, "#pb-publish-bar")
-      assert settled =~ "Autosave is failing"
+      assert settled =~ "Can&#39;t be saved: A plugin refused this draft."
+    end
+
+    # A REFUSED WRITE SAYS WHY. It said "Autosave is failing" and logged nothing, so a plugin's
+    # refusal, a validation and a crash all read the same.
+    test "and a refused draft write is logged and named in the flash", %{conn: conn, page: page} do
+      refuse_draft_writes()
+      {:ok, view, _html} = open_builder(conn, page)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          render_click(view, "op", %{
+            "kind" => "delete",
+            "node_id" => node_with_tag(view, "h1").id
+          })
+
+          send(self(), {:settled, render_async(view)})
+        end)
+
+      assert_received {:settled, settled}
+      assert log =~ "a draft write was refused"
+      assert log =~ "A plugin refused this draft."
+      assert flashes(view) =~ "Can&#39;t be saved: A plugin refused this draft."
+      assert flashes(view) =~ "Your edits are still here"
+      refute settled =~ "Autosave is failing"
+    end
+
+    # ONLY THE WORDS. A refusal can carry an Ash error's header, its breadcrumbs, the value it
+    # refused and a stack trace, and the flash showed every line of it.
+    test "and a refusal's stack trace and Ash wrapping are left out of the flash", %{
+      conn: conn,
+      page: page
+    } do
+      register_plugin(__MODULE__.NoisyDraftGate, "builder:draft:before_save")
+      {:ok, view, _html} = open_builder(conn, page)
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+        _settled = render_async(view)
+      end)
+
+      shown = flashes(view)
+
+      assert shown =~ "Can&#39;t be saved: template: is required."
+      refute shown =~ "Invalid Error"
+      refute shown =~ "Bread Crumbs"
+      refute shown =~ "Value:"
+      refute shown =~ "lib/ash"
+      refute shown =~ "update.ex:"
     end
 
     # AND NOTHING IS CALLED KEPT THAT WAS NOT WRITTEN. The canvas stays live for the whole round
@@ -2926,10 +2975,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
     test "a page holding text in it says so, and is not published", %{conn: conn, site: site} do
       {view, node} = term_row_page(conn, site, ~s( terms="E2E-0"))
 
-      assert has_element?(view, "#pb-attr-mistyped-#{node.id}-terms")
+      assert has_element?(
+               view,
+               "#pb-attr-mistyped-#{node.id}-terms",
+               "so the page cannot be published with it"
+             )
 
       html = publish!(view)
-      assert html =~ "Not saved"
+      assert html =~ "Not published"
       assert html =~ "term-row.terms holds text where the component takes a list or a map"
     end
   end
@@ -3385,6 +3438,101 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       tree = view |> editor() |> Map.fetch!(:tree)
       assert Tree.get(tree, text.id).text == "one\n  two\n    three"
     end
+
+    # A `<pre>` shows every character inside it, and so does anything whose `white-space` keeps
+    # what it holds. The canvas puts nothing of its own between an element and its children, at any
+    # level, so the text there is the text on the published page.
+    test "a pre shows the same text on the canvas as on the page", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            "<pre>line1\nline2\nline3</pre>" <>
+              ~s(<div class="whitespace-pre"><p><code>one\n  two</code></p></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      # The markup as it is sent: the test client's own render drops the whitespace between tags.
+      canvas =
+        conn
+        |> get("/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert canvas |> LazyHTML.query("pre") |> LazyHTML.text() == "line1\nline2\nline3"
+      assert canvas |> LazyHTML.query(".whitespace-pre") |> LazyHTML.text() == "one\n  two"
+    end
+
+    # A code block: the `<code>` is an element of its own inside the `<pre>`, which a core before
+    # mishka-group/mishka_cms_core#110 reads as text.
+    @tag :pre_elements
+    test "and so does a code block in a pre", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: "<pre><code>line1\n  line2\nline3</code></pre>")
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      canvas =
+        conn
+        |> get("/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert canvas |> LazyHTML.query("pre > code") |> Enum.count() == 1
+      assert canvas |> LazyHTML.query("pre") |> LazyHTML.text() == "line1\n  line2\nline3"
+    end
+
+    # The browser drops the one newline right after a `<pre>`'s start tag, so a block written
+    # `<pre>` and then its first line below starts at that line on the page, and on the canvas too.
+    test "a pre that opens on a new line starts at its first line", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            "<pre>\nlead\n  indented\n</pre>" <>
+              "<listing>\n<code>one\n  two</code></listing>"
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      canvas =
+        conn
+        |> get("/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert canvas |> LazyHTML.query("pre") |> LazyHTML.text() == "lead\n  indented\n"
+      assert canvas |> LazyHTML.query("listing") |> LazyHTML.text() == "one\n  two"
+
+      # The words typed into that first line are what the page shows, and the line break the page
+      # drops stays in the source.
+      {:ok, live_canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      text =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :text and &1.text =~ "lead"))
+
+      render_click(live_canvas, "set_text", %{
+        "id" => text.id,
+        "text" => "lead\n  indented\n",
+        "pre" => true
+      })
+
+      assert Tree.get(editor(view).tree, text.id).text == "\nlead\n  indented\n"
+
+      render_click(live_canvas, "set_text", %{
+        "id" => text.id,
+        "text" => "lead\n  typed\n",
+        "pre" => true
+      })
+
+      assert Tree.get(editor(view).tree, text.id).text == "\nlead\n  typed\n"
+    end
   end
 
   describe "the controls a node can actually take" do
@@ -3768,5 +3916,28 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert by_status[500] =~ "Boom", "the 404 tree was published over the 500 entry"
       assert by_status[404] =~ "Not found"
     end
+  end
+
+  defmodule NoisyDraftGate do
+    @moduledoc false
+    # A draft gate that refuses with an Ash error's own `Exception.message/1`, trace and all.
+    use MishkaInstaller.Event.Hook, event: "builder:draft:before_save"
+
+    @refusal """
+
+    Bread Crumbs:
+      > Error returned from: MishkaCmsCore.Runtime.PageDraft.autosave
+
+    Invalid Error
+
+    * template: is required.
+
+    Value: ""
+        (ash 3.24.0) lib/ash/actions/update/update.ex:212: Ash.Actions.Update.run/4
+        (mishka_cms_core 0.0.4) lib/mishka_cms_core/runtime/authoring/drafts.ex:88: MishkaCmsCore.Runtime.Authoring.Drafts.autosave/8
+    """
+
+    @impl true
+    def call(payload), do: {:reply, %{payload | error: @refusal}}
   end
 end

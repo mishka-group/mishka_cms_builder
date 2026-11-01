@@ -2076,13 +2076,17 @@ defmodule MishkaCmsBuilder.EditorSession do
   end
 
   @doc """
-  Holds an overlay open on the canvas, or lets it shut again.
+  Opens an overlay on the canvas, or closes it again.
 
-  An overlay opens on its own while it is selected — see the `data-pb-overlay` rules in
-  `MishkaCmsBuilderWeb.Live.CanvasLive` — so pin one only to keep it open while working
-  on something else, which is the case selection alone cannot express.
+  This is the one way an author opens a dialog, a drawer or a sidebar to edit it: the Inspector's
+  "Open on canvas" button and the pin on its layers row both call it. Selecting the overlay's chip
+  only selects it, so it can be moved and its properties set without it covering the page. The
+  one automatic opening is a node INSIDE a shut overlay selected from the layers rail, which opens
+  it for as long as that selection lasts — see the `data-pb-overlay` rules in
+  `MishkaCmsBuilderWeb.Live.CanvasLive`. An opened overlay is drawn in the flow, where its chip
+  stood, and stays open until it is toggled off.
 
-  Session state like `hidden`, and never serialized: a dialog left pinned is still a dialog that
+  Session state like `hidden`, and never serialized: a dialog left open here is still a dialog that
   opens from its trigger on the published page.
   """
   @spec toggle_pinned(String.t(), String.t()) :: {:ok, t()} | {:error, term()}
@@ -2104,7 +2108,7 @@ defmodule MishkaCmsBuilder.EditorSession do
   @spec hidden?(t(), Node.t()) :: boolean()
   def hidden?(%{hidden: hidden}, %Node{} = node), do: Node.hidden?(node, hidden)
 
-  @doc "Whether an overlay is being held open on the canvas."
+  @doc "Whether an overlay is opened on the canvas with `toggle_pinned/2`."
   @spec pinned?(t(), String.t()) :: boolean()
   def pinned?(%{pinned: pinned}, node_id) when is_binary(node_id),
     do: MapSet.member?(pinned || MapSet.new(), node_id)
@@ -2757,20 +2761,25 @@ defmodule MishkaCmsBuilder.EditorSession do
   # to it timed out. Recorded like any whole-document replacement, the first undo goes back to the
   # document the draft replaced and redo brings the draft back. It stays off the timeline: loading a
   # draft is how the document arrives, not a change to it.
+  #
+  # AND THE DRAFT'S ELEMENT CSS BECOMES THE HOLD. A draft holds the Custom CSS applied to it in Draft
+  # (`element_css`, mishka_cms_core 0.0.5 on), so opening it brings that CSS back after a reload, and
+  # the publish writes it; the hold of the document open before does not follow the author into
+  # another draft. A draft with no such field leaves the hold as it was.
   @spec edit_draft(String.t(), map(), String.t()) :: {:ok, t()} | {:error, term()}
-  def edit_draft(token, %{id: id, label: label}, template) do
+  def edit_draft(token, %{id: _id, label: _label} = draft, template) do
     with {:ok, parsed} <- Tree.parse(template) do
       step = make_ref()
 
       commit(
         token,
-        &opened_draft(&1, backfill_ids(parsed, &1.components), id, label, step),
+        &opened_draft(&1, backfill_ids(parsed, &1.components), draft, step),
         steps: [step]
       )
     end
   end
 
-  defp opened_draft(session, tree, id, label, step) do
+  defp opened_draft(session, tree, %{id: id, label: label} = draft, step) do
     entry = Journal.replacement_entry(session, tree, :draft, step)
 
     next = %{
@@ -2782,6 +2791,7 @@ defmodule MishkaCmsBuilder.EditorSession do
         step_run: nil,
         draft_id: id,
         draft_label: label,
+        staged_element_css: draft_css(draft, session),
         # OPENING A DRAFT *IS* BEING IN THE DRAFT STAGE, and the caller used to say so in a
         # second call. Two calls meant two ETS reads of the session — each one copying the whole
         # tree out — two writes, and two broadcasts to every canvas frame for one click, on the
@@ -2807,6 +2817,10 @@ defmodule MishkaCmsBuilder.EditorSession do
 
     {:store, next, {:draft, :opened}}
   end
+
+  defp draft_css(%{element_css: css}, _session) when is_map(css) and map_size(css) > 0, do: css
+  defp draft_css(%{element_css: _none}, _session), do: nil
+  defp draft_css(_no_field, session), do: session.staged_element_css
 
   @doc "Replaces the palette metadata containment consults — re-read when a component is installed."
   @spec put_components(String.t(), list()) :: {:ok, t()} | {:error, term()}

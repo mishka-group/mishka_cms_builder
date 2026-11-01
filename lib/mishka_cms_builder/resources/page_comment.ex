@@ -212,7 +212,7 @@ defmodule MishkaCmsBuilder.PageComment do
         enabled false
       end
 
-      empty_state message: dgettext_noop("mishka_gervaz", "No notes on this page yet"),
+      empty_state message: dgettext_noop("mishka_gervaz", "No notes here yet"),
                   icon: "hero-chat-bubble-left-right"
     end
 

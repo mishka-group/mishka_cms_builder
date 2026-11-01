@@ -2174,6 +2174,41 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.FormsTest do
       render_click(view, "select", %{"id" => dom(view, "name-box").id})
       assert has_element?(view, ~s([data-role="pb-crumbs"] button), "Contact")
     end
+
+    # THE DOCUMENT IS NO NODE. The body crumb sent `select` with no id, which no clause takes, so
+    # the press raised and the editor went down with it.
+    test "the body crumb drops the selection, as Escape does", %{conn: conn, site: site} do
+      view = joining(conn, site)
+      render_click(view, "select", %{"id" => dom(view, "name-box").id})
+
+      view |> element("#pb-crumb-body") |> render_click()
+
+      assert Process.alive?(view.pid)
+      assert editor(view).selection == nil
+      refute has_element?(view, ~s([data-role="pb-crumbs"] button), "Contact")
+    end
+
+    test "and does the same in the component builder", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "crumbed",
+          template: ~s|<div><h2 id="crumb-heading">Hi</h2></div>|,
+          attrs: [],
+          slots: []
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      render_click(view, "select", %{"id" => node_with_tag(view, "h2").id})
+
+      view |> element("#pb-crumb-body") |> render_click()
+
+      assert Process.alive?(view.pid)
+      assert editor(view).selection == nil
+    end
   end
 
   # The Inspector's Form panel, on the two deep forms: Phoenix's `<.form>` and Chelekom's Form

@@ -303,6 +303,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     )
     |> assign(:missing?, false)
     |> assign(:selection, nil)
+    |> assign(:selection_anchor, nil)
     |> assign(:preview?, true)
     |> assign(:example?, true)
     |> assign(:page_title, gettext("Example"))
@@ -412,7 +413,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
         <div id="pb-page-starter-foot">
           <span id="pb-page-starter-note">
-            {gettext("Or drop a component straight onto the page.")}
+            {gettext("Or drop a component straight onto the canvas.")}
           </span>
           <button type="button" id="pb-starter-scratch" phx-click="starter_scratch">
             {gettext("Start from scratch")}
@@ -535,6 +536,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # parent window on every patch where it changed, and the frame's spinner is dismissed by that.
     |> assign(:revision, session.revision)
     |> assign(:selection, session.selection)
+    |> assign(:selection_anchor, selection_anchor(session.tree, session.selection))
     |> assign(:locked, session.locked)
     |> assign(:hidden, session.hidden)
     |> assign(:pinned, session.pinned || MapSet.new())
@@ -885,11 +887,30 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # per-node markup. Rendering `data-marked` on every node would re-render the whole document on
   # every ⌘-click, which is the trap the selection ring already sidesteps.
   defp sync_selection(socket, _previous, %{selection: selection} = session) do
+    socket = assign_session(socket, session)
+
     socket
-    |> assign_session(session)
-    |> push_event("pb:selected", %{id: selection})
+    |> push_event("pb:selected", %{id: selection, anchor: socket.assigns.selection_anchor})
     |> push_event("pb:marked", %{ids: MapSet.to_list(session.marked || MapSet.new())})
   end
+
+  # A SLOT HAS NO ELEMENT OF ITS OWN ON THE CANVAS. A component draws its slots inside its own
+  # markup, so a sidebar's `<:item>` selected in the layers rail named an id no element carries: the
+  # hook painted `data-selected` on nothing, and the rules that keep an overlay open while something
+  # in it is selected let go of it, so an opened sidebar snapped back to `fixed` and the full height
+  # of the screen. The anchor is the nearest ancestor that is not a slot, which the hook rings in
+  # the slot's place; `nil` for anything else, which carries its own `data-node-id`.
+  defp selection_anchor(tree, id) when is_binary(id) do
+    case Tree.get(tree, id) do
+      %Node{kind: :slot} ->
+        tree |> Tree.ancestors(id) |> Enum.find_value(&(&1.kind != :slot && &1.id))
+
+      _drawn_or_gone ->
+        nil
+    end
+  end
+
+  defp selection_anchor(_tree, _id), do: nil
 
   @impl true
   # PREVIEW ANSWERS ONE EVENT: the way out of it. Every other event here belongs to editing, and the
@@ -976,7 +997,11 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     EditorSession.apply_op(socket.assigns.token, %{
       kind: :set_text,
       node_id: id,
-      text: text |> unwrapped(params["pre"]) |> escape_typed()
+      text:
+        text
+        |> unwrapped(params["pre"])
+        |> escape_typed()
+        |> with_lead_break(socket.assigns.tree, id)
     })
 
     {:noreply, socket}
@@ -1208,9 +1233,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     ~H"""
     <.canvas_notice
       nonce={assigns[:csp_nonce]}
-      message={
-        gettext("This editing session has expired. Reopen the page from the builder to continue.")
-      }
+      message={gettext("This editing session has expired. Reopen it from the builder to continue.")}
     />
     """
   end
@@ -1238,174 +1261,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       /* A field is being dragged: every form it could join is outlined until the drag ends. */
       html[data-pb-field-drag] [data-pb-form] { outline: 2px dashed #8b5cf6; outline-offset: 3px; }
 
-      /* AN OVERLAY OPENS WHEN IT IS SELECTED, AND SHUTS WHEN THE SELECTION MOVES ON.
-
-         Fourteen kit components render their content closed, and every one of them used to be held
-         open for the whole session: a page with a dialog, a drawer and a dropdown on it drew all
-         three over the content they belong to, permanently, and the author had no way to see the
-         page. Selection is the answer every editor of this kind arrives at — clicking the thing you
-         mean to edit is already the gesture, so opening it costs no second one.
-
-         `data-selected` is painted by the canvas hook on the click itself, which is why this is CSS
-         and not an assign: threading the selection through every node would re-render the whole
-         document on every click, which is the trap the selection ring already sidesteps. `:has()`
-         is what keeps it open while something INSIDE it is selected — a heading in a dialog is the
-         author editing the dialog.
-
-         `data-pb-reveal` is the third way in: the pin on the layers row, for the one case selection
-         cannot express — keeping an overlay open while working on the page behind it.
-
-         Each rule reaches DOWN, because none of this lands on the element the canvas wraps:
-         `data-pb-overlay` is on the wrapper, the `hidden` is on the component's own root a level
-         down and the `fixed` backdrop a level below that. `!important` because what is being beaten
-         is a utility class, and no selector out-specifies a class from a rule that is not one.
-
-         A node whose own root is a `<td>` or an `<option>` has no wrapper — see `component_frame/1`
-         — so for it the two would be the same element and the rule would reach past what it means
-         to open. No kit ships a component that is both concealed and stamped, and
-         `MishkaCmsBuilderWeb.Live.TableCellCanvasTest` is what says so.
-
-         `.fixed` is neutralised rather than left alone: a dialog pins itself to the viewport, which
-         is right for a dialog and wrong for something being edited in place — it would cover the
-         page it belongs to. `aria-hidden` is the kit's own marker for its scrim, and an author is
-         editing the content, not the overlay.
-
-         AND ONLY `.fixed`. `.absolute` was swept in with it and is not the same thing: pinning to
-         the VIEWPORT is what covers the page, while absolute positioning is ordinary layout inside
-         the component's own box. A carousel was in this set then, so selecting one un-positioned its
-         own prev and next buttons and both fell into a heap in the top-left corner — reported as
-         "the next and prev button is not obvious how they are and where they are".
-
-         IN THE BASE LAYER, because that is where the rule keeping `[hidden]` shut lives: Tailwind's
-         preflight writes `[hidden] { display: none !important }` inside `@layer base`, and an
-         `!important` in a cascade layer outranks every unlayered one, whatever the selectors. So a
-         panel hidden by the attribute — `chelekom-dropdown-content`, a headless popover's popup —
-         stayed shut when selected and drew a box 0px high. Inside the same layer the selector below
-         is the more specific one. The scrim rule moves with the reveal so the two keep the order
-         they had between themselves; a stylesheet with no base layer gets one, which changes
-         nothing else.
-
-         PREVIEW NEVER GETS THIS: the whole `<style>` is inside `:if={!@preview?}`, so a visitor sees
-         the component close itself exactly as its author intended. */
-      @layer base {
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) :is(.hidden, .invisible, .opacity-0, .max-h-0, [hidden]) {
-          display: block !important;
-          visibility: visible !important;
-          opacity: 1 !important;
-          max-height: none !important;
-          pointer-events: auto !important;
-        }
-
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) .fixed { position: static !important; transform: none !important; }
-
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) [data-floating-content] { visibility: visible !important; opacity: 1 !important; }
-
-        /* THE SCRIM GOES, THE PANEL STAYS. A modal's backdrop, a drawer's overlay and a scroll area's
-           two scrollbars are all `aria-hidden` and all decorative — none holds a node an author put
-           there — so hiding them while the overlay is open is right. A dropdown's and a popover's
-           CONTENT is `aria-hidden` too while shut, and it is the one thing the author came to fill:
-           this rule was hiding the panel the reveal above had just opened, which is why a dropdown
-           showed its trigger and nothing else and read as "we cannot add any content inside". */
-        :is(
-          [data-pb-reveal="true"],
-          [data-pb-overlay][data-selected="true"],
-          [data-pb-overlay]:has([data-selected="true"])
-        ) [aria-hidden="true"]:not([data-floating-content]):not(:has([data-node-id])) {
-          display: none !important;
-        }
-      }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) { outline: 2px dotted #8580d8; outline-offset: 3px; }
-
-      /* AND WHILE IT IS SHUT IT IS STILL SOMETHING ON THE PAGE, so it says what it is rather than
-         collapsing to nothing. A dialog's root is `display:none`, so a closed one occupies no space
-         at all: the author dropped a modal, watched it vanish, and had nothing left to click. The
-         chip is what they click.
-
-         `attr()` rather than markup, for the same reason the empty-dialog label below is: what is
-         inside the wrapper belongs to the COMPONENT, and the editor's words have no business in
-         somebody's dialog. */
-      [data-pb-overlay] {
-        position: relative;
-        display: block;
-        min-height: 32px;
-      }
-
-      [data-pb-overlay]::before {
-        display: flex;
-        align-items: center;
-        height: 32px;
-        padding: 0 11px;
-        border: 1px dashed #c3c1f0;
-        border-radius: 9px;
-        background: #faf9ff;
-        color: #6c67c9;
-        font: 600 11.5px ui-sans-serif, system-ui;
-        letter-spacing: .01em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      )::before { display: none; }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      ) { min-height: 0; }
-
-      /* AND ONE WITH NOTHING IN IT SAYS WHAT IT IS AND ASKS FOR SOMETHING. Revealing an empty dialog
-         reveals a few pixels of the kit's own padding, which is not a target anybody can hit — so
-         the wrapper is given a real height and its own words. `attr()` rather than markup: what is
-         inside the wrapper is the component's, and this is the editor talking. */
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      )[data-pb-hollow] {
-        position: relative;
-        min-height: 140px;
-        border: 2px dashed #c3c1f0;
-        border-radius: 12px;
-        background: #faf9ff;
-      }
-
-      :is(
-        [data-pb-reveal="true"],
-        [data-pb-overlay][data-selected="true"],
-        [data-pb-overlay]:has([data-selected="true"])
-      )[data-pb-hollow]::after {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #6c67c9;
-        font: 600 12.5px ui-sans-serif, system-ui;
-        letter-spacing: .01em;
-        pointer-events: none;
-      }
+      /* A shut overlay is a chip; opened, it is drawn in the flow — see `overlay_rules/0`. */
+      <%= style_body(overlay_rules()) %>
 
       /* NOTHING DRAWN IS STILL SOMETHING THERE. The canvas hook sets `data-pb-blank` on a
          component's box when nothing inside it has a size (`markBlanks` in `hooks.js`): a pager with
@@ -1694,7 +1551,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       phx-hook="PbCanvas"
       dir={@dir}
       data-token={@token}
-      {%{"data-selection" => @selection}}
+      {%{"data-selection" => @selection, "data-selection-anchor" => @selection_anchor}}
       data-preview={to_string(@preview?)}
       data-example={to_string(@example?)}
       data-revision={@revision}
@@ -1986,17 +1843,178 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end
   end
 
+  # AN OVERLAY IS A CHIP UNTIL THE AUTHOR OPENS IT, the way Elementor's editing mode, Bricks' "keep
+  # open while styling", Oxygen and Webflow's Show menu all work. Fourteen kit components render
+  # their content closed — a dialog, a drawer, a dropdown — and the canvas draws each shut one as a
+  # chip with its name (`data-pb-overlay` on the editor's wrapper, the label drawn by `::before`).
+  #
+  # THE CHIP IS A HANDLE. Clicking it selects the component, so the Inspector shows its properties,
+  # and dragging it moves it; neither opens it. Opening it on a click covered the page the author
+  # was arranging it on, and a drag started on an open dialog moved the dialog's contents instead.
+  #
+  # OPENING IS ASKED FOR, three ways:
+  #
+  #   * `data-pb-reveal`, written by the server for an overlay in the session's `pinned` set: the
+  #     Inspector's "Open on canvas" button and the pin on its layers row. It stays open until it is
+  #     closed the same way, and is never saved.
+  #   * `:has([data-selected])`: a node INSIDE a shut overlay, selected from the layers rail, opens it
+  #     for as long as that selection lasts — the author is editing what is inside it.
+  #   * `data-pb-anchored`: the same for a slot, which has no element of its own, so the hook rings
+  #     the component it belongs to and marks the ring as standing in for something inside it.
+  #
+  # `data-selected` and the anchor mark are painted by the canvas hook on the click itself, which is
+  # why this is CSS and not an assign: threading the selection through every node would re-render
+  # the whole document on every click.
+  #
+  # AN OPENED OVERLAY IS DRAWN IN THE FLOW, where its chip stood. Each rule reaches DOWN, because
+  # `data-pb-overlay` is on the wrapper, the `hidden` on the component's own root a level down and
+  # the `fixed` backdrop below that; `!important` because what is being beaten is a utility class. A
+  # node whose own root is a `<td>` or an `<option>` has no wrapper (`component_frame/1`), so the two
+  # would be one element — no kit ships a component that is both, and
+  # `MishkaCmsBuilderWeb.Live.TableCellCanvasTest` says so.
+  #
+  #   * `.fixed` goes back in the flow: pinned to the viewport, a dialog covers the page it belongs
+  #     to. Only `.fixed`: `.absolute` is layout inside the component's own box, and a carousel's
+  #     prev and next buttons fell into a heap when it was swept in too.
+  #   * Its height and slide go with the pin. A drawer and `chelekom-sidebar` are `fixed h-screen`,
+  #     and back in the flow that stood three links as tall as the screen; `height: auto` gives it
+  #     its content's. A drawer is slid away with `-translate-x-full`, which Tailwind v4 writes as the
+  #     `translate` property that `transform: none` does not reach.
+  #   * `aria-hidden` is the kit's scrim — a modal's backdrop, a drawer's overlay — and is hidden; a
+  #     dropdown's and a popover's panel is `aria-hidden` too while shut, and is the thing the author
+  #     came to fill, so `[data-floating-content]` and anything holding a node is kept.
+  #   * One with nothing in it gets a real height and its own words (`data-pb-hollow`), since the
+  #     kit's own padding is not a target anybody can hit.
+  #   * It is drawn above a docked `fixed` sidebar beside it, which painted over an opened drawer:
+  #     `z-index: 50` on the wrapper, already `position: relative`, and far under the canvas chrome.
+  #
+  # IN THE BASE LAYER, because the rule keeping `[hidden]` shut lives there: Tailwind's preflight
+  # writes `[hidden] { display: none !important }` inside `@layer base`, and an `!important` in a
+  # cascade layer outranks every unlayered one. Inside the same layer these selectors are the more
+  # specific ones.
+  #
+  # A SIDEBAR THAT STAYS ON THE SCREEN IS EDITED WHERE IT SITS. `chelekom-sidebar` is a drawer below
+  # `md` and a fixed column from `md` up (`PaletteEntry.persistent_at/1`), and its wrapper says so
+  # with `data-pb-persistent="md"`. The canvas frames are real iframes at the device's width, so a
+  # media query is the answer: at and above that width it has no chip and none of the rules above,
+  # the real fixed column stays put, a click selects it and its children are ordinary nodes; below
+  # it, it is a drawer like any other. Tailwind's own breakpoints, so the canvas switches where the
+  # component does.
+  #
+  # PREVIEW NEVER GETS THIS: the whole `<style>` is inside `:if={!@preview?}`, so a visitor sees the
+  # component close itself exactly as its author intended.
+  @opened ~s|:is([data-pb-reveal="true"], [data-pb-overlay]:has([data-selected="true"]), | <>
+            ~s|[data-pb-overlay][data-pb-anchored="true"])|
+
+  @breakpoint_widths [
+    {"sm", "40rem"},
+    {"md", "48rem"},
+    {"lg", "64rem"},
+    {"xl", "80rem"},
+    {"2xl", "96rem"}
+  ]
+
+  defp overlay_rules do
+    always = opened_rules(@opened <> ":not([data-pb-persistent])")
+
+    by_width =
+      for {name, width} <- @breakpoint_widths, into: "" do
+        persistent = ~s|[data-pb-persistent="#{name}"]|
+
+        """
+        @media (width < #{width}) {
+        #{opened_rules(@opened <> persistent)}
+        }
+
+        @media (width >= #{width}) {
+          #{persistent}::before, #{persistent}[data-pb-hollow]::after { display: none; }
+          #{persistent} { min-height: 0; }
+        }
+        """
+      end
+
+    chip() <> always <> by_width
+  end
+
+  defp chip do
+    """
+    [data-pb-overlay] {
+      position: relative;
+      display: block;
+      min-height: 32px;
+    }
+
+    [data-pb-overlay]::before {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      padding: 0 11px;
+      border: 1px dashed #c3c1f0;
+      border-radius: 9px;
+      background: #faf9ff;
+      color: #6c67c9;
+      font: 600 11.5px ui-sans-serif, system-ui;
+      letter-spacing: .01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    """
+  end
+
+  defp opened_rules(open) do
+    """
+    @layer base {
+      #{open} :is(.hidden, .invisible, .opacity-0, .max-h-0, [hidden]) {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        max-height: none !important;
+        pointer-events: auto !important;
+      }
+
+      #{open} .fixed { position: static !important; transform: none !important; translate: none !important; height: auto !important; }
+
+      #{open} [data-floating-content] { visibility: visible !important; opacity: 1 !important; }
+
+      #{open} [aria-hidden="true"]:not([data-floating-content]):not(:has([data-node-id])) {
+        display: none !important;
+      }
+    }
+
+    #{open} { outline: 2px dotted #8580d8; outline-offset: 3px; min-height: 0; z-index: 50; }
+
+    #{open}::before { display: none; }
+
+    #{open}[data-pb-hollow] {
+      position: relative;
+      min-height: 140px;
+      border: 2px dashed #c3c1f0;
+      border-radius: 12px;
+      background: #faf9ff;
+    }
+
+    #{open}[data-pb-hollow]::after {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6c67c9;
+      font: 600 12.5px ui-sans-serif, system-ui;
+      letter-spacing: .01em;
+      pointer-events: none;
+    }
+    """
+  end
+
   @word_marker "␞"
 
   defp chrome_words do
-    reveal =
-      ~s|:is([data-pb-reveal="true"], [data-pb-overlay][data-selected="true"], | <>
-        ~s|[data-pb-overlay]:has([data-selected="true"]))|
-
     """
     [data-pb-overlay]::before { content: #{css_content(gettext("%{name} — opens from its trigger", name: @word_marker), "data-pb-overlay")}; }
-    #{reveal}[data-pb-hollow]::after { content: #{css_content(gettext("Empty %{name} — drop something in here", name: @word_marker), "data-pb-hollow")}; }
-    #{reveal}[data-pb-hollow][data-pb-sealed]::after { content: #{css_content(gettext("%{name} — draws its own content; nothing goes in here", name: @word_marker), "data-pb-hollow")}; }
+    #{@opened}[data-pb-hollow]::after { content: #{css_content(gettext("Empty %{name} — drop something in here", name: @word_marker), "data-pb-hollow")}; }
+    #{@opened}[data-pb-hollow][data-pb-sealed]::after { content: #{css_content(gettext("%{name} — draws its own content; nothing goes in here", name: @word_marker), "data-pb-hollow")}; }
     :is([data-pb-live]:hover, [data-pb-live][data-selected="true"])::after { content: #{css_content(gettext("Live · %{name} — runs on the published page", name: @word_marker), "data-pb-live")}; }
     [data-pb-blank]::before { content: #{css_content(gettext("%{name} — draws nothing visible here", name: @word_marker), "data-component")}; }
     [data-pb-blank][data-stateful]::before { content: #{css_content(gettext("Live · %{name} — draws nothing here; it fills in on the published page", name: @word_marker), "data-component")}; }
@@ -2250,16 +2268,20 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   #
   # Only inside a COMPONENT, which is where a positional rule the editor did not write can see it.
   defp visible_node(%{node: %Node{kind: :text, meta: %{whitespace?: true}} = node} = assigns) do
+    assigns = assign(assigns, :shown_text, shown_text(assigns.tree, node))
+
     case trailing_in_component?(assigns, node) do
       true ->
-        ~H"{@node.text}"
+        ~H"{@shown_text}"
 
       false ->
-        ~H|<span data-node-id={@node.id} data-kind="text" data-ws="true">{@node.text}</span>|
+        ~H|<span data-node-id={@node.id} data-kind="text" data-ws="true">{@shown_text}</span>|
     end
   end
 
   defp visible_node(%{node: %Node{kind: :text}} = assigns) do
+    assigns = assign(assigns, :shown_text, shown_text(assigns.tree, assigns.node))
+
     ~H"""
     <span
       draggable="true"
@@ -2268,7 +2290,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       {wrapper_attrs(assigns)}
       phx-click="select"
       phx-value-id={@node.id}
-    >{text_html(@node.text)}</span>
+    >{text_html(@shown_text)}</span>
     """
   end
 
@@ -2320,7 +2342,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       |> assign(:component_name, Node.component_name(assigns.node))
       |> assign(
         :missing,
-        missing_required(assigns.node, assigns[:required_attrs] || %{}, assigns.tree)
+        missing_required(assigns.node, assigns[:required_attrs] || %{})
       )
 
     render_component_node(assigns)
@@ -2377,6 +2399,38 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     """
   end
 
+  # A TEXTAREA'S CONTENT IS TEXT, NOT MARKUP. The browser reads everything up to `</textarea>` as the
+  # field's value, so the `<span data-node-id …>` the canvas draws a text node as, and the dev
+  # annotations around it, showed as words in the box. Its text children are written into it as
+  # text, through `text_html/1` like any other run, and nothing else is: an element dropped inside
+  # one keeps its row in the layers rail, and the published page would show its markup as text.
+  # A `<title>` reads its content the same way. `phx-no-format` keeps the formatter from indenting
+  # the content, which would put whitespace in the value.
+  @raw_text_tags ~w(textarea title)
+
+  defp visible_node(%{node: %Node{kind: :tag, tag: tag}} = assigns) when tag in @raw_text_tags do
+    assigns =
+      assigns
+      |> assign(
+        :html_attrs,
+        Map.merge(html_attrs(assigns.node, assigns.tree), form_marks(assigns))
+      )
+      |> assign(:raw_text, raw_text(assigns.node, assigns.tree))
+
+    ~H"""
+    <.dynamic_tag
+      tag_name={@node.tag}
+      draggable="true"
+      data-node-id={@node.id}
+      style={wrapper_style(assigns)}
+      phx-click="select"
+      phx-value-id={@node.id}
+      {@html_attrs}
+      phx-no-format
+    >{text_html(@raw_text)}</.dynamic_tag>
+    """
+  end
+
   defp visible_node(%{node: %Node{meta: %{self_close: true}}} = assigns) do
     assigns =
       assign(
@@ -2398,6 +2452,10 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     """
   end
 
+  # NOTHING OF THE CANVAS'S OWN BETWEEN AN ELEMENT AND ITS CHILDREN. A `<pre>`, or anything whose
+  # `white-space` keeps what it holds, shows every character inside it, and the newline and indent
+  # this template put around the children were a blank line and a margin the page does not have,
+  # one more at every level. `phx-no-format` keeps the formatter from putting them back.
   defp visible_node(assigns) do
     assigns =
       assign(
@@ -2415,8 +2473,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       phx-click="select"
       phx-value-id={@node.id}
       {@html_attrs}
-    >
-      <.pb_node
+      phx-no-format
+    ><.pb_node
         :for={child <- @node.children}
         id={child}
         tree={@tree}
@@ -2431,8 +2489,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         shapers={@shapers}
         holders={@holders}
         form_marks={@form_marks}
-      />
-    </.dynamic_tag>
+      /></.dynamic_tag>
     """
   end
 
@@ -2444,6 +2501,50 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   defp trailing_in_component?(_assigns, _node), do: false
+
+  # THE LINE BREAK A `<pre>` OPENS WITH IS NOT SHOWN. The browser drops one line break right after a
+  # `<pre>`'s or a `<listing>`'s start tag, so `<pre>\nlead</pre>` starts at "lead" on the page. On
+  # the canvas the text is drawn in a box of its own, where that break is the box's first character
+  # and stays, a blank line the page does not have, so the box leaves it out. Words typed into the
+  # box get it back (`with_lead_break/3`), so the source keeps it. A `<textarea>` writes its text
+  # right after its start tag (`raw_text/2`), where the browser drops it.
+  @lead_break ~r/\A\r?\n/
+  @drops_lead_break ~w(pre listing)
+
+  defp shown_text(tree, %Node{text: text} = node) when is_binary(text) do
+    case opens_pre?(tree, node) do
+      true -> String.replace(text, @lead_break, "")
+      false -> text
+    end
+  end
+
+  defp shown_text(_tree, %Node{text: text}), do: text
+
+  defp opens_pre?(tree, %Node{id: id, parent_id: parent_id}) do
+    case Tree.get(tree, parent_id) do
+      %Node{kind: :tag, tag: tag, children: [^id | _rest]} -> tag in @drops_lead_break
+      _other -> false
+    end
+  end
+
+  defp with_lead_break(typed, tree, id) do
+    with %Node{text: text} = node when is_binary(text) <- Tree.get(tree, id),
+         true <- opens_pre?(tree, node),
+         [break] <- Regex.run(@lead_break, text) || Regex.run(@lead_break, typed) do
+      break <> typed
+    else
+      _shown_as_stored -> typed
+    end
+  end
+
+  defp raw_text(node, tree) do
+    Enum.map_join(node.children, fn id ->
+      case Tree.get(tree, id) do
+        %Node{kind: :text, text: text} when is_binary(text) -> text
+        _element_or_gone -> ""
+      end
+    end)
+  end
 
   # A function the editor cannot resolve, or one missing something it declared required. Both are
   # the editor's own markup rather than the component's, so both keep the box.
@@ -2501,6 +2602,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       |> assign(:wants_media, wants_media(assigns))
       |> assign(:overlay, overlay(assigns))
       |> assign(:reveal, reveal(assigns))
+      |> assign(:persistent, persistent(assigns))
       |> assign(:hollow, hollow(assigns))
       |> then(&assign(&1, :sealed, sealed(&1)))
 
@@ -2612,18 +2714,30 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # A KIT SAYS IT IN ITS OWN MARKUP; AN AUTHOR SAYS IT IN A CLASS. `<div class="[&>*]:rounded-none">`
   # is the same promise written by hand, and the canvas has to keep it the same way — otherwise the
-  # editor disagrees with the page over markup the author wrote themselves.
-  defp shapes_children?(%Node{kind: :component} = parent, assigns) do
-    case assigns[:shapers] do
-      nil -> false
-      names -> MapSet.member?(names, Node.component_name(parent))
-    end
-  end
+  # editor disagrees with the page over markup the author wrote themselves. A component's class is
+  # read too: `<.form class="space-y-4">` is a component node, and it spaces its own fields.
+  defp shapes_children?(%Node{kind: :component} = parent, assigns),
+    do: authored_shaping?(parent) or kit_shaping?(parent, assigns[:shapers])
 
-  defp shapes_children?(%Node{kind: :tag} = parent, _assigns),
-    do: PaletteEntry.shapes_children?(Node.attr_text(parent, "class"))
+  defp shapes_children?(%Node{kind: :tag} = parent, _assigns), do: authored_shaping?(parent)
 
   defp shapes_children?(_parent, _assigns), do: false
+
+  defp kit_shaping?(_parent, nil), do: false
+  defp kit_shaping?(parent, names), do: MapSet.member?(names, Node.component_name(parent))
+
+  # `space-y-*`, `space-x-*` and `divide-*` REACH THE CHILD TOO, through Tailwind's
+  # `:where(& > :not(:last-child))`. Around a wrapper the gap landed on the editor's box and the
+  # field's own `mb-2` collapsed into it: 16px under `space-y-4` on the canvas, while on the page the
+  # field's `mb-2` outranks the zero-specificity `:where` and the gap is 8px.
+  @spaces_children ~r/(?<![\w-])-?(?:space-[xy]|divide)-/
+
+  defp authored_shaping?(parent) do
+    case Node.attr_text(parent, "class") do
+      nil -> false
+      class -> PaletteEntry.shapes_children?(class) or Regex.match?(@spaces_children, class)
+    end
+  end
 
   # `data-pb-frame` says the box is the editor's, which is what the canvas hook measures to give a
   # component that draws nothing a floor (`markBlanks` in `hooks.js`). Never on a stamped root, which
@@ -2681,6 +2795,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       "data-incomplete" => missing != [] && "true",
       "data-pb-overlay" => assigns[:overlay],
       "data-pb-reveal" => assigns[:reveal],
+      "data-pb-persistent" => assigns[:persistent],
       "data-pb-hollow" => assigns[:hollow],
       "data-pb-sealed" => assigns[:sealed],
       "data-pb-hidden" => Visibility.hidden?(assigns.node) && "true",
@@ -2732,7 +2847,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   #
   # It was then held open for the whole session, which traded that for the opposite complaint: three
   # overlays on a page cover the page. The label is what the `data-pb-overlay` rules in
-  # `#pb-canvas-chrome` draw as a chip, and selecting it is what opens it.
+  # `#pb-canvas-chrome` draw as a chip, a handle that selects and moves the component; opening it is
+  # the author's explicit ask — see `overlay_rules/0`.
   #
   # Never in preview: a visitor sees the component close itself exactly as its author intended.
   defp overlay(%{preview?: true}), do: nil
@@ -2744,9 +2860,9 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end
   end
 
-  # HELD OPEN ON PURPOSE. Selection opens an overlay and closing it again is the selection moving on,
-  # which is the wrong answer exactly once: when the point is the page BEHIND the dialog. The pin on
-  # the layers row is that case, and it is the only thing this attribute now means.
+  # OPENED ON PURPOSE. The Inspector's "Open on canvas" button and the pin on the layers row put the
+  # overlay in the session's `pinned` set, and this is what draws it open, in the flow, until the
+  # author closes it the same way.
   defp reveal(%{preview?: true}), do: nil
 
   defp reveal(%{node: node} = assigns) do
@@ -2776,12 +2892,23 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # to make a drop the core then refused. `data-pb-sealed` picks the other sentence.
   defp sealed(%{hollow: hollow, node: node} = assigns) when is_binary(hollow) do
     case Map.get(assigns[:conceals] || %{}, Node.component_name(node)) do
-      true -> "true"
+      {true, _persistent_at} -> "true"
       _takes_content -> nil
     end
   end
 
   defp sealed(_assigns), do: nil
+
+  # AND ONE THAT STAYS ON THE SCREEN FROM A BREAKPOINT UP SAYS WHICH, so the canvas draws it as an
+  # ordinary element at that width and as an overlay below it — see `overlay_rules/0`.
+  defp persistent(%{preview?: true}), do: nil
+
+  defp persistent(%{node: node} = assigns) do
+    case Map.get(assigns[:conceals] || %{}, Node.component_name(node)) do
+      {_sealed, breakpoint} when is_binary(breakpoint) -> breakpoint
+      _always_an_overlay -> nil
+    end
+  end
 
   defp conceals?(assigns, %Node{kind: :component} = node) do
     case assigns[:conceals] do
@@ -2808,12 +2935,13 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   defp label_for(_absent), do: gettext("component")
 
   # The names of every component that renders its own content closed, read off the palette once,
-  # each with whether it is sealed: whether `Containment` would refuse anything dropped into it.
+  # each with whether it is sealed — whether `Containment` would refuse anything dropped into it —
+  # and the breakpoint from which it stays on the screen, if it does.
   defp conceals(components) do
     for entry <- components || [],
         Map.get(entry, :concealed?, false),
         into: %{},
-        do: {entry.name, sealed_entry?(entry)}
+        do: {entry.name, {sealed_entry?(entry), Map.get(entry, :persistent_at)}}
   end
 
   defp sealed_entry?(%{name: name} = entry),
@@ -3165,11 +3293,38 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end)
     |> Map.new()
     |> put_globals(node, declared, global)
+    |> put_function_class(node, declared, global)
     |> put_declared_defaults(module, fun)
     |> put_form_fields(node, tree, declared)
     |> put_unresolved(node, module, fun)
     |> Map.merge(slot_assigns(node, tree, assigns))
     |> tracked()
+  end
+
+  # A FUNCTION COMPONENT'S CLASS IS THE AUTHOR'S TOO. `canvas_owned?/1` keeps `class` out of the
+  # globals because the canvas rebuilds it from `meta.styles`, and a tag and a kit component get it
+  # back through `put_class/2` and `put_component_class/3`. A function component got nothing back,
+  # so `<.form class="space-y-4">` drew its field and its button touching on the canvas and spaced
+  # on the published page. Rebuilt the same way, written as the serializer writes it, into the
+  # `class` the component declares, or into its globals when it gathers undeclared attributes there,
+  # as `<.form>` does.
+  defp put_function_class(assigns_map, node, declared, global) do
+    class =
+      Styles.merge_class(authored_class(node), node.meta[:styles] || %{}, important?: true)
+
+    case {class, Map.get(declared, "class"), global} do
+      {nil, _declared, _global} ->
+        assigns_map
+
+      {class, key, _global} when not is_nil(key) ->
+        Map.put(assigns_map, key, class)
+
+      {_class, nil, nil} ->
+        assigns_map
+
+      {class, nil, global} ->
+        Map.update(assigns_map, global, %{"class" => class}, &Map.put(&1, "class", class))
+    end
   end
 
   # AN EXPRESSION THE CANVAS CANNOT COMPUTE IS STILL SOMETHING THE AUTHOR WROTE.
@@ -3198,18 +3353,38 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     |> declared_attr_specs(fun)
     |> Enum.reduce(assigns_map, fn attr, acc ->
       case Map.get(attr, :required, false) and not Map.has_key?(acc, attr.name) do
-        true -> put_written(acc, node, attr)
+        true -> put_written(acc, node, attr, fun)
         false -> acc
       end
     end)
   end
 
-  defp put_written(assigns_map, node, attr) do
+  defp put_written(assigns_map, node, attr, fun) do
     case Node.attr(node, Atom.to_string(attr.name)) do
-      {:expr, _source} -> Map.put(assigns_map, attr.name, stand_in(attr.type, node, attr.name))
-      _unwritten -> assigns_map
+      {:expr, _source} ->
+        widget = function_widget(attr, fun)
+        Map.put(assigns_map, attr.name, stand_in(attr.type, node, attr.name, widget))
+
+      _unwritten ->
+        assigns_map
     end
   end
+
+  # AN ICON'S NAME IS READ, NOT PRINTED. `chelekom-icon`'s body is `%{name: "hero-" <> _} = assigns`
+  # and core's `<.icon>` has the same head, so the id-shaped stand-in raised in both. Before the
+  # palette arrives the canvas knows no attribute is required, so `name={item[:icon]}` on a kit icon
+  # was handed `pb-<id>-name`, and core logged "body did not apply" on every render; core's own
+  # `<.icon>` drew the "could not render" box. An attribute the Inspector gives its icon picker
+  # stands in as a real icon instead. That is read off the attribute, not off the palette.
+  @icon_stand_in "hero-sparkles"
+
+  defp stand_in(:string, _node, _name, :icon), do: @icon_stand_in
+  defp stand_in(type, node, name, _widget), do: stand_in(type, node, name)
+
+  # Core's `<.icon>` names its icon `name`, which the Inspector reads as an icon only on a component
+  # whose name ends in `-icon`. Any other attribute of a function component is asked by its name.
+  defp function_widget(%{name: :name}, :icon), do: :icon
+  defp function_widget(%{name: name}, _fun), do: Inspector.widget(%{"name" => to_string(name)})
 
   defp stand_in(:string, node, name), do: "pb-#{node.id}-#{name}"
   defp stand_in(:integer, _node, _name), do: 0
@@ -3549,8 +3724,18 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   defp canvas_owned?(_name), do: false
 
+  # THE AUTHOR'S CLASSES, NOT AN EXPRESSION'S SOURCE. `class={["shrink-0", item[:icon_class]]}` read
+  # as text drew `hero-sparkles ["shrink-0", item[:icon_class]]`; `Tree.classes/1` answers the
+  # literal classes and leaves out what only the page can work out.
+  defp authored_class(node) do
+    case Tree.classes(node) do
+      [] -> nil
+      classes -> Enum.join(classes, " ")
+    end
+  end
+
   defp put_class(html_attrs, %Node{} = node) do
-    case Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+    case Styles.merge_class(authored_class(node), node.meta[:styles] || %{},
            important?: node.kind == :component
          ) do
       nil -> html_attrs
@@ -3667,10 +3852,24 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   # The required attributes this node has not been given. Empty for everything healthy, which is the
   # only path that costs anything on a normal page.
-  defp missing_required(node, required, tree) do
+  #
+  # BY THE PUBLISH GATE'S OWN RULE, `Inspector.unmet/3`: an attribute left out or left blank is
+  # missing, and one written as an expression is supplied, whether or not the canvas can compute it.
+  # The canvas used to call `name={item[:icon]}` missing because it cannot evaluate `item`, and drew
+  # a red "needs name" over a component Publish then accepted. `put_unresolved_kit/4` hands such an
+  # expression a stand-in — `hero-sparkles` for an icon — and `contained/3` keeps a render that
+  # still raises to its own box, so the canvas draws the component the page publishes.
+  defp missing_required(node, required) do
     case Map.get(required, Node.component_name(node), []) do
       [] -> []
-      names -> Enum.reject(names, &filled?(node, &1, tree))
+      names -> Enum.reject(names, &written?(node, &1))
+    end
+  end
+
+  defp written?(node, name) do
+    case Node.attr_text(node, name) do
+      nil -> false
+      text -> String.trim(text) != ""
     end
   end
 
@@ -3686,7 +3885,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # Asked of the ASSEMBLED assigns rather than of the node, because that map is what the component
   # will actually read: a default `put_declared_defaults/3` filled in counts as supplied, and so does
   # a form field `put_form_fields/4` synthesised, without either needing a special case here. It is
-  # the same question `missing_required/3` asks of a kit, so the two paths cannot drift.
+  # the same question `missing_required/2` asks of a kit, so the two paths cannot drift.
   defp missing_given(nil, _given), do: []
 
   defp missing_given({module, fun}, given) do
@@ -3696,16 +3895,11 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         do: Atom.to_string(attr.name)
   end
 
-  # WRITTEN IS NOT THE SAME AS SUPPLIED, and this guard used to conflate them. An expression the
-  # canvas cannot resolve — `@some_assign`, a function call — is dropped by `attr_value/1` and never
-  # reaches the component, so counting it as filled let the render proceed without it and raise.
-  #
-  # Asking the same question `attr_value/1` answers keeps the two in step: anything it would drop is
-  # missing here, and the reader gets the "needs …" placeholder they can act on instead of a canvas
-  # that disappears.
-  # A BINDING IS SUPPLIED TOO, since `put_form_fields/4` synthesises one. `field={f[:email]}` is an
-  # expression `literal/1` refuses, so without this clause a kit field that declares `field`
-  # required showed the "needs field" placeholder on a form that renders perfectly well.
+  # WHETHER THE CANVAS HAS A PICTURE TO DRAW, which is the media well's question and not a required
+  # attribute's (`missing_required/2`). An expression the canvas cannot resolve — `@some_assign`, a
+  # function call — is dropped by `attr_value/1` and draws nothing, so the well stays to aim at. A
+  # binding `put_form_fields/4` synthesises, and a working form's `for`, are values the canvas does
+  # hand the component.
   defp filled?(node, name, tree) do
     case Node.attr(node, name) do
       {:string, value} ->
@@ -3815,15 +4009,16 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # `put_unresolved/4` for a kit component: an attribute the author wrote as an expression the canvas
   # cannot evaluate, which the kit declares with no default, still reaches the template as a key.
   # Chelekom's form wrapper declares `for` that way, so a wrapper bound to its page form
-  # (`for={assigns[:contact_form]}`) raised `key :for not found` on every render. A required one only
-  # gets this far when `missing_required/3` counts it as supplied, as a working form's `for`.
+  # (`for={assigns[:contact_form]}`) raised `key :for not found` on every render. A required one gets
+  # this far too, since `missing_required/2` counts every written expression as supplied.
   defp put_unresolved_kit(assigns_map, node, specs, declared) do
     Enum.reduce(specs, assigns_map, fn attr, acc ->
       with name when is_binary(name) <- attr_name(attr),
            atom when not is_nil(atom) <- Map.get(declared, name),
            false <- Map.has_key?(acc, atom) or defaulted?(attr),
            {:expr, _source} <- Node.attr(node, name) do
-        Map.put(acc, atom, stand_in(kit_type(attr), node, atom))
+        widget = Inspector.widget(attr, %{}, %{name: Node.component_name(node)})
+        Map.put(acc, atom, stand_in(kit_type(attr), node, atom, widget))
       else
         _supplied_defaulted_or_unwritten -> acc
       end
@@ -3867,7 +4062,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   defp put_component_class(assigns, node, module) do
     with atom when not is_nil(atom) <- declared_attr(module, "class"),
          class when is_binary(class) <-
-           Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+           Styles.merge_class(authored_class(node), node.meta[:styles] || %{},
              important?: node.kind == :component
            ) do
       Map.put(assigns, atom, class)
@@ -4020,9 +4215,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # 0-2-1 against a plain `p-[8px]`'s 0-1-0 on the very same `<th>`. Without the bang the panel
   # writes a rule that loses to the component's own default, every time.
   defp put_slot_class(assigns, node) do
-    case Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
-           important?: true
-         ) do
+    case Styles.merge_class(authored_class(node), node.meta[:styles] || %{}, important?: true) do
       nil -> assigns
       class -> Map.put(assigns, :class, class)
     end

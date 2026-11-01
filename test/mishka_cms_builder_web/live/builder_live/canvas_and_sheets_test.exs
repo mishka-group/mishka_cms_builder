@@ -29,6 +29,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert has_element?(view, "#pb-redo")
     end
 
+    # THE ••• MENU IS TALLER THAN A SHORT SCREEN. At 623px it stood 674px with nothing to scroll, so
+    # Command palette, Fit to screen and Record history were cut off below the window's edge.
+    test "the ••• menu scrolls within the screen below the header", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      menu = view |> element("#pb-more-menu") |> render() |> opening_tag()
+
+      assert menu =~ "max-h-[calc(100vh-56px)]"
+      assert menu =~ "overflow-y-auto"
+    end
+
     # The editor takes the whole viewport, like the prototype: no admin sidebar, no admin topbar, no
     # 1340px content column. It is a `h-screen` three-column workspace, and nesting it in the admin
     # shell's scrolling, padded, width-capped `<main>` costs it the canvas and adds a second
@@ -729,6 +740,41 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert {"icon", {:string, "lucide-rocket"}} in edited.attrs
     end
 
+    # BRACES ARE AN EXPRESSION, AS IN HEEx. The box shows a bound icon's source without them, and a
+    # name typed over it is text; typed between braces it stays bound.
+    test "an icon typed between braces is written as an expression", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "iconbound",
+        template: "<div><span class={@icon}></span></div>",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{"editor" => "icon"}}],
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="iconbound" site="#{site.name}"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      component = node_with_tag(view, ".component")
+      render_click(view, "inspect", %{"id" => component.id})
+
+      html =
+        render_change(view, "icon_typed", %{
+          "name" => "icon",
+          "node_id" => component.id,
+          "value" => "{item[:icon]}"
+        })
+
+      edited = view |> editor() |> Map.fetch!(:tree) |> Tree.get(component.id)
+
+      assert {"icon", {:expr, "item[:icon]"}} in edited.attrs
+      assert html =~ "{…} keeps an expression"
+    end
+
     # Picking is a decision, so the popover has answered its question and gets out of the way. Typing
     # is not — there the list is a filter being narrowed, and closing it on every keystroke would
     # make the grid useless.
@@ -1149,6 +1195,87 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       refute html =~ "contact_validate"
     end
 
+    # A FORM'S CLASS IS DRAWN AS THE PAGE DRAWS IT. `<.form>` declares no `class`, so the canvas
+    # gathers it into the form's globals, and it used to drop it there with the `phx-*` bindings: the
+    # field and the button touched on the canvas and stood apart on the published page. A style set
+    # in the inspector reaches the form the same way, and the bindings are still left out.
+    test "a form keeps its class and the inspector's styles, and still drops its bindings", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, tree} =
+        Tree.parse("""
+        <.form :let={f} id="spaced-form" as={:contact} for={assigns[:contact_form]} class="space-y-4" phx-submit="contact_submit">
+          <.input field={f[:email]} type="email" label="Email" />
+          <button type="submit">Send</button>
+        </.form>
+        """)
+
+      {:ok, session} = EditorSession.put_tree(token(view), tree)
+      form = session.tree |> Tree.walk() |> Enum.find(&(&1.tag == ".form"))
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => form.id,
+        "bucket" => "base",
+        "prop" => "padding",
+        "value" => "8px"
+      })
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, ~s(form#spaced-form[class~="space-y-4"])),
+             "the form's own class is what spaces its field from its button"
+
+      assert has_element?(canvas, ~s(form#spaced-form[class~="p-[8px]!"])),
+             "and the inspector's padding reaches it too"
+
+      refute render(canvas) =~ "contact_submit"
+    end
+
+    # AND ITS FIELDS ARE ITS OWN CHILDREN THERE. `space-y-4` reaches the element right inside the
+    # form, which was the editor's box around `<.input>`: the gap landed on the box and the field's
+    # `mb-2` collapsed into it, 16px on the canvas and 8px on the page, where the field's own margin
+    # outranks Tailwind's zero-specificity `:where`. A tag that spaces its children is the same.
+    test "a field under a parent that spaces its children is that parent's own child", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, tree} =
+        Tree.parse("""
+        <.form :let={f} id="spaced-form" as={:contact} for={assigns[:contact_form]} class="space-y-4">
+          <.input field={f[:email]} type="email" label="Email" />
+          <button type="submit">Send</button>
+        </.form>
+        <div id="ruled" class="divide-y"><.input name="ruled" value="" label="Ruled" /></div>
+        <div id="padded" class="p-4"><.input name="padded" value="" label="Padded" /></div>
+        """)
+
+      {:ok, session} = EditorSession.put_tree(token(view), tree)
+      inputs = session.tree |> Tree.walk() |> Enum.filter(&(&1.tag == ".input"))
+
+      [spaced, ruled, padded] =
+        Enum.map(inputs, &~s|[data-node-id="#{&1.id}"]:not([data-pb-frame])|)
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, "form#spaced-form > div.mb-2" <> spaced),
+             "the form's `space-y-4` lands on the editor's box around the field, not on the field"
+
+      assert has_element?(canvas, "div#ruled > div.mb-2" <> ruled)
+
+      assert has_element?(canvas, ~s(div#padded > div[data-pb-frame] > div.mb-2)),
+             "a parent that leaves its children alone keeps the editor's box"
+
+      refute has_element?(canvas, "div#padded > " <> padded)
+    end
+
     # THE OTHER HALF OF THE SAME SURFACE, and the half the installed kit never reaches. All 23 of
     # Chelekom's fields take a `%Phoenix.HTML.FormField{}`, so `field={f[:email]}` is the only thing
     # the editor writes for them. A kit on the documented fallback gets the pair instead —
@@ -1341,7 +1468,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert has_element?(canvas, ~s(form#news-form input#simple-email[name="news[email]"]))
     end
 
-    test "a required `for` that is not the page's own form still says it is needed", %{
+    # WRITTEN IS WRITTEN, as the publish gate counts it (`Inspector.unmet/3`). `for={@changeset}` is
+    # not the page's own form, so the canvas has no form to hand it, but it does not call a property
+    # missing that Publish accepts: it draws the component with a stand-in, and in its own box when
+    # that still raises.
+    test "a required `for` that is not the page's own form is written, as Publish counts it", %{
       conn: conn,
       site: site
     } do
@@ -1359,8 +1490,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       {:ok, canvas, html} =
         live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
 
-      assert has_element?(canvas, ~s([data-incomplete="true"]))
-      assert html =~ "needs for"
+      refute has_element?(canvas, ~s([data-incomplete="true"]))
+      refute html =~ "needs for"
+      refute render_click(view, "publish", %{}) =~ "is required and empty"
     end
 
     # WRITTEN IS SUPPLIED; UNWRITTEN IS NOT. A required attribute the author never wrote is a real
@@ -1603,6 +1735,63 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert html =~ "<form", "an empty form is still a form"
       assert html =~ "min-height:56px", "and is somewhere to aim at"
       refute html =~ "could not render"
+    end
+
+    # A TEXTAREA'S CONTENT IS ITS VALUE. The browser reads everything up to `</textarea>` as text, so
+    # the `<span data-node-id …>` a text node is drawn as became words in the box.
+    test "a textarea holds its text, not the editor's markup", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="box"><textarea name="note">hello &amp; you</textarea></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      textarea = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "textarea"))
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert [_whole, content] = Regex.run(~r{<textarea[^>]*>(.*?)</textarea>}s, html)
+
+      assert content == "hello &amp; you",
+             "the text node was drawn as a `<span>`, which the browser shows as words in the box"
+
+      assert html =~ ~s(data-node-id="#{textarea.id}")
+    end
+
+    # A BLOCK DROPPED INTO ONE IS STILL NOT DRAWN AS MARKUP. Containment up to mishka_cms_core 0.0.4
+    # lets it in, and the canvas does not leak it into the field; from
+    # mishka-group/mishka_cms_core#110 on a textarea holds text only, so the drop is refused and says
+    # so. Either way the field shows its text alone.
+    test "and a child element in a textarea is not drawn into it", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="box"><textarea name="note">hi</textarea></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      textarea = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "textarea"))
+
+      html =
+        render_click(view, "op", %{
+          "kind" => "insert",
+          "parent_id" => textarea.id,
+          "index" => "1",
+          "template" => ~s(<p id="inside">inside</p>)
+        })
+
+      case Tree.get(editor(view).tree, textarea.id).children do
+        [_text, _element] -> :ok
+        [_text] -> assert html =~ "holds text only"
+      end
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert [_whole, content] = Regex.run(~r{<textarea[^>]*>(.*?)</textarea>}s, html)
+      assert content == "hi"
     end
   end
 
@@ -1988,7 +2177,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
         |> saved_snippets(page)
         |> Map.new(&{&1.name, &1.scope})
 
-      assert stored["Beside this page"] == "This page"
+      assert stored["Beside this page"] == "This document"
       assert stored["Across this site"] == "Shared"
 
       # "All sites" is the one choice that is not a `scope` at all: it writes a nil `site_id`, which
@@ -3428,7 +3617,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       render_click(other, "goto_comment", %{"id" => note.id})
 
       assert editor(other).selection == their_h1.id
-      refute render(other) =~ "no longer on this page"
+      refute render(other) =~ "that note was on is no longer there"
     end
 
     # The path is a position, and a position is only right if what sits there is still the same kind
@@ -3451,7 +3640,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       render_click(other, "open_sheet", %{"sheet" => "review"})
       render_click(other, "goto_comment", %{"id" => note.id})
 
-      assert render(other) =~ "no longer on this page"
+      assert render(other) =~ "that note was on is no longer there"
     end
 
     # A NOTE ABOUT THE PAGE, WITH SOMETHING SELECTED. The composer follows the canvas, which is right
@@ -3741,7 +3930,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       [comment] = notes(site, page)
       html = render_click(view, "goto_comment", %{"id" => comment.id})
 
-      assert html =~ "no longer on this page"
+      assert html =~ "that note was on is no longer there"
     end
 
     test "a page-level note says it is about the page rather than going nowhere", %{
@@ -3754,7 +3943,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       post_note(view, "About the page", "information")
 
       [comment] = notes(site, page)
-      assert render_click(view, "goto_comment", %{"id" => comment.id}) =~ "the whole page"
+      assert render_click(view, "goto_comment", %{"id" => comment.id}) =~ "the whole document"
     end
 
     # Nothing here implements AI review. What is pinned is that when something does, it is a

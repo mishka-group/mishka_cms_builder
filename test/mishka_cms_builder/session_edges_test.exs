@@ -103,6 +103,47 @@ defmodule MishkaCmsBuilder.SessionEdgesTest do
       assert markup(redone.tree) == markup(editing.tree)
     end
 
+    # A DRAFT HOLDS THE ELEMENT CSS APPLIED TO IT IN DRAFT, so opening it is what brings that CSS back
+    # after a reload, and what the publish then writes. The hold of the document open before does not
+    # follow the author into another draft.
+    test "makes the draft's own element CSS the hold" do
+      session = open()
+      {:ok, _held} = EditorSession.stage_element_css(session.token, "pb-0a0a0a0a", "color: red;")
+
+      {:ok, editing} =
+        EditorSession.edit_draft(
+          session.token,
+          %{id: "draft-1", label: "Styled", element_css: %{"pb-1b1b1b1b" => "color: crimson;"}},
+          ~s(<div id="root"><h2 class="pb-1b1b1b1b">styled</h2></div>)
+        )
+
+      assert editing.staged_element_css == %{"pb-1b1b1b1b" => "color: crimson;"}
+
+      {:ok, plain} =
+        EditorSession.edit_draft(
+          session.token,
+          %{id: "draft-2", label: "Plain", element_css: %{}},
+          ~s(<div id="root"><p>plain</p></div>)
+        )
+
+      assert plain.staged_element_css == nil
+    end
+
+    # A draft of a core whose drafts hold no element CSS has no such field, and the hold stays.
+    test "leaves the hold as it was for a draft with no element CSS field" do
+      session = open()
+      {:ok, _held} = EditorSession.stage_element_css(session.token, "pb-0a0a0a0a", "color: red;")
+
+      {:ok, editing} =
+        EditorSession.edit_draft(
+          session.token,
+          %{id: "draft-1", label: "Older"},
+          ~s(<div id="root"><p>older</p></div>)
+        )
+
+      assert editing.staged_element_css == %{"pb-0a0a0a0a" => "color: red;"}
+    end
+
     test "a draft that will not parse is reported rather than half-applied" do
       session = open()
 

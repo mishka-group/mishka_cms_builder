@@ -193,6 +193,57 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize() =~ "Contact Us"
     end
 
+    # THE ERROR IS ABOUT THE MARKUP IT REFUSED. An undo, any other edit or another selection puts
+    # other markup in the pane, and the refusal stayed under it as if it were about that.
+    test "a refusal's error goes when the document or the selection moves", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{"node_id" => heading.id, "source" => "<h1>Talk To Us</h1>"})
+
+      refuse = fn ->
+        heading = node_with_tag(view, "h1")
+
+        view
+        |> element("#pb-drawer-heex-form")
+        |> render_submit(%{"node_id" => heading.id, "source" => "<h1>{@user.name</h1>"})
+
+        assert has_element?(view, "#pb-drawer-heex-error")
+      end
+
+      refuse.()
+      render_click(view, "undo", %{})
+      refute has_element?(view, "#pb-drawer-heex-error"), "it stayed after the undo"
+
+      refuse.()
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+      refute has_element?(view, "#pb-drawer-heex-error"), "it stayed under another element"
+    end
+
+    # APPLY IS SHOWN BY `data-dirty`, which `PbCodeEditor` sets on the pane in the browser. The
+    # server's markup does not have it, so the patch that drew a refusal took it off, and Apply and
+    # ⌘↵ were gone while the text still differed.
+    test "the pane keeps its client-set dirty flag across a server patch", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      assert has_element?(
+               view,
+               ~s([data-pane="heex"][phx-mounted*="ignore_attrs"][phx-mounted*="data-dirty"])
+             )
+    end
+
     # THE TOKENIZER IS NOT THE COMPILER. This tokenizes perfectly — it is a component tag like any
     # other — and 500s the first visitor, so the check that catches it is a real compile.
     @tag :slow
@@ -308,6 +359,35 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
 
       assert has_element?(view, "#pb-drawer-css-error")
       assert live_assigns(view).element_css_rules == %{}
+    end
+
+    # A REFUSED CUSTOM CSS IS ABOUT THE ELEMENT IT WAS TYPED FOR. Another selection puts that
+    # element's own CSS in the Inspector box and the drawer's pane, and the refusal stayed under both.
+    test "a Custom CSS refusal stays with its element and goes when another is selected", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      view
+      |> element("#pb-drawer-css-form")
+      |> render_submit(%{"node_id" => heading.id, "css" => "main { color: red"})
+
+      assert has_element?(view, "#pb-css-error")
+      assert has_element?(view, "#pb-drawer-css-error")
+
+      render_click(view, "select", %{"id" => heading.id})
+      assert has_element?(view, "#pb-css-error"), "it went while its element stayed selected"
+      assert has_element?(view, "#pb-drawer-css-error")
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+      refute has_element?(view, "#pb-css-error"), "it stayed under another element"
+      refute has_element?(view, "#pb-drawer-css-error"), "it stayed in the drawer's pane"
     end
 
     # The upper Code menu. What it shows has to be what a save WRITES, which is `to_heex/1`
@@ -978,7 +1058,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
           "css" => "gap: 1px; } body { display: none; "
         })
 
-      assert html =~ "unmatched"
+      # "an unmatched { or }" up to mishka_cms_core 0.0.4; the core that checks an element's CSS with
+      # igniter_css's parser points at the `}` itself.
+      assert html =~ ~r/unmatched|closes the block it is written in/
       assert live_assigns(view).element_css_rules == %{}
     end
 
@@ -1442,7 +1524,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       {:ok, view, _html} = open_builder(conn, page)
       view |> element("#pb-code") |> render_click()
 
-      assert render_click(view, "source_tab", %{"tab" => "styles"}) =~ "No element on this page"
+      assert render_click(view, "source_tab", %{"tab" => "styles"}) =~
+               "No element has CSS of its own yet"
     end
 
     # A rule whose element has been deleted is still being served. Hiding it would make the prune on
@@ -1728,7 +1811,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
         refute has_element?(clear_flashes(view), "#flash-info"), id
         view |> element("##{id}") |> render_click()
 
-        assert flashes(view) =~ "Select an element on the page first.", id
+        assert flashes(view) =~ "Select an element on the canvas first.", id
         refute internals?(flashes(view)), id
         refute flashes(view) =~ "node_id", id
       end

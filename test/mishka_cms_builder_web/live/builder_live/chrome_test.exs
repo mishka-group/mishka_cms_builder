@@ -580,7 +580,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       {:ok, view, _html} = open_builder(conn, page)
 
       html = publish!(view)
-      assert html =~ "Not saved"
+      assert html =~ "Not published"
       assert html =~ "demo-collapse.:trigger"
     end
 
@@ -1301,8 +1301,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       # change still reaches the record of who did what, which is the whole point of having one.
       published = render_click(view, "set_stage", %{"stage" => "published"})
       assert published =~ "nothing is saved as you work now"
-      assert published =~ "Press Publish to put your changes on the live page"
-      assert published =~ "only recorded in the page’s history"
+      assert published =~ "Press Publish to put your changes live"
+      assert published =~ "only recorded in the editing history"
 
       drafted = render_click(view, "set_stage", %{"stage" => "draft"})
       assert drafted =~ "every change is kept as you make it"
@@ -1372,6 +1372,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
     # every other one. This handler called `Drafts` itself, so the gate never ran for it: a plugin
     # that refuses draft writes was overruled by the one button that writes on the way out, and the
     # author was sent away believing the work was kept.
+    @tag :capture_log
     test "and a plugin that refuses the write keeps you here with the work", %{
       conn: conn,
       page: page

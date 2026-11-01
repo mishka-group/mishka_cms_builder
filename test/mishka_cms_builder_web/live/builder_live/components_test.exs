@@ -1267,6 +1267,74 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       assert html =~ "needful.:caption"
     end
 
+    # THE COMPONENT BUILDER ASKS THE SAME. A component's own template places kit components too, and
+    # its Publish goes through the same gate a page's does.
+    test "a required property left empty refuses Publish in the component builder too", %{
+      conn: conn,
+      site: site
+    } do
+      needy(site.id)
+
+      holder =
+        create_component!(
+          site_id: site.id,
+          name: "needful-holder",
+          template: ~s|<div><.component component_name="needful" /></div>|,
+          attrs: [],
+          slots: []
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{holder.id}")
+
+      _loaded = render_async(view)
+
+      # The Inspector names the document being edited, not a page.
+      render_click(view, "select", %{"id" => needful_node(view).id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      assert render(view) =~ "Required — the component cannot be published without it."
+      refute render(view) =~ "the page cannot be published"
+
+      html = render_click(view, "publish", %{})
+
+      assert html =~ "Not published"
+      assert html =~ "needful.src"
+    end
+
+    # WRITTEN AS AN EXPRESSION IS WRITTEN, on the canvas as at the gate: `src={@image}` is the
+    # component's own assign, which the canvas cannot compute and the page supplies.
+    test "and one written as an expression is filled, there and on its canvas", %{
+      conn: conn,
+      site: site
+    } do
+      needy(site.id)
+
+      holder =
+        create_component!(
+          site_id: site.id,
+          name: "needful-bound",
+          template:
+            ~s|<div><.component component_name="needful" src={@image} alt="Cover"><:caption>Hi</:caption></.component></div>|,
+          attrs: [%{"name" => "image", "type" => "string", "opts" => %{}}],
+          slots: []
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{holder.id}")
+
+      _loaded = render_async(view)
+      node = needful_node(view)
+
+      refute view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ "needed"
+
+      {:ok, _canvas, canvas} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      refute canvas =~ "needs src"
+
+      refute render_click(view, "publish", %{}) =~ "is required and empty"
+    end
+
     # A kit this editor has never seen declares its requirements the same way, so nothing here is
     # keyed to a component name or an attribute name.
     test "a component nobody has heard of is marked the same way", %{conn: conn, site: site} do
@@ -1300,7 +1368,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       assert has_element?(view, ~s([data-role='pb-root-drop'][data-parent-id='root']))
 
       tail = view |> element(~s([data-role='pb-root-drop'])) |> render()
-      assert tail =~ "drop at the end of the page"
+      assert tail =~ "drop at the end"
       assert tail =~ "data-[show=true]:flex"
       refute tail =~ ~s(data-show=)
     end
@@ -3627,8 +3695,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
         "value" => ""
       })
 
+      # Publish is the write it stops, so that is the word the Inspector and the refusal use; the
+      # draft is still saved.
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      assert render(view) =~ "Required — the page cannot be published without it."
+      refute render(view) =~ "cannot be saved without it"
+      assert save!(view) =~ "saved"
+
       html = publish!(view)
-      assert html =~ "Not saved"
+      assert html =~ "Not published"
+      refute html =~ "Not saved"
       assert html =~ "needs-title.title"
 
       # Fill it and the save goes through.

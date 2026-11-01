@@ -39,6 +39,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsBuilder.EditorSession
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.Tree
@@ -237,6 +238,15 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     render_click(five, "save_as_draft", %{"label" => "Both", "draft_id" => draft_id})
 
     {five, draft_id}
+  end
+
+  # WHERE A DRAFT-STAGE STYLE IS SAID TO BE: in the draft, with a core whose drafts hold element CSS
+  # (`Drafts.autosave/8`), and in this editing session with one whose drafts do not.
+  defp held_in do
+    case Code.ensure_loaded?(Drafts) and function_exported?(Drafts, :autosave, 8) do
+      true -> "It is in the draft — the preview shows it"
+      false -> "Held in this editing session"
+    end
   end
 
   defp publish!(view) do
@@ -984,7 +994,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       assert html =~ "goes live when you publish", "the flash did not say where the style went"
 
-      assert html =~ "Held in this editing session",
+      assert html =~ held_in(),
              "the flash did not say where the style is until then"
 
       assert ElementCss.all(actor, site.id, owner) == %{}, "draft-stage CSS reached the live row"
@@ -1007,8 +1017,37 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
         render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "color: teal;"})
 
       refute html =~ "goes live when you publish"
+      refute html =~ held_in()
       assert [body] = Map.values(ElementCss.all(actor, site.id, owner))
       assert body =~ "teal", "the live row was not written under a chip reading Publish"
+    end
+
+    # The parser takes `@apply not-a-real-class;`, and Tailwind does not. Held, it reached the
+    # canvas's in-browser build, which failed on it, and the refusal came at the draft's autosave.
+    @tag :apply_check
+    test "draft-stage CSS Tailwind cannot build is refused at Apply", ctx do
+      %{view: view, site: site, owner: owner, actor: actor, heading: heading} = ctx
+
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      html =
+        render_click(view, "save_element_css", %{
+          "node_id" => heading.id,
+          "css" => "@apply not-a-real-class;"
+        })
+
+      assert has_element?(
+               view,
+               "#pb-css-error",
+               "Cannot apply unknown utility class `not-a-real-class`"
+             ),
+             "the refusal was not shown under the box"
+
+      refute html =~ "Style applied."
+      refute editor(view).staged_element_css, "the refused rule was held for the publish"
+      refute editor(view).element_css =~ "not-a-real-class", "the canvas was handed the rule"
+      assert ElementCss.all(actor, site.id, owner) == %{}
     end
 
     # THE HOLD IS NOT A PLACE WORK GOES MISSING FROM. Nothing but the publish writes it to a row, so
@@ -1037,6 +1076,64 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       assert [body] = Map.values(ElementCss.all(actor, site.id, owner))
       assert body =~ "teal", "the style did not survive to the publish that writes it"
+    end
+
+    # THE DRAFT HOLDS ITS OWN ELEMENT CSS, beside the markup that carries the scope class: the
+    # autosave writes it, the new-tab preview compiles it from there, and a reload — a new editing
+    # session, which holds nothing — gets it back by opening the draft.
+    @tag :draft_css
+    test "draft-stage CSS is written into the draft and comes back with it after a reload", ctx do
+      %{conn: conn, view: view, site: site, owner: owner, actor: actor, heading: heading} = ctx
+
+      render_click(view, "save_element_css", %{
+        "node_id" => heading.id,
+        "css" => "color: crimson;"
+      })
+
+      render_async(view)
+
+      draft_id = editor(view).draft_id
+      assert draft_id, "the Apply was not autosaved into a draft"
+      scope = editor(view) |> Map.fetch!(:tree) |> Tree.scope(heading.id)
+
+      {:ok, draft} = Drafts.get("page", draft_id, actor)
+
+      assert %{^scope => "color: crimson;"} = draft.element_css,
+             "the draft does not hold the style"
+
+      assert ElementCss.all(actor, site.id, owner) == %{}, "draft-stage CSS reached the live row"
+
+      EditorSession.close(token(view))
+      reloaded = open_record(conn, :page, ctx.record)
+
+      refute editor(reloaded).staged_element_css, "a new editing session should hold nothing"
+      render_click(reloaded, "open_draft", %{"id" => draft_id})
+
+      assert editor(reloaded).staged_element_css == %{scope => "color: crimson;"},
+             "opening the draft did not bring its style back"
+
+      assert editor(reloaded).element_css =~ "crimson", "the canvas came back without the style"
+
+      publish!(reloaded)
+
+      assert [body] = Map.values(ElementCss.all(actor, site.id, owner))
+      assert body =~ "crimson", "publishing the reopened draft did not write its style"
+    end
+
+    # A NAMED SAVE IS THE DOCUMENT AS IT STANDS, so the draft it makes holds the style this sitting
+    # applied, whichever document it was copied from.
+    @tag :draft_css
+    test "a named draft holds the style the sitting applied", ctx do
+      %{view: view, actor: actor, heading: heading} = ctx
+
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "color: teal;"})
+      render_async(view)
+      render_click(view, "save_as_draft", %{"label" => "Named"})
+
+      {:ok, named} = Drafts.get("page", editor(view).draft_id, actor)
+
+      assert named.label == "Named"
+      assert Map.values(named.element_css) == ["color: teal;"], "the named draft lost the style"
     end
 
     test "going back to the live page keeps the style for the next publish", ctx do
@@ -1415,11 +1512,11 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
     end
   end
 
-  # THE PREVIEW'S STYLESHEET IS CACHED UNDER THE RECORD'S TOKEN and only compiled when that key is
-  # absent, which is what makes opening one cheap. It also meant a document published with new
-  # utility classes went on being previewed against the CSS of the version before it — the new
-  # classes had no rules at all, so the preview looked broken and the markup was blamed.
-  describe "publishing drops the preview stylesheet" do
+  # WHAT A PREVIEW KEEPS UNDER THE RECORD'S TOKEN is dropped by the publish, so the next preview is
+  # of the document as published. The site its JS is served for is kept there by every core; a core
+  # that cached the preview's stylesheet there too (0.0.4) drops that with it, and a newer one
+  # compiles the stylesheet on every open and keeps none.
+  describe "publishing drops what the preview kept" do
     for section <- [:page, :layout, :error_page] do
       test "for a #{section}", %{conn: conn, site: site} do
         {view, record} = open(conn, unquote(section), site)
@@ -1431,9 +1528,9 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
         MishkaCmsCore.Runtime.States.AssetsState.save(%{
           id: loaded.preview_token,
-          type: "css",
-          value: ".stale{}",
-          hash: "deadbeef",
+          type: "site",
+          value: site.id,
+          hash: nil,
           updated_at: DateTime.utc_now()
         })
 
@@ -1446,8 +1543,8 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
         publish!(view)
 
-        refute MishkaCmsCore.Runtime.States.AssetsState.exists?(loaded.preview_token, "css"),
-               "the preview kept the stylesheet of the version before this publish"
+        refute MishkaCmsCore.Runtime.States.AssetsState.exists?(loaded.preview_token, "site"),
+               "the preview kept what it held for the version before this publish"
       end
     end
   end
@@ -1662,9 +1759,9 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       assert MishkaCmsCore.Runtime.Authoring.Drafts.resource("component") == nil
     end
 
-    # AND IT SAYS SO RATHER THAN DOING NOTHING. The stage control still offers Draft — it is one
-    # control for four sections — so asking for one has to come back with the reason and the way
-    # round it, not with a silent no-op that reads as a save.
+    # AND IT SAYS SO RATHER THAN DOING NOTHING. A component opens in the Draft stage like every
+    # section, though its menu offers no Draft mode, so asking for one has to come back with the
+    # reason and the way round it, not with a silent no-op that reads as a save.
     test "and asking a component for a draft reports why it cannot", %{conn: conn, site: site} do
       {view, _record} = open(conn, :component, site)
 
@@ -1673,6 +1770,51 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
       assert html =~ "A component has no drafts"
       assert html =~ "Publish"
+    end
+
+    # The editor's own words name the component, or no document at all, and its Draft stage
+    # promises nothing kept aside.
+    test "a component's editor speaks of the component, not of a page", %{conn: conn, site: site} do
+      {view, _record} = open(conn, :component, site)
+
+      render_click(view, "set_stage", %{"stage" => "draft"})
+
+      assert has_element?(
+               view,
+               ~s(#pb-stage[title="A component has no drafts — use Publish to save it."])
+             )
+
+      assert has_element?(view, ~s(#pb-avatars[title="Only you are editing this"]))
+
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      html = render_async(view)
+      assert html =~ "Every change to this component"
+      assert html =~ "The component itself is untouched."
+    end
+
+    # Its stage menu offers no Draft mode, and the Audit tab's Fix asks about the component.
+    test "a component's stage menu and audit prompts leave out the page", %{
+      conn: conn,
+      site: site
+    } do
+      Application.put_env(:mishka_cms_builder, :ai_backend, MishkaCmsBuilder.Test.AiBackendStub)
+      MishkaCmsBuilder.Test.AiBackendStub.answer([])
+
+      on_exit(fn ->
+        Application.delete_env(:mishka_cms_builder, :ai_backend)
+        Application.delete_env(:mishka_cms_core, :test_ai_answer)
+      end)
+
+      {view, _record} = open(conn, :component, site)
+
+      assert has_element?(view, "#pb-stage-published")
+      refute has_element?(view, "#pb-stage-draft")
+
+      render_click(view, "audit_fix", %{"rule" => "no-h1"})
+      assert_receive {:asked, "Make the first heading on this component an h1.", _opts}
+
+      render_click(view, "audit_fix", %{"rule" => "contrast"})
+      assert_receive {:asked, "Fix the contrast issue on this component.", _opts}
     end
 
     for section <- [:page, :layout, :error_page] do
@@ -1688,6 +1830,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
         render_click(view, "save_as_draft", %{"label" => "A named draft"})
 
+        assert has_element?(view, "#pb-stage-draft")
         assert has_element?(view, "#pb-draft-target")
         assert editor(view) |> Map.fetch!(:draft_id)
       end

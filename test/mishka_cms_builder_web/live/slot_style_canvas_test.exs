@@ -212,4 +212,49 @@ defmodule MishkaCmsBuilderWeb.Live.SlotStyleCanvasTest do
              "the saved template drops the bang, so the published page loses the override"
     end
   end
+
+  # A SLOT HAS NO ELEMENT OF ITS OWN ON THE CANVAS: the component draws it inside its own markup. So
+  # the selection travels with an anchor, the nearest ancestor that is drawn, which the hook rings in
+  # its place. Without one, selecting a sidebar's `<:item>` in the layers rail ringed nothing, and an
+  # opened sidebar fell back to `fixed` and the full height of the screen.
+  describe "selecting a slot" do
+    test "sends the component it belongs to as the anchor", %{conn: conn, page: page} do
+      view = open_builder(conn, page)
+      {canvas, _html} = canvas(conn, view)
+      slot = slot_node(view)
+
+      slot_id = slot.id
+
+      render_click(view, "select", %{"id" => slot_id})
+
+      assert_push_event(canvas, "pb:selected", %{id: ^slot_id, anchor: anchor})
+      assert anchor == slot.parent_id
+      assert %{kind: :component} = Tree.get(editor(view).tree, anchor)
+    end
+
+    test "and hands the anchor to a canvas that mounts with the slot selected", %{
+      conn: conn,
+      page: page
+    } do
+      view = open_builder(conn, page)
+      slot = slot_node(view)
+      render_click(view, "select", %{"id" => slot.id})
+
+      {_canvas, html} = canvas(conn, view)
+
+      assert html =~ ~s(data-selection-anchor="#{slot.parent_id}")
+    end
+
+    test "but an element the canvas draws is its own anchor", %{conn: conn, page: page} do
+      view = open_builder(conn, page)
+      {canvas, _html} = canvas(conn, view)
+      slot = slot_node(view)
+
+      component_id = slot.parent_id
+
+      render_click(view, "select", %{"id" => component_id})
+
+      assert_push_event(canvas, "pb:selected", %{id: ^component_id, anchor: nil})
+    end
+  end
 end

@@ -201,8 +201,10 @@ defmodule MishkaCmsBuilder.ClassesTest do
     end
   end
 
-  # What the Stylesheets admin page does, and what every row written before the check existed holds:
-  # the row IS the record, so a class typed there by hand is a class here — bad ones included.
+  # What every row written before the check existed holds: the row IS the record, so a class typed
+  # there by hand is a class here — bad ones included. Written past the action, because a core that
+  # checks a stylesheet when it is saved (mishka-group/mishka_cms_core#110) refuses this one on the
+  # Stylesheets page too.
   defp hand_edited(master, site_id, classes) do
     Stylesheet
     |> Ash.Query.filter(name == ^Classes.row_name() and site_id == ^site_id)
@@ -210,11 +212,7 @@ defmodule MishkaCmsBuilder.ClassesTest do
     |> Ash.read!()
     |> Map.fetch!(:results)
     |> hd()
-    |> Ash.Changeset.for_update(:master_update, %{content: Classes.css(classes)},
-      actor: master,
-      tenant: nil
-    )
-    |> Ash.update!()
+    |> Ash.Seed.update!(%{content: Classes.css(classes)})
   end
 
   # THE GLOBALS ARE THE CASE WITH TEETH. A class saved while editing a shared document is a

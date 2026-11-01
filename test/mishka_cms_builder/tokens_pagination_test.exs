@@ -26,14 +26,17 @@ defmodule MishkaCmsBuilder.TokensPaginationTest do
   # from — `pb-token-form-brand`, not `pb-token-form---brand`.
   @count 101
 
+  # Seeded past the action: what is under test is the read, and a core that checks a stylesheet when
+  # it is saved (mishka-group/mishka_cms_core#110) runs Tailwind for each of these hundred rows,
+  # longer than a test is given.
   defp sheet!(name, content) do
-    Stylesheet
-    |> Ash.Changeset.for_create(
-      :master_create,
-      %{name: name, kind: :theme, content: content, site_id: nil, active: true},
-      authorize?: false
-    )
-    |> Ash.create!()
+    Ash.Seed.seed!(Stylesheet, %{
+      name: name,
+      kind: :theme,
+      content: content,
+      site_id: nil,
+      active: true
+    })
   end
 
   describe "a site with more stylesheet rows than the old cap" do

@@ -23,6 +23,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
 
   import MishkaCmsBuilder.LiveCase, only: [token: 1]
 
+  import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
@@ -156,6 +157,151 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
         )
 
       refute canvas_html(conn, page) =~ "not-an-icon-at-all{"
+    end
+  end
+
+  # AN ICON NAME THE CANVAS CANNOT COMPUTE STANDS IN AS AN ICON. `name={assigns[:icon]}` has no value
+  # without the page's assigns, and the stand-in for any other string is shaped like a DOM id,
+  # `pb-<id>-name`. An icon's body reads that name as `"hero-" <> _` and raised: a kit icon was
+  # logged "body did not apply" on every render while the palette had not arrived, and core's
+  # `<.icon>` drew the "could not render" box.
+  describe "an icon name the canvas cannot compute" do
+    test "stands in as a real icon on core's `<.icon>`", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="w4"><.icon name={assigns[:icon]} /></div>)
+        )
+
+      html = canvas_html(conn, page)
+
+      assert html =~ "hero-sparkles size-4"
+      refute html =~ ~r/pb-n[a-z0-9]{8}-name/
+      refute html =~ "could not render"
+    end
+
+    test "and on a kit component whose attribute is an icon", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "acme-glyph",
+        template: ~S|<span class={["glyph", @name]}></span>|,
+        body: ~S|%{name: "hero-" <> _} = assigns = assigns|,
+        attrs: [%{"name" => "name", "type" => "string", "opts" => %{"editor" => "icon"}}]
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="w5"><.component component_name="acme-glyph" site="#{site.name}" name={assigns[:icon]} /></div>)
+        )
+
+      log = capture_log(fn -> send(self(), {:html, canvas_html(conn, page)}) end)
+      assert_received {:html, html}
+
+      assert html =~ "glyph hero-sparkles"
+      refute html =~ ~r/pb-n[a-z0-9]{8}-name/
+      refute log =~ "did not apply"
+    end
+  end
+
+  # WRITTEN AS AN EXPRESSION IS WRITTEN. `chelekom-sidebar` draws its items' icons with
+  # `<.component component_name="chelekom-icon" :if={item[:icon]} name={item[:icon]} …>`, and the
+  # canvas drew a red "chelekom-icon needs name" over it because it cannot evaluate `item`, while
+  # Publish accepted the same markup. The canvas now asks the publish gate's question
+  # (`Inspector.unmet/3`): left out or blank is missing, an expression is supplied.
+  describe "a required attribute" do
+    setup %{site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "acme-mark",
+        template: ~S|<span class={["mark", @name]}></span>|,
+        body: ~S|%{name: "hero-" <> _} = assigns = assigns|,
+        attrs: [
+          %{
+            "name" => "name",
+            "type" => "string",
+            "opts" => %{"editor" => "icon", "required" => true}
+          }
+        ]
+      )
+
+      :ok
+    end
+
+    test "written as an expression draws the component with a stand-in icon", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="w6"><.component component_name="acme-mark" site="#{site.name}" :if={assigns[:icon]} name={assigns[:icon]} /></div>)
+        )
+
+      html = canvas_html(conn, page)
+
+      assert html =~ "mark hero-sparkles"
+      refute html =~ "needs name"
+      refute mark_box(html) =~ "data-incomplete"
+    end
+
+    test "left blank or left out is still asked for", %{conn: conn, site: site} do
+      for written <- [~s(name=""), ~s(name="  "), ""] do
+        page =
+          create_page!(
+            site_id: site.id,
+            template:
+              ~s(<div id="w7"><.component component_name="acme-mark" site="#{site.name}" #{written} /></div>)
+          )
+
+        html = canvas_html(conn, page)
+
+        assert html =~ "needs name", "#{inspect(written)} drew the component"
+        assert mark_box(html) =~ ~s(data-incomplete="true")
+      end
+    end
+
+    # The opening tag of the editor's box around the component: the chrome names
+    # `data-incomplete` in its own rules, so the whole document cannot tell.
+    defp mark_box(html) do
+      html
+      |> String.split("<")
+      |> Enum.find("", &String.contains?(&1, ~s(data-component="acme-mark")))
+    end
+  end
+
+  # A CLASS WRITTEN AS A LIST KEEPS ITS LITERALS. `chelekom-sidebar` writes its items' icons with
+  # `class={["shrink-0", item[:icon_class]]}`, and the canvas drew the expression's source as the
+  # class, `hero-sparkles ["shrink-0", item[:icon_class]]`. It reads the literal classes now, as
+  # `Tree.classes/1` does, and leaves out what only the page can work out.
+  describe "a class written as a list expression" do
+    test "keeps its literal classes and no brackets", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "acme-classy",
+        template: ~S|<span class={["glyph", @name, @class]}></span>|,
+        body: ~S|%{name: "hero-" <> _} = assigns = assigns|,
+        attrs: [
+          %{"name" => "name", "type" => "string", "opts" => %{"editor" => "icon"}},
+          %{"name" => "class", "type" => "string", "opts" => %{}}
+        ]
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="w8"><.component component_name="acme-classy" site="#{site.name}" name={assigns[:icon]} class={["shrink-0", assigns[:icon_class]]} /><b class={["tag-own", assigns[:tone]]}>x</b></div>)
+        )
+
+      html = canvas_html(conn, page)
+
+      assert html =~ ~s(class="glyph hero-sparkles shrink-0")
+      assert html =~ ~r/<b [^>]*class="tag-own"/
+      refute html =~ "icon_class"
+      refute html =~ "[&quot;"
     end
   end
 end

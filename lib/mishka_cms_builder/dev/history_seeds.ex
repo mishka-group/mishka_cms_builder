@@ -274,7 +274,7 @@ defmodule MishkaCmsBuilder.Dev.HistorySeeds do
         detail: "9 elements live",
         author_type: :system,
         note:
-          "Published to the live page, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own.",
+          "Published, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own.",
         snapshot_id: snapshot
       },
 

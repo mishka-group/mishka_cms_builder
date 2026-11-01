@@ -206,7 +206,7 @@ defmodule MishkaCmsBuilderWeb.Templates.HistoryTimeline do
                   title={
                     dgettext(
                       "mishka_gervaz",
-                      "Restores the document in the editor. The live page does not change until you publish."
+                      "Restores the document in the editor. What is live does not change until you publish."
                     )
                   }
                   class="h-[22px] flex-none rounded-[6px] border border-[#ecebe6] bg-white px-2.5 text-[9.5px] font-bold text-[#5c5a54] hover:border-[#c3c1f0] hover:text-[#4f4bcc]"
@@ -356,7 +356,7 @@ defmodule MishkaCmsBuilderWeb.Templates.HistoryTimeline do
   # published (`MishkaCmsBuilder.History.collect/5`) — never with age — and the publish row keeps the
   # page it published, which is where going back starts.
   defp unrevertible_title(%{op: :publish, author_type: :system}),
-    do: dgettext("mishka_gervaz", "This publish kept no copy of the page it published.")
+    do: dgettext("mishka_gervaz", "This publish kept no copy of what it published.")
 
   defp unrevertible_title(_record),
     do:

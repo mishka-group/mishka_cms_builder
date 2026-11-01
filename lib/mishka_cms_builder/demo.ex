@@ -36,7 +36,7 @@ defmodule MishkaCmsBuilder.Demo do
     %{
       role: :assistant,
       text:
-        "I can edit this page for you — describe a change, or select an element and use “Ask AI” " <>
+        "I can edit this for you — describe a change, or select an element and use “Ask AI” " <>
           "to scope it.",
       scope: nil,
       plain: nil,

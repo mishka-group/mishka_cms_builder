@@ -1842,6 +1842,45 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       refute has_element?(second, "#pb-inherited-bar")
     end
 
+    # The canvas opened on the live page, which has no layout, and Carry on brought the draft's
+    # markup in without its layout until the canvas was reloaded.
+    test "and Carry on draws the draft's layout around the canvas", %{conn: conn, site: site} do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          name: "carry-shell",
+          path: "/layouts/carry-shell",
+          template: ~S|<header id="layout-probe">Shell</header>{@inner_content}|
+        )
+
+      page = create_page!(site_id: site.id, template: @template)
+
+      {:ok, first, _html} = open_builder(conn, page)
+      draft_id = autosave!(first)
+
+      open_settings(first)
+      form = settings_form("page-draft")
+      first |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+
+      first
+      |> element("#{form} [phx-click='relation_select'][phx-value-id='#{layout.id}']")
+      |> render_click()
+
+      first |> form(form) |> render_submit()
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).layout_id == layout.id
+
+      {:ok, second, _html} = open_builder(conn, page)
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(second)}")
+
+      refute has_element?(canvas, "#pb-layout-shell"), "the live page has no layout"
+
+      second |> element("#pb-inherited-continue") |> render_click()
+
+      assert has_element?(canvas, "#pb-layout-shell #layout-probe", "Shell")
+    end
+
     test "a different document still opens its own session", %{conn: conn, page: page, site: site} do
       other = create_page!(site_id: site.id, template: "<section><h2>Other</h2></section>")
       {:ok, first, _html} = open_builder(conn, page)

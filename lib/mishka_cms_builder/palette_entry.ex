@@ -461,6 +461,43 @@ defmodule MishkaCmsBuilder.PaletteEntry do
     end
   end
 
+  # Tailwind's breakpoints, narrowest first, so the first one a class list names is the answer.
+  @breakpoints ~w(sm md lg xl 2xl)
+
+  @slid_off ~r/(?<![\w:-])-?translate-(x|y)-full(?![\w-])/
+  @back_on ~r/(?<![\w-])(sm|md|lg|xl|2xl):translate-(x|y)-0(?![\w-])/
+
+  @doc """
+  The breakpoint from which this component stops hiding and stays on the screen, or `nil`.
+
+  `chelekom-sidebar` is a drawer on a narrow screen and a fixed column from `md` up: its
+  `hide_position` helper answers `"-translate-x-full md:translate-x-0"`, which slides it off the
+  screen and brings it back at that width. Read off the template and the helper bodies, where a
+  class list that slides the component off the screen and puts it back at a breakpoint, in the same
+  string, says so. A modal's `translate-y-4 sm:translate-y-0` is a transition, not this, because
+  nothing in it slides the panel a full width away.
+
+  The canvas draws such a component as an ordinary element at and above that width, and as an
+  overlay below it.
+  """
+  @spec persistent_at(map()) :: String.t() | nil
+  def persistent_at(entry) do
+    found =
+      ~r/"[^"\n]*"/
+      |> Regex.scan(body_of(entry))
+      |> Enum.flat_map(fn [literal] -> back_at(literal) end)
+
+    Enum.find(@breakpoints, &(&1 in found))
+  end
+
+  defp back_at(literal) do
+    slid = for [_whole, axis] <- Regex.scan(@slid_off, literal), do: axis
+
+    for [_whole, breakpoint, axis] <- Regex.scan(@back_on, literal),
+        axis in slid,
+        do: breakpoint
+  end
+
   # A SELECTOR THAT WOULD MATCH THE EDITOR'S OWN BOX. `[&>*]:rounded-none` and
   # `[&>*:not(:last-child)]:border-r` reach for whatever element is immediately inside, which on the
   # canvas is the wrapper rather than the button. `[&>li]`, `[&>img]`, `[&>.quote-icon]` cannot match

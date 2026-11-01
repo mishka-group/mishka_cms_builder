@@ -4,7 +4,13 @@
 
 defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
   @moduledoc """
-  A dialog on the canvas: shut by default, open while it is selected, held open by the pin.
+  A dialog on the canvas: shut by default and drawn as a chip, opened only when the author asks.
+
+  The chip is a handle: a click selects the overlay and a drag moves it, as in Elementor, Bricks,
+  Oxygen and Webflow. "Open on canvas" in the Inspector and the pin on its layers row open it in the
+  flow until it is closed again; a node inside it selected from the layers rail opens it for as long
+  as that selection lasts. A sidebar that stays on the screen from a breakpoint up is an ordinary
+  element at that width and an overlay below it.
 
   ## What was wrong
 
@@ -24,8 +30,8 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
   ## What is pinned here
 
   That the wrapper carries a label while the overlay is shut (the chip an author clicks), that the
-  pin and only the pin writes `data-pb-reveal`, that the self-closing bindings are gone from what
-  the editor draws, and that a visitor gets none of it.
+  pin and only the pin writes `data-pb-reveal`, that selecting the chip itself opens nothing, that
+  the self-closing bindings are gone from what the editor draws, and that a visitor gets none of it.
   """
   use MishkaCmsCore.ConnCase
 
@@ -154,10 +160,10 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
   # THE WRAPPER'S OWN OPENING TAG. Asserting on the whole document cannot tell an attribute apart
   # from the `#pb-canvas-chrome` rule that names it in a selector, and every one of these attributes
   # appears in both places.
-  defp wrapper(html) do
+  defp wrapper(html, name \\ "acme-dialog") do
     html
     |> String.split("<")
-    |> Enum.find("", &String.contains?(&1, ~s(data-component="acme-dialog")))
+    |> Enum.find("", &String.contains?(&1, ~s(data-component="#{name}")))
   end
 
   defp dialog_id(view) do
@@ -276,6 +282,28 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
       refute chrome =~ ~r/:is\(\.fixed, \.absolute\)/,
              "a carousel's own controls are absolute, and this drops them in the corner"
     end
+
+    # A DRAWER AND `chelekom-sidebar` ARE `fixed h-screen`, and back in the flow the viewport's
+    # height stood a panel of a few links as tall as the screen over the page below it. A drawer is
+    # also slid off the screen with Tailwind v4's `translate` property, which `transform` is not.
+    test "and an opened panel takes its content's height and stays in view", %{chrome: chrome} do
+      assert chrome =~
+               ~r/\)\s*\.fixed \{ position: static !important; transform: none !important; translate: none !important; height: auto !important; \}/,
+             "an opened drawer keeps `h-screen`, or its `-translate-x-full` keeps it off the canvas"
+
+      refute chrome =~ ~r/\.fixed \{[^}]*min-height/,
+             "a panel's own minimum, a modal's `min-h-full` row among them, is left alone"
+    end
+
+    # A DOCKED SIDEBAR IS `fixed` AND STAYS SO, and an opened drawer in the flow beside it was drawn
+    # under it. The wrapper is `position: relative` already, so a z-index is all it takes.
+    test "and an opened overlay is drawn above a docked sidebar", %{chrome: chrome} do
+      assert chrome =~
+               ~r/\)\s*\{ outline: 2px dotted #8580d8; outline-offset: 3px; min-height: 0; z-index: 50; \}/,
+             "an opened drawer is painted under the fixed sidebar docked beside it"
+
+      assert chrome =~ ~r/\[data-pb-overlay\] \{\s*position: relative;/
+    end
   end
 
   # AN OPEN BUTTON THAT DOES NOTHING IS WORSE THAN NO BUTTON. A component may be written as two
@@ -349,6 +377,199 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
       render_click(view, "op", %{"kind" => "delete", "node_id" => id})
 
       refute EditorSession.pinned?(editor(view), id)
+    end
+  end
+
+  # THE CHIP IS A HANDLE. A click on a shut overlay selects it — the Inspector shows its properties
+  # and a drag moves it — and covered the page it was being arranged on when it also opened it.
+  # Opening is asked for: the Inspector's button or the pin on its row.
+  describe "opening an overlay" do
+    setup %{conn: conn, page: page} do
+      view = open_builder(conn, page)
+      {_canvas, html} = canvas(conn, view)
+      {:ok, view: view, chrome: html}
+    end
+
+    test "is not what selecting its chip does", %{chrome: chrome} do
+      refute chrome =~ ~s|[data-pb-overlay][data-selected="true"]|,
+             "a click on the chip opened the overlay over the page"
+    end
+
+    test "is what selecting something inside it from the layers does", %{chrome: chrome} do
+      assert chrome =~ ~s|[data-pb-overlay]:has([data-selected="true"])|
+
+      assert chrome =~ ~s|[data-pb-overlay][data-pb-anchored="true"]|,
+             "a slot has no element, so the hook rings its component and marks the ring"
+    end
+
+    test "is a button in the Inspector, and the same button closes it", %{conn: conn, view: view} do
+      id = dialog_id(view)
+      render_click(view, "inspect", %{"id" => id})
+
+      assert view |> element("#pb-overlay-open") |> render() =~ "Open on canvas"
+
+      view |> element("#pb-overlay-open") |> render_click()
+
+      assert EditorSession.pinned?(editor(view), id)
+      assert has_element?(view, ~s(#pb-overlay-open[aria-pressed="true"]), "Close on canvas")
+      {_canvas, html} = canvas(conn, view)
+      assert wrapper(html) =~ ~s(data-pb-reveal="true")
+
+      view |> element("#pb-overlay-open") |> render_click()
+
+      refute EditorSession.pinned?(editor(view), id)
+      assert has_element?(view, ~s(#pb-overlay-open[aria-pressed="false"]), "Open on canvas")
+    end
+
+    test "is not offered for anything that does not close", %{view: view} do
+      heading = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "h1"))
+      render_click(view, "inspect", %{"id" => heading.id})
+
+      refute has_element?(view, "#pb-overlay-open")
+    end
+
+    test "is a pin on its layers row that is there without the pointer", %{view: view} do
+      id = dialog_id(view)
+      pin = view |> element("#pb-layer-pin-#{id}") |> render()
+
+      assert pin =~ ~s(class="grid ),
+             "the pin showed only under the pointer or on the selected row"
+
+      refute pin =~ "group-hover:grid"
+
+      view |> element("#pb-layer-pin-#{id}") |> render_click()
+      assert EditorSession.pinned?(editor(view), id)
+    end
+
+    # AN OPENED OVERLAY IS DRAWN IN THE FLOW, where its chip stood, and every way of opening it
+    # gets the same rules.
+    test "draws it in the flow whichever way it was opened", %{chrome: chrome} do
+      opened =
+        ~s|:is([data-pb-reveal="true"], [data-pb-overlay]:has([data-selected="true"]), | <>
+          ~s|[data-pb-overlay][data-pb-anchored="true"]):not([data-pb-persistent]) .fixed { position: static|
+
+      assert chrome =~ opened
+    end
+  end
+
+  # `chelekom-sidebar` IS A DRAWER ON A PHONE AND A COLUMN FROM `md` UP. Drawn as a chip at every
+  # width, the always-visible column of a desktop page had to be opened before it could be edited,
+  # and then it was drawn in the flow, not where it sits.
+  describe "a sidebar that stays on the screen from md up" do
+    @sidebar ~S"""
+    <aside id={@id} phx-click-away="hide" class="fixed h-screen -translate-x-full md:translate-x-0">
+      {render_slot(@inner_block)}
+    </aside>
+    """
+
+    setup %{conn: conn, site: site} do
+      create_component!(site_id: site.id, name: "acme-sidebar", template: @sidebar)
+
+      define_component!(
+        "acme-sidebar",
+        site,
+        ~S(<aside class="fixed h-screen -translate-x-full md:translate-x-0">Links</aside>)
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="wrap"><.component component_name="acme-sidebar" site="#{site.name}" id="s1">Links</.component></div>)
+        )
+
+      view = open_builder(conn, page)
+
+      sidebar =
+        editor(view).tree
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "acme-sidebar"))
+
+      {:ok, view: view, sidebar: sidebar}
+    end
+
+    test "is read off the class list that slides it away and brings it back" do
+      assert PaletteEntry.persistent_at(%{"name" => "acme-sidebar", "template" => @sidebar}) ==
+               "md"
+
+      helper = %{
+        "name" => "acme-side",
+        "template" => ~S|<aside class={["fixed", hide(@at)]}></aside>|,
+        "helpers" => [%{"name" => "hide", "code" => ~S|"translate-x-full lg:translate-x-0"|}]
+      }
+
+      assert PaletteEntry.persistent_at(helper) == "lg"
+    end
+
+    test "and a transition that moves a panel a few pixels is not that" do
+      modal = %{
+        "name" => "acme-modal",
+        "template" => ~S|<div class="hidden opacity-0 translate-y-4 sm:translate-y-0">x</div>|
+      }
+
+      assert PaletteEntry.persistent_at(modal) == nil
+    end
+
+    test "and the kit's own sidebar says md, while its modal and drawer say nothing" do
+      entries =
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.fetch!("components")
+        |> Map.new(&{&1["name"], &1})
+
+      assert PaletteEntry.persistent_at(entries["chelekom-sidebar"]) == "md"
+      assert PaletteEntry.persistent_at(entries["chelekom-modal"]) == nil
+      assert PaletteEntry.persistent_at(entries["chelekom-drawer"]) == nil
+    end
+
+    test "says so on its wrapper", %{conn: conn, view: view} do
+      {_canvas, html} = canvas(conn, view)
+
+      assert wrapper(html, "acme-sidebar") =~ ~s(data-pb-persistent="md")
+      assert wrapper(html, "acme-sidebar") =~ ~s(data-pb-overlay="sidebar")
+      refute wrapper(html) =~ "data-pb-persistent", "a dialog is an overlay at every width"
+    end
+
+    test "has no chip and nothing reopened from that width up, and is a drawer below it", %{
+      conn: conn,
+      view: view
+    } do
+      {_canvas, chrome} = canvas(conn, view)
+
+      assert [_before, wide] = String.split(chrome, "@media (width >= 48rem) {", parts: 2)
+      assert wide =~ ~r/\[data-pb-persistent="md"\]::before[^{]*\{ display: none; \}/
+
+      assert [_before, narrow] = String.split(chrome, "@media (width < 48rem) {", parts: 2)
+      [narrow | _rest] = String.split(narrow, "@media (width >= 48rem)", parts: 2)
+
+      assert narrow =~ ~s|[data-pb-persistent="md"] .fixed { position: static|,
+             "below md the sidebar is a drawer, opened in the flow like any other"
+    end
+
+    test "the Inspector says it is edited where it sits on Desktop, and opens it on Mobile", %{
+      view: view,
+      sidebar: sidebar
+    } do
+      render_click(view, "inspect", %{"id" => sidebar.id})
+
+      assert has_element?(
+               view,
+               "#pb-overlay-docked",
+               "Always visible at this width — edit it on the page"
+             )
+
+      refute has_element?(view, "#pb-overlay-open")
+
+      render_click(view, "set_device", %{"device" => "mobile"})
+
+      assert has_element?(view, "#pb-overlay-open", "Open on canvas")
+      refute has_element?(view, "#pb-overlay-docked")
+
+      render_click(view, "set_device", %{"device" => "frames"})
+
+      assert has_element?(view, "#pb-overlay-open", "Open on canvas")
+      assert has_element?(view, "#pb-overlay-docked", "From md up it is always visible")
     end
   end
 

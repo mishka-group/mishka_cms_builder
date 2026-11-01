@@ -261,3 +261,93 @@ describe("a double click is the author saying they are about to type", () => {
     expect(shortcuts(posted)[0]).toMatchObject({ key: "delete", node_id: "h1", typing: false });
   });
 });
+
+// ⌘Z WHILE TYPING TAKES BACK THE TYPING. Inline words are written to the document by `set_text` on
+// blur, so until then they are a pending edit in the DOM. ⌘Z sent to the server undid the
+// structural change before them, a block dropped a minute earlier, while the words stayed on screen.
+// In typed text undo and redo are the field's own: the browser's, or CodeMirror's in the Code
+// window. Anywhere else they still undo the page.
+describe("undo while typing", () => {
+  const undo = (target) => key(target, { metaKey: true, key: "z", code: "KeyZ" });
+  const redo = (target) => key(target, { metaKey: true, shiftKey: true, key: "z", code: "KeyZ" });
+
+  // jsdom has no `isContentEditable`; this is the browser's answer: inside an editing host.
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "isContentEditable", {
+      configurable: true,
+      get() {
+        const host = this.closest("[contenteditable]");
+        return host !== null && host.getAttribute("contenteditable") !== "false";
+      },
+    });
+  });
+
+  afterEach(() => {
+    delete HTMLElement.prototype.isContentEditable;
+  });
+
+  describe("on the canvas", () => {
+    it("is the browser's while words are open for typing", () => {
+      canvas(PAGE);
+
+      doubleClick($("#words"));
+      const back = undo($("#words"));
+      const again = redo($("#words"));
+
+      expect(shortcuts(posted)).toEqual([]);
+      expect(back.defaultPrevented).toBe(false);
+      expect(again.defaultPrevented).toBe(false);
+    });
+
+    it("and the page's once they are put down", () => {
+      canvas(PAGE);
+
+      doubleClick($("#words"));
+      $("#words").dispatchEvent(new FocusEvent("blur"));
+      const back = undo(document.body);
+
+      expect(shortcuts(posted)).toHaveLength(1);
+      expect(shortcuts(posted)[0]).toMatchObject({ key: "undo", node_id: "h1" });
+      expect(back.defaultPrevented).toBe(true);
+    });
+  });
+
+  describe("in the chrome", () => {
+    const fields =
+      '<input id="text" type="text" /><textarea id="area"></textarea>' +
+      '<div id="cm" class="cm-content" contenteditable="true"></div>' +
+      '<select id="pick"><option>a</option></select><input id="tick" type="checkbox" />';
+
+    it("is the field's own in a text input, a textarea and the Code window's editor", () => {
+      const ctx = chrome("h1");
+      document.body.insertAdjacentHTML("beforeend", fields);
+
+      const keys = ["#text", "#area", "#cm"].flatMap((id) => [undo($(id)), redo($(id))]);
+
+      expect(ctx.pushed).toEqual([]);
+      expect(keys.map((event) => event.defaultPrevented)).toEqual(keys.map(() => false));
+    });
+
+    it("and the page's in a field with no typed text of its own", () => {
+      const ctx = chrome("h1");
+      document.body.insertAdjacentHTML("beforeend", fields);
+
+      undo($("#pick"));
+      redo($("#tick"));
+
+      expect(ctx.pushed).toEqual([
+        ["shortcut", { key: "undo", node_id: "h1" }],
+        ["shortcut", { key: "redo", node_id: "h1" }],
+      ]);
+    });
+
+    it("and the page's with the focus outside every field", () => {
+      const ctx = chrome("h1");
+
+      const back = undo(document.body);
+
+      expect(ctx.pushed).toEqual([["shortcut", { key: "undo", node_id: "h1" }]]);
+      expect(back.defaultPrevented).toBe(true);
+    });
+  });
+});
