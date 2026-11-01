@@ -49,7 +49,7 @@ defmodule MishkaCmsBuilderWeb.Templates.SnippetForm do
   alias MishkaCmsBuilderWeb.Live.Panels
 
   @scopes [
-    {"page", gettext_noop("This page")},
+    {"page", gettext_noop("This document")},
     {"shared", gettext_noop("Shared")},
     {"global", gettext_noop("All sites")}
   ]
@@ -80,10 +80,13 @@ defmodule MishkaCmsBuilderWeb.Templates.SnippetForm do
       assigns
       |> assign(:scopes, scopes(assigns.state))
       |> assign(:selected_scope, selected_scope(assigns.state))
-      |> assign(:selection_tag, defaults(assigns.state)[:selection_tag] || gettext("whole page"))
+      |> assign(
+        :selection_tag,
+        defaults(assigns.state)[:selection_tag] || gettext("whole document")
+      )
       |> assign(
         :save_label,
-        defaults(assigns.state)[:save_label] || gettext("Save this page as a snippet")
+        defaults(assigns.state)[:save_label] || gettext("Save this as a snippet")
       )
 
     ~H"""
@@ -95,7 +98,7 @@ defmodule MishkaCmsBuilderWeb.Templates.SnippetForm do
         <div class="min-w-0">
           <div class="text-[12.5px] font-bold text-[#2e2b6b]">{gettext("Save as snippet")}</div>
           <div class="mt-0.5 text-[10.5px] font-medium text-[#7d79c4]">
-            {gettext("Reuse this on any page")}
+            {gettext("Reuse this anywhere")}
           </div>
         </div>
         <span class="flex-1"></span>

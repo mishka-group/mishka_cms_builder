@@ -245,7 +245,7 @@ defmodule MishkaCmsBuilder.HistoryTimelineTest do
       html = render_row(record, master())
 
       refute html =~ ">Revert<"
-      assert html =~ "This publish kept no copy of the page it published."
+      assert html =~ "This publish kept no copy of what it published."
       refute html =~ "A later publish keeps the record"
     end
 

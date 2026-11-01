@@ -1301,8 +1301,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeTest do
       # change still reaches the record of who did what, which is the whole point of having one.
       published = render_click(view, "set_stage", %{"stage" => "published"})
       assert published =~ "nothing is saved as you work now"
-      assert published =~ "Press Publish to put your changes on the live page"
-      assert published =~ "only recorded in the page’s history"
+      assert published =~ "Press Publish to put your changes live"
+      assert published =~ "only recorded in the editing history"
 
       drafted = render_click(view, "set_stage", %{"stage" => "draft"})
       assert drafted =~ "every change is kept as you make it"

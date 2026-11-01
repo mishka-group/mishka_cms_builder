@@ -506,9 +506,9 @@ defmodule MishkaCmsBuilderWeb.Templates.ReviewComments do
 
   defp empty_message("open"), do: gettext("Nothing open — every note here is resolved")
   defp empty_message("resolved"), do: gettext("Nothing resolved yet")
-  defp empty_message(_all), do: gettext("No notes on this page yet")
+  defp empty_message(_all), do: gettext("No notes here yet")
 
-  defp scope_label(%{node_id: nil}), do: gettext("whole page")
+  defp scope_label(%{node_id: nil}), do: gettext("whole document")
 
   defp scope_label(%{node_label: label}) when is_binary(label) and label != "",
     do: "<" <> label <> ">"

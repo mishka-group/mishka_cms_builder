@@ -30,7 +30,7 @@ defmodule MishkaCmsBuilder.CommentTest do
     test "a note with no node is about the whole page, not an error" do
       assert {:ok, comment} = Comment.new(%{text: "Needs a meta description"})
       assert comment.node_id == nil
-      assert comment.node_label == "the whole page"
+      assert comment.node_label == "the whole document"
     end
 
     test "ids are unique and shaped like the tree's" do

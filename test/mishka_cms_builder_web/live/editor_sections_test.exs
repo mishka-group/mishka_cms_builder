@@ -1744,6 +1744,26 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       assert html =~ "Publish"
     end
 
+    # The editor's own words name the component, or no document at all, and its Draft stage
+    # promises nothing kept aside.
+    test "a component's editor speaks of the component, not of a page", %{conn: conn, site: site} do
+      {view, _record} = open(conn, :component, site)
+
+      render_click(view, "set_stage", %{"stage" => "draft"})
+
+      assert has_element?(
+               view,
+               ~s(#pb-stage[title="A component has no drafts — use Publish to save it."])
+             )
+
+      assert has_element?(view, ~s(#pb-avatars[title="Only you are editing this"]))
+
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      html = render_async(view)
+      assert html =~ "Every change to this component"
+      assert html =~ "The component itself is untouched."
+    end
+
     for section <- [:page, :layout, :error_page] do
       test "a #{section} keeps drafts, and saving one writes a row", %{conn: conn, site: site} do
         {view, _record} = open(conn, unquote(section), site)

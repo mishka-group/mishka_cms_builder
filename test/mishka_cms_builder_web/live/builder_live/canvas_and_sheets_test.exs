@@ -2171,7 +2171,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
         |> saved_snippets(page)
         |> Map.new(&{&1.name, &1.scope})
 
-      assert stored["Beside this page"] == "This page"
+      assert stored["Beside this page"] == "This document"
       assert stored["Across this site"] == "Shared"
 
       # "All sites" is the one choice that is not a `scope` at all: it writes a nil `site_id`, which
@@ -3611,7 +3611,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       render_click(other, "goto_comment", %{"id" => note.id})
 
       assert editor(other).selection == their_h1.id
-      refute render(other) =~ "no longer on this page"
+      refute render(other) =~ "that note was on is no longer there"
     end
 
     # The path is a position, and a position is only right if what sits there is still the same kind
@@ -3634,7 +3634,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       render_click(other, "open_sheet", %{"sheet" => "review"})
       render_click(other, "goto_comment", %{"id" => note.id})
 
-      assert render(other) =~ "no longer on this page"
+      assert render(other) =~ "that note was on is no longer there"
     end
 
     # A NOTE ABOUT THE PAGE, WITH SOMETHING SELECTED. The composer follows the canvas, which is right
@@ -3924,7 +3924,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       [comment] = notes(site, page)
       html = render_click(view, "goto_comment", %{"id" => comment.id})
 
-      assert html =~ "no longer on this page"
+      assert html =~ "that note was on is no longer there"
     end
 
     test "a page-level note says it is about the page rather than going nowhere", %{
@@ -3937,7 +3937,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       post_note(view, "About the page", "information")
 
       [comment] = notes(site, page)
-      assert render_click(view, "goto_comment", %{"id" => comment.id}) =~ "the whole page"
+      assert render_click(view, "goto_comment", %{"id" => comment.id}) =~ "the whole document"
     end
 
     # Nothing here implements AI review. What is pinned is that when something does, it is a

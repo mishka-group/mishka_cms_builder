@@ -510,8 +510,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       descriptor("toggle_visibility", :command, gettext_noop("Hide or show for visitors"), 55,
         shortcut: "⇧⌘H",
         icon: "eye_off",
-        description:
-          gettext_noop("Keep the selection in the page, shown to nobody, or show it again")
+        description: gettext_noop("Keep the selection but show it to nobody, or show it again")
       ),
       descriptor("delete", :command, gettext_noop("Delete selection"), 60,
         shortcut: "⌫",
@@ -1209,7 +1208,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-stage"
             type="button"
             phx-click={(@stage == @applied_stage && menu_toggle("#pb-stage-ways")) || "apply_stage"}
-            title={stage_button_title(@stage, @applied_stage)}
+            title={stage_tooltip(@section, @stage, @applied_stage)}
             class={[
               "inline-flex h-8 items-center gap-[7px] rounded-l-[9px] border-r-0 px-[13px] text-[12px] font-bold max-[1000px]:px-2.5",
               ((@stage == :published or @stage != @applied_stage) &&
@@ -1272,7 +1271,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                   {gettext("Publish now")}
                 </span>
                 <span class="mt-0.5 block text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
-                  {gettext("Puts what you see on the live page, for every visitor.")}
+                  {gettext("Puts what you see live, for every visitor.")}
                 </span>
               </span>
             </button>
@@ -2406,7 +2405,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               value={@find}
               autocomplete="off"
               phx-debounce="150"
-              placeholder={gettext("Find in the page's text…")}
+              placeholder={gettext("Find text on the canvas…")}
               class="peer h-[38px] w-full rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] pl-[34px] pr-[30px] text-[12.5px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white"
             />
             <%!-- One form, two fields, one handler that reads both — so clearing either has to
@@ -2445,13 +2444,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-find-none"
             class="px-2.5 py-8 text-center text-[12px] font-medium text-[#6d6a63]"
           >
-            {gettext("No text on this page says that.")}
+            {gettext("No text on the canvas says that.")}
           </p>
           <p
             :if={String.trim(@find) == ""}
             class="px-2.5 py-8 text-center text-[12px] font-medium text-[#a8a5a0]"
           >
-            {gettext("Type to search the words on this page.")}
+            {gettext("Type to search the words on the canvas.")}
           </p>
           <button
             :for={hit <- @hits}
@@ -2937,7 +2936,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       <.icon name={:eye_off} size={14} class="flex-none text-[#8a877f]" />
       <span class="min-w-0 flex-1 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]">
         {(@hider.id == @node.id &&
-            gettext("Hidden from visitors. It stays in the page, with everything inside it.")) ||
+            gettext("Hidden from visitors. It stays in the markup, with everything inside it.")) ||
           gettext("Hidden from visitors with the element around it.")}
       </span>
       <button
@@ -4520,10 +4519,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       |> assign(:required?, Inspector.required?(assigns.attr))
       |> then(&assign(&1, :missing?, &1.required? and blank?(&1.value)))
       |> assign(:mistyped?, mistyped?(assigns.attr, assigns.node, assigns.name))
-      |> assign(
-        :noun,
-        String.downcase(translate(Section.label(Section.normalize(assigns.section))))
-      )
+      |> assign(:noun, doc_noun(assigns.section))
 
     ~H"""
     <%!-- One property. It carries its own state rather than leaving it to be inferred: a violet dot
@@ -4547,7 +4543,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
           <span
             :if={!is_nil(@value)}
-            title={gettext("Set on this page")}
+            title={gettext("Set on this %{noun}", noun: @noun)}
             class="size-[7px] flex-none rounded-full bg-[#4f4bcc]"
           />
 
@@ -8369,9 +8365,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
           <div class="min-w-0">
             <h1 class="font-['Space_Grotesk'] text-[17px] font-bold text-[#17161a]">
-              {gettext("This %{section} could not be opened",
-                section: String.downcase(translate(Section.label(Section.normalize(@section))))
-              )}
+              {gettext("This %{section} could not be opened", section: doc_noun(@section))}
             </h1>
             <p class="mt-1 text-[12.5px] font-medium leading-[1.6] text-[#6d6a63]">
               {gettext(
@@ -8715,7 +8709,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         </span>
         <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
           {gettext(
-            "Publish mode: these changes are not on the live page or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
+            "Publish mode: these changes are not live or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
           )}
         </span>
         <%!-- The bar names Publish, so it carries it: the same press as the top bar's button. --%>
@@ -9253,7 +9247,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               type="submit"
               form="pb-drawer-heex-form"
               id="pb-drawer-heex-save"
-              title={gettext("Apply this markup to the page (⌘↵)")}
+              title={gettext("Apply this markup (⌘↵)")}
               class="hidden h-[22px] flex-none items-center gap-1.5 rounded-[7px] bg-[#2f7d5b] px-2.5 font-['Space_Grotesk'] text-[10.5px] font-bold text-white hover:bg-[#37916a] group-data-[dirty=true]/heex:inline-flex"
             >
               {gettext("Apply")} <span class="text-[9.5px] font-medium opacity-70">⌘↵</span>
@@ -9471,7 +9465,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp code_scope(:html, nil), do: gettext("# the whole document")
   defp code_scope(:html, node), do: "# " <> node_label(node)
   defp code_scope(:css, _node), do: gettext("# selected element")
-  defp code_scope(_js, _node), do: gettext("# page hooks")
+  defp code_scope(_js, _node), do: gettext("# hooks")
 
   # Source lines are left in one colour rather than tinted by a guess at what each one is. The one
   # distinction worth drawing is a comment, which is not code at all.
@@ -9701,7 +9695,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         current_user={@current_user}
       />
       <p :if={@tree.roots == []} class="py-8 text-center text-[12px] font-medium text-[#a8a5a0]">
-        {gettext("Nothing on this page yet.")}
+        {gettext("Nothing here yet.")}
       </p>
 
       <%!-- THE END OF THE PAGE, which the rail could not otherwise offer. Every other target here is
@@ -9722,7 +9716,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           <.icon name={:plus} size={11} />
         </span>
         <span class="min-w-0 flex-1 truncate text-[11.5px] font-semibold">
-          {gettext("drop at the end of the page")}
+          {gettext("drop at the end")}
         </span>
       </div>
     </div>
@@ -10591,7 +10585,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           class="text-[11.5px] font-medium leading-[1.55] text-[#5c5a54]"
         >
           {gettext(
-            "I can edit this page for you — describe a change, or select an element and use “Ask AI” to scope it."
+            "I can edit this for you — describe a change, or select an element and use “Ask AI” to scope it."
           )}
         </p>
 
@@ -10789,7 +10783,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                       {gettext("Capture template")}
                     </span>
                     <span class="block text-[10px] font-medium text-[#6d6a63]">
-                      {gettext("The whole page canvas")}
+                      {gettext("The whole canvas")}
                     </span>
                   </span>
                 </button>
@@ -10817,7 +10811,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             <span class="inline-flex min-w-0 flex-1 items-center gap-1.5">
               <span class="size-[5px] flex-none rounded-full bg-[#5b57d6]" />
               <span class="truncate font-['Space_Grotesk'] text-[10.5px] font-semibold text-[#6d6a63]">
-                {(@selected_node && selection_tag(@selected_node)) || gettext("whole page")}
+                {(@selected_node && selection_tag(@selected_node)) || gettext("whole document")}
               </span>
             </span>
             <button
@@ -10945,7 +10939,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
         </span>
         <div class="min-w-0">
-          <div class="text-[12.5px] font-bold text-[#1b1a18]">{gettext("Page score")}</div>
+          <div class="text-[12.5px] font-bold text-[#1b1a18]">
+            {gettext("%{section} score",
+              section: translate(Section.label(Section.normalize(@editor.section)))
+            )}
+          </div>
           <div id="pb-audit-summary" class="mt-0.5 text-[10.5px] font-medium text-[#6d6a63]">
             {audit_summary(@findings)}
           </div>
@@ -11475,7 +11473,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               id="pb-source-apply"
               class="flex-none rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white hover:bg-[#2a282f]"
             >
-              {gettext("Apply to the page")}
+              {gettext("Apply")}
             </button>
           </footer>
         </form>
@@ -11622,7 +11620,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     >
       <p :if={@rows == []} class="text-[12px] font-medium text-[#6d6a63]">
         {gettext(
-          "No element on this page has CSS of its own yet. Select one and open Custom CSS in the inspector to give it some."
+          "No element has CSS of its own yet. Select one and open Custom CSS in the inspector to give it some."
         )}
       </p>
 
@@ -11817,7 +11815,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       class="mb-4 rounded-[12px] border border-[#ecebe6] bg-[#faf9f6] px-4 py-3"
     >
       <h3 class="mb-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
-        {gettext("Forms on this page")}
+        {gettext("Forms in the template")}
       </h3>
       <div class="flex flex-col gap-2.5">
         <div
@@ -12314,7 +12312,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         <span
           :if={@state != :none}
           class="size-[6px] flex-none rounded-full bg-[#8580d8]"
-          title={gettext("This element is only on the page sometimes")}
+          title={gettext("This element is only shown sometimes")}
         ></span>
       </button>
 
@@ -12362,7 +12360,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
           <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
             {gettext(
-              "The canvas always draws it, so it stays editable. The published page is where the condition decides."
+              "The canvas always draws it, so it stays editable. On the live site, the condition decides."
             )}
           </p>
         </form>
@@ -12733,10 +12731,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     do: gettext("No handlers yet. One answers a phx-click, a form submit or a key press.")
 
   defp empty_note(:infos),
-    do:
-      gettext(
-        "No messages yet. One answers something the server sends this page — a tick, a broadcast."
-      )
+    do: gettext("No messages yet. One answers something the server sends — a tick, a broadcast.")
 
   defp empty_note(:helpers),
     do: gettext("No helpers yet. One is a function the template can call.")
@@ -12744,7 +12739,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp empty_note(:state),
     do:
       gettext(
-        "No state yet. Each value is an assign the page starts with, so @count is there from the first render."
+        "No state yet. Each value is a starting assign, so @count is there from the first render."
       )
 
   # Whether the record being edited compiles to a `Phoenix.LiveComponent` — read off the row rather
@@ -12754,12 +12749,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp live_record?(_record), do: false
 
   defp scope_note(:helpers),
-    do: gettext("Helpers belong to this page and its template can call them.")
+    do: gettext("Helpers belong here, and the template can call them.")
 
   defp scope_note(:state),
     do:
       gettext(
-        "Worked out for each visitor when the page opens. A handler changes a value with assign(socket, :count, 1)."
+        "Worked out for each visitor on the first render. A handler changes a value with assign(socket, :count, 1)."
       )
 
   defp scope_note(_tab), do: gettext("Code is written on its own, not with the document.")
@@ -12799,7 +12794,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             </h2>
             <p class="mt-1.5 text-[11.5px] font-medium leading-[1.55] text-[#6d6a63]">
               {gettext(
-                "This page has changes that are not in a draft or published yet. They stay in this editing session and will be drawn again — but anything you are typing on the canvas right now is lost when the frame reloads."
+                "Your changes are not in a draft or published yet. They stay in this editing session and will be drawn again — but anything you are typing on the canvas right now is lost when the frame reloads."
               )}
             </p>
           </div>
@@ -13020,11 +13015,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           </span>
           <div class="min-w-0">
             <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
-              {gettext("This isn’t on the page yet")}
+              {gettext("This isn’t live yet")}
             </h2>
             <p class="mt-1.5 text-[11.5px] font-medium leading-[1.55] text-[#6d6a63]">
               {gettext(
-                "The chip is on Publish, so this is recorded in the page’s history but is not on the live page and not in a draft. What should happen to it?"
+                "The chip is on Publish, so this is recorded in the editing history but is not live and not in a draft. What should happen to it?"
               )}
             </p>
           </div>
@@ -13064,7 +13059,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             <span class="min-w-0 flex-1">
               <span class="block text-[12.5px] font-bold text-white">{gettext("Publish it now")}</span>
               <span class="mt-0.5 block text-[11px] font-medium leading-[1.5] text-white/80">
-                {gettext("Goes live on the site straight away, and the page is rebuilt.")}
+                {gettext("Goes live on the site straight away and is rebuilt.")}
               </span>
             </span>
           </button>
@@ -15804,7 +15799,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp history_sheet(assigns) do
     ~H"""
     <p class="-mt-1 mb-3 text-[11px] font-medium text-[#6d6a63]">
-      {gettext("Every change to this page")}
+      {gettext("Every change to this %{noun}", noun: doc_noun(@section))}
     </p>
 
     <%!-- A change is written when it settles, so one just made appears a moment later rather than
@@ -15840,12 +15835,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         phx-click="history_clear"
         data-confirm={
           gettext(
-            "Deletes every recorded change for this page, including what can be restored from them. The page itself is untouched. This cannot be undone."
+            "Deletes every recorded change for this %{noun}, including what can be restored from them. The %{noun} itself is untouched. This cannot be undone.",
+            noun: doc_noun(@section)
           )
         }
         class="h-[26px] rounded-[8px] border border-[#f0dcd8] bg-white px-2.5 text-[10px] font-bold text-[#a3554f] hover:bg-[#fdf2f1]"
       >
-        {gettext("Clear this page’s editing history")}
+        {gettext("Clear the editing history")}
       </button>
     </div>
     """
@@ -16009,13 +16005,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     Enum.join([gettext("%{name} (you)", name: me) | Enum.map(editors, & &1.name)], ", ")
   end
 
-  defp avatars_title([]), do: gettext("Only you are editing this page")
+  defp avatars_title([]), do: gettext("Only you are editing this")
 
   defp avatars_title(editors),
     do:
       ngettext(
-        "You and %{count} other editing this page",
-        "You and %{count} others editing this page",
+        "You and %{count} other editing this",
+        "You and %{count} others editing this",
         length(editors)
       )
 
@@ -16025,13 +16021,19 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp stage_button_label(:published, _applied), do: gettext("Publish")
   defp stage_button_label(_draft, _applied), do: gettext("Save draft")
 
+  # A component has no drafts, so its Draft stage promises nothing kept aside.
+  defp stage_tooltip("component", :draft, _applied),
+    do: gettext("A component has no drafts — use Publish to save it.")
+
+  defp stage_tooltip(_section, stage, applied), do: stage_button_title(stage, applied)
+
   defp stage_button_title(stage, stage), do: stage_title(stage)
 
   defp stage_button_title(:published, _applied),
-    do: gettext("Publish — this will make the page visible to visitors")
+    do: gettext("Publish — this will make it visible to visitors")
 
   defp stage_button_title(_draft, _applied),
-    do: gettext("Save draft — kept aside; the live page is untouched until you publish")
+    do: gettext("Save draft — kept aside; what is live is untouched until you publish")
 
   defp stage_icon(stage, stage), do: (stage == :published && :check) || :draft
   defp stage_icon(:published, _applied), do: :rocket
@@ -16040,7 +16042,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp stage_label(:published), do: gettext("Published")
   defp stage_label(_draft), do: gettext("Draft")
 
-  defp stage_title(:published), do: gettext("Published — visitors can see this page")
+  defp stage_title(:published), do: gettext("Published — visitors can see this")
   defp stage_title(_draft), do: gettext("Draft — kept aside, not in front of visitors")
 
   # The dot is the draft light, so its tooltip is what the last write did.
@@ -16238,11 +16240,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # WHAT THE CHIP IS OFFERING TO LEAVE. "Live page" was written into the markup, so a layout, a
   # component and an error page all called their live record a page — in the one control whose whole
   # job is to say which document a save lands on. The section already names itself.
-  defp live_label(section),
-    do:
-      gettext("Live %{section}",
-        section: String.downcase(translate(Section.label(Section.normalize(section))))
-      )
+  defp live_label(section), do: gettext("Live %{section}", section: doc_noun(section))
+
+  # The document's name in a sentence: "page", "component", read off the section table.
+  defp doc_noun(section),
+    do: String.downcase(translate(Section.label(Section.normalize(section))))
 
   # "Page builder" over a page, "Component builder" over a component. The noun comes from the same
   # table the back link and the flash messages read, so there is one place to change a name.

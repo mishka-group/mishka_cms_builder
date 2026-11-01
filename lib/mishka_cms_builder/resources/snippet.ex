@@ -109,13 +109,13 @@ defmodule MishkaCmsBuilder.Snippet do
         end
       end
 
-      # The Studio's chips. "This page" and "Shared" are the stored `scope`; "All" is this filter
+      # The Studio's chips. "This document" and "Shared" are the stored `scope`; "All" is this filter
       # unset, which is why the All chip pushes an empty value rather than a third option.
       filters do
         filter :scope, :select do
           options fn ->
             [
-              {dgettext("mishka_gervaz", "This page"), "page"},
+              {dgettext("mishka_gervaz", "This document"), "page"},
               {dgettext("mishka_gervaz", "Shared"), "shared"}
             ]
           end

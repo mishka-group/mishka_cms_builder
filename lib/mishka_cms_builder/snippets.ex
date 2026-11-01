@@ -201,7 +201,7 @@ defmodule MishkaCmsBuilder.Snippets do
   defp keep?(_snippet, _filter), do: true
 
   defp scope_label(%{site_id: nil}), do: gettext("All sites")
-  defp scope_label(%{scope: :page}), do: gettext("This page")
+  defp scope_label(%{scope: :page}), do: gettext("This document")
   defp scope_label(_snippet), do: gettext("Shared")
 
   defp scope_type(%{site_id: nil}), do: "global"

@@ -413,7 +413,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
         <div id="pb-page-starter-foot">
           <span id="pb-page-starter-note">
-            {gettext("Or drop a component straight onto the page.")}
+            {gettext("Or drop a component straight onto the canvas.")}
           </span>
           <button type="button" id="pb-starter-scratch" phx-click="starter_scratch">
             {gettext("Start from scratch")}
@@ -1229,9 +1229,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     ~H"""
     <.canvas_notice
       nonce={assigns[:csp_nonce]}
-      message={
-        gettext("This editing session has expired. Reopen the page from the builder to continue.")
-      }
+      message={gettext("This editing session has expired. Reopen it from the builder to continue.")}
     />
     """
   end

@@ -736,7 +736,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       {:ok, view, _html} = open_builder(conn, page)
 
       html = view |> element("#pb-avatars") |> render()
-      assert html =~ "Only you are editing this page"
+      assert html =~ ~s(title="Only you are editing this")
 
       # Exactly one chip: you. A second would mean a second person, which is the case that matters.
       assert html |> String.split("rounded-full") |> length() == 2
@@ -1529,7 +1529,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       p = node_with_tag(view, "p")
 
       render_click(view, "shortcut", %{"key" => "visibility"})
-      assert flashes(view) =~ "Select an element on the page first."
+      assert flashes(view) =~ "Select an element on the canvas first."
 
       render_click(view, "ctx", %{"action" => "visibility", "node_id" => p.id})
       assert Visibility.hidden?(node_with_tag(view, "p"))

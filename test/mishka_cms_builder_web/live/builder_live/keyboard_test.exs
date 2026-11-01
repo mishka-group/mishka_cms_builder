@@ -68,7 +68,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.KeyboardTest do
       render_click(view, "select", %{"id" => h1.id})
       shortcut(view, "delete", %{"node_id" => nil})
       assert node_count(view) == before
-      assert flashes(view) =~ "Select an element on the page first."
+      assert flashes(view) =~ "Select an element on the canvas first."
 
       render_click(view, "select", %{"id" => p.id})
       shortcut(view, "delete", %{"node_id" => p.id})
@@ -76,8 +76,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.KeyboardTest do
 
       shortcut(view, "delete", %{"node_id" => p.id})
       assert present?(view, h1.id)
-      assert flashes(view) =~ "Select an element on the page first."
-      refute flashes(view) =~ "no longer on the page"
+      assert flashes(view) =~ "Select an element on the canvas first."
+      refute flashes(view) =~ "no longer there"
     end
 
     test "cut, copy and duplicate follow the same rule", %{conn: conn, page: page} do

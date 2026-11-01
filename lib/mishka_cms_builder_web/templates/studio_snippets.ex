@@ -42,7 +42,7 @@ defmodule MishkaCmsBuilderWeb.Templates.StudioSnippets do
 
   @chips [
     {"all", gettext_noop("All")},
-    {"page", gettext_noop("This page")},
+    {"page", gettext_noop("This document")},
     {"global", gettext_noop("Shared")}
   ]
 

@@ -1493,7 +1493,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       {:ok, view, _html} = open_builder(conn, page)
       view |> element("#pb-code") |> render_click()
 
-      assert render_click(view, "source_tab", %{"tab" => "styles"}) =~ "No element on this page"
+      assert render_click(view, "source_tab", %{"tab" => "styles"}) =~
+               "No element has CSS of its own yet"
     end
 
     # A rule whose element has been deleted is still being served. Hiding it would make the prune on
@@ -1779,7 +1780,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
         refute has_element?(clear_flashes(view), "#flash-info"), id
         view |> element("##{id}") |> render_click()
 
-        assert flashes(view) =~ "Select an element on the page first.", id
+        assert flashes(view) =~ "Select an element on the canvas first.", id
         refute internals?(flashes(view)), id
         refute flashes(view) =~ "node_id", id
       end

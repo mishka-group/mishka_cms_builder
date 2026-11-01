@@ -1689,10 +1689,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       # The old implicit rule, kept as the PRESELECTED choice rather than the only one: a selection
       # belongs to its own page, a whole page has nowhere else to go but shared.
       visibility: (selected && record && "page") || "shared",
-      selection_tag: (selected && Panels.selection_tag(selected)) || gettext("whole page"),
+      selection_tag:
+        (selected && Panels.selection_tag(selected)) ||
+          gettext("whole %{noun}", noun: noun(editor.section)),
       save_label:
         (selected && gettext("Save selection as snippet")) ||
-          gettext("Save this page as a snippet")
+          gettext("Save this %{noun} as a snippet", noun: noun(editor.section))
     })
   end
 
@@ -2775,7 +2777,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
        |> assign(:history_reverting?, false)
        |> put_flash(
          :info,
-         gettext("Restored in the editor. The live page does not change until you publish.")
+         gettext("Restored in the editor. What is live does not change until you publish.")
        )}
 
   def handle_async(:history_revert, {:ok, {:error, :gone}}, socket),
@@ -3037,7 +3039,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         socket,
         :info,
         gettext(
-          "Publish mode: nothing is saved as you work now. Press Publish to put your changes on the live page; until then they are only recorded in the page’s history."
+          "Publish mode: nothing is saved as you work now. Press Publish to put your changes live; until then they are only recorded in the editing history."
         )
       )
 
@@ -3790,14 +3792,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
          |> assign(sheet: :none, left_hidden: false, left_tab: :inspector)}
 
       :page ->
-        {:noreply, put_flash(socket, :info, gettext("That note is about the whole page."))}
+        {:noreply, put_flash(socket, :info, gettext("That note is about the whole document."))}
 
       :gone ->
         {:noreply,
          put_flash(
            socket,
            :error,
-           gettext("The element that note was on is no longer on this page.")
+           gettext("The element that note was on is no longer there.")
          )}
     end
   end
@@ -4785,7 +4787,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     case Tree.get(editor.tree, node_id) do
       %Node{kind: :tag} -> FormPlacement.replace_ops(editor, node_id, events: events)
       %Node{} = node -> FormPlacement.wiring(editor.tree, node, editor.components, events: events)
-      nil -> {:error, gettext("That form is no longer on the page.")}
+      nil -> {:error, gettext("That form is no longer there.")}
     end
     |> wired(socket)
   end
@@ -5570,7 +5572,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp set_condition(tree, node_id, source),
     do: Tree.set_attr(tree, node_id, Conditions.attribute(), {:expr, source})
 
-  defp condition_flash(nil), do: gettext("This element is always on the page.")
+  defp condition_flash(nil), do: gettext("This element is always shown.")
   defp condition_flash(_source), do: gettext("Condition set.")
 
   # THE SCOPE, THE AIM AND THE COMMAND ARE ALL READ OFF THE STORED TREE, because all three are the
@@ -5617,7 +5619,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp save_interaction(socket, _gone, _action),
-    do: {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
+    do: {:noreply, put_flash(socket, :error, gettext("That element is no longer there."))}
 
   # The rail's Fix, for every finding whose answer is a sentence rather than an edit. A Forms
   # finding reaches this only when the document has moved on under the click, or when the answer is
@@ -6499,7 +6501,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   end
 
   defp needs_selection(socket),
-    do: put_flash(socket, :info, gettext("Select an element on the page first."))
+    do: put_flash(socket, :info, gettext("Select an element on the canvas first."))
 
   # Runtime components are placed in their wrapper form, which is what every stored template uses
   # and what the compilers emit: the name is data, and a hyphenated one could not be a tag at all.
@@ -6807,7 +6809,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       document: heex,
       note:
         gettext(
-          "Published to the live page, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own."
+          "Published, which Revert here goes back to. The changes behind it are recorded but no longer restorable on their own."
         )
     }
 
@@ -7098,7 +7100,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:noreply, put_flash(socket, :info, flash)}
 
       _gone ->
-        {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
+        {:noreply, put_flash(socket, :error, gettext("That element is no longer there."))}
     end
   end
 
@@ -8031,7 +8033,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp shadow_value(_part, value), do: to_string(value)
 
   defp human(reason) when is_binary(reason), do: plain(reason)
-  defp human(:unknown_node), do: gettext("That element is no longer on the page.")
+  defp human(:unknown_node), do: gettext("That element is no longer there.")
   defp human(:unknown_session), do: gettext("This editing session expired. Reload the builder.")
   defp human(:invalid_parent), do: gettext("That element cannot hold content.")
 
@@ -8049,7 +8051,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp human(:document_root),
     do: gettext("That is the document itself — put content inside it rather than around it.")
 
-  defp human(:unserializable), do: gettext("the page's markup could not be written out")
+  defp human(:unserializable), do: gettext("the markup could not be written out")
   defp human({:exit, _reason}), do: gettext("the save stopped before it finished")
 
   # ASH SAYS WHY IN ITS OWN WORDS, and wraps them. `Exception.message/1` on an error class is a
@@ -8456,7 +8458,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:noreply, assign(socket, :heex_error, source_message(reason))}
 
       nil ->
-        {:noreply, assign(socket, :heex_error, gettext("That element is no longer on the page."))}
+        {:noreply, assign(socket, :heex_error, gettext("That element is no longer there."))}
     end
   end
 

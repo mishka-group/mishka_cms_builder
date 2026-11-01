@@ -1368,7 +1368,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       assert has_element?(view, ~s([data-role='pb-root-drop'][data-parent-id='root']))
 
       tail = view |> element(~s([data-role='pb-root-drop'])) |> render()
-      assert tail =~ "drop at the end of the page"
+      assert tail =~ "drop at the end"
       assert tail =~ "data-[show=true]:flex"
       refute tail =~ ~s(data-show=)
     end

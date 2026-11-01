@@ -66,7 +66,7 @@ defmodule MishkaCmsBuilder.Comment do
     |> Map.new(fn {key, value} -> {to_string(key), value} end)
     |> Map.put("id", generate_id())
     |> Map.put("at", DateTime.utc_now())
-    |> Map.put_new("node_label", gettext("the whole page"))
+    |> Map.put_new("node_label", gettext("the whole document"))
     |> Map.put_new("author", gettext("Someone"))
     |> builder()
   end
