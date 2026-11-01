@@ -411,7 +411,7 @@ defmodule MishkaCmsBuilderWeb.Live.OverlayCanvasTest do
       view |> element("#pb-overlay-open") |> render_click()
 
       assert EditorSession.pinned?(editor(view), id)
-      assert has_element?(view, ~s(#pb-overlay-open[aria-pressed="true"]), "Close")
+      assert has_element?(view, ~s(#pb-overlay-open[aria-pressed="true"]), "Close on canvas")
       {_canvas, html} = canvas(conn, view)
       assert wrapper(html) =~ ~s(data-pb-reveal="true")
 

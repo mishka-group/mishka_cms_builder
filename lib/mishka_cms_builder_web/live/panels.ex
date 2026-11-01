@@ -12641,7 +12641,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           "border-[#dcdbf5] bg-white text-[#4f4bcc] hover:bg-[#f7f6ff]"
       ]}
     >
-      <.icon name={:pin} size={11} /> {(@open? && gettext("Close")) || gettext("Open on canvas")}
+      <.icon name={:pin} size={11} /> {(@open? && gettext("Close on canvas")) ||
+        gettext("Open on canvas")}
     </button>
     <p
       :if={@docked == :some}
