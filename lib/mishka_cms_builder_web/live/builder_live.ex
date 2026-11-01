@@ -7239,6 +7239,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # which replaces the whole document too, ran the tokenizer and nothing else.
   defp apply_source(socket, source) do
     with {:ok, tree} <- Tree.parse(source),
+         :ok <- placement_ok(socket, source),
          :ok <- compiles(socket, tree) do
       EditorSession.put_tree(socket.assigns.token, tree, reason: :source_edit)
       {:noreply, assign(socket, source_modal: false, source_error: nil, source_draft: nil)}
@@ -8462,6 +8463,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp write_document_heex(socket, source) do
     with {:ok, tree} <- Tree.parse(source),
+         :ok <- placement_ok(socket, source),
          :ok <- compiles(socket, tree) do
       EditorSession.put_tree(socket.assigns.token, tree, reason: :source_edit)
       {:noreply, assign(socket, :heex_error, nil)}
@@ -8529,6 +8531,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp replace(socket, tree, %Node{} = node, source) do
     with index when is_integer(index) <- Tree.index_of(tree, node.id),
+         :ok <- placement_ok(socket, source),
          {:ok, proposed} <- splice(tree, node, index, source),
          :ok <- compiles(socket, proposed) do
       replace_node(socket, node, index, source)
@@ -8544,6 +8547,14 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       Tree.insert(without, Tree.refresh_ids(subtree), node.parent_id || :root, index)
     end
   end
+
+  # The placement rules, asked of the markup that was typed. The compiler takes `<p>words <.form>…
+  # </.form></p>` and a browser closes the `<p>` in front of the form, so the canvas and the Layers
+  # and Code views would disagree. A refusal is a fault with a line and a column, which
+  # `source_message/1` prints like the tokenizer's. The editor's components are handed over so a kit
+  # form is read as the `<form>` its markup opens with.
+  defp placement_ok(socket, source),
+    do: CodeCheck.placement(source, components: socket.assigns.editor.components)
 
   # THE REAL COMPILER, not the tokenizer. `Tree.parse` answers "is this markup" — it is the HTML
   # tokenizer, and it is happy with `{@user.name` and with a component attribute that no component

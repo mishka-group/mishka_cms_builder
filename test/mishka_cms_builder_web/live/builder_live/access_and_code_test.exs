@@ -1232,6 +1232,31 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       assert Serializer.serialize(editor(view).tree) =~ "mended"
     end
 
+    test "refuses a form typed inside a paragraph, at its line and column", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      before = Serializer.serialize(editor(view).tree)
+
+      typed =
+        ~s(<p>Join us <.form for={%{}} :let={_f}><.input name="email" value="" /></.form></p>)
+
+      render_click(view, "apply_source", %{"source" => typed})
+
+      error = view |> element("#pb-source-error") |> render()
+      assert error =~ "Line 1, column 12"
+      assert error =~ "can only hold text and inline elements"
+      assert Serializer.serialize(editor(view).tree) == before
+
+      render_click(view, "apply_source", %{
+        "source" => ~s(<p>Join us</p><div>#{"<.form for={%{}} :let={_f}></.form>"}</div>)
+      })
+
+      assert Serializer.serialize(editor(view).tree) =~ "Join us"
+    end
+
     test "closing the window drops the draft rather than keeping it forever", %{
       conn: conn,
       page: page
