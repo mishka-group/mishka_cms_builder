@@ -461,52 +461,27 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert has_element?(view, "#pb-bp-mobile")
     end
 
-    # BUT NOT OUT FROM UNDER AN AUTHOR WHO IS USING THE PALETTE. A selection is also the palette's
-    # answer to "where", and an e2e run that clicked the navbar to aim its next card found the rail
-    # turned into the Inspector, so the next drag picked up Inspector text instead of a card.
-    test "a canvas click leaves the palette tab the author chose", %{conn: conn, page: page} do
+    # WHICHEVER TAB THE RAIL WAS ON. A selection is the palette's answer to "where" as well, but a
+    # click on the page asks for the element's form, and a rail that stayed on the palette because the
+    # author had once chosen its tab, or left a search in its box, showed a ring on the canvas and no
+    # Inspector until a row in the layers tree was clicked.
+    test "a canvas click opens the Inspector from the Components and Blocks tabs", %{
+      conn: conn,
+      page: page
+    } do
       {:ok, view, _html} = open_builder(conn, page)
       section = node_with_tag(view, "section")
       token = view |> editor() |> Map.fetch!(:token)
 
-      view |> element("#pb-lefttab-components") |> render_click()
-      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
-      refute palette_hidden?(view)
+      for tab <- ["components", "blocks"] do
+        view |> element("#pb-lefttab-#{tab}") |> render_click()
+        assert live_assigns(view).left_tab == String.to_existing_atom(tab)
 
-      view |> element("#pb-lefttab-blocks") |> render_click()
-      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
-      assert has_element?(view, "#pb-block-search")
-
-      view |> element("#pb-lefttab-inspector") |> render_click()
-      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
-      assert palette_hidden?(view)
-      assert has_element?(view, "#pb-bp-mobile")
-    end
-
-    # A search or a category narrowing the palette is the palette in the middle of being used; with
-    # neither, the tab is back to being the one the editor opened on.
-    test "a search or a category keeps the palette open", %{conn: conn, page: page} do
-      for {event, value} <- [
-            {"palette_query", %{"value" => "card"}},
-            {"palette_cat", %{"cat" => "general"}}
-          ] do
-        {:ok, view, _html} = open_builder(conn, page)
-        section = node_with_tag(view, "section")
-        token = view |> editor() |> Map.fetch!(:token)
-
-        render_hook(view, event, value)
         {:ok, _session} = EditorSession.select(token, section.id, :canvas)
-        refute palette_hidden?(view)
+        assert live_assigns(view).left_tab == :inspector, "a click opens it from the #{tab} tab"
+        assert palette_hidden?(view)
+        assert has_element?(view, "#pb-bp-mobile")
       end
-
-      {:ok, view, _html} = open_builder(conn, page)
-      section = node_with_tag(view, "section")
-      token = view |> editor() |> Map.fetch!(:token)
-
-      render_hook(view, "palette_query", %{"value" => "card"})
-      render_hook(view, "palette_query", %{"value" => ""})
-      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
-      assert palette_hidden?(view)
     end
 
     # The click that follows placing a card is usually about that card: on the tab the editor
@@ -545,6 +520,56 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       view |> element("#pb-lefttab-components") |> render_click()
       {:ok, _session} = EditorSession.select(token, section.id, {:canvas, "class"})
       assert palette_hidden?(view)
+    end
+
+    # THE CLICK THE CANVAS SENDS, not a hand-made broadcast: the box carries `phx-click="select"`
+    # and its id, the canvas answers it, and the chrome hears the session's `:canvas` selection. An
+    # icon placed in a paragraph is boxed in a `<span>`, and a heading is a plain tag, so both are
+    # clicked; each opens the Inspector, whichever way the palette was last used.
+    test "a click on an icon in a paragraph, or on a heading, opens the Inspector", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<p id="intro">Words <.icon name="hero-sparkles" /></p><h2 id="title">Hi</h2>)
+        )
+
+      palette_uses = [
+        {"the Components tab clicked",
+         &render_click(&1, "set_left_tab", %{"tab" => "components"})},
+        {"a search typed", &render_hook(&1, "palette_query", %{"value" => "icon"})},
+        {"a category chosen", &render_hook(&1, "palette_cat", %{"cat" => "general"})},
+        {"the palette untouched", fn _view -> :ok end}
+      ]
+
+      for {used, use} <- palette_uses, target <- [{:component, "icon"}, {:tag, "h2"}] do
+        {:ok, view, _html} = open_builder(conn, page)
+
+        {:ok, canvas, _html} =
+          live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+        use.(view)
+
+        node =
+          case target do
+            {:component, name} -> component_node(view, name)
+            {:tag, tag} -> node_with_tag(view, tag)
+          end
+
+        assert node, "#{inspect(target)} is on the page"
+
+        if target == {:component, "icon"},
+          do: assert(has_element?(canvas, "p#intro > span[data-pb-frame][data-node-id]"))
+
+        render_click(canvas, "select", %{"id" => node.id})
+        assert editor(view).selection == node.id
+
+        assert palette_hidden?(view),
+               "a click on #{inspect(target)} opens the Inspector with #{used}"
+      end
     end
 
     # The grip drags locally and reports once, so the bounds have to reach the browser: without
