@@ -42,6 +42,25 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DarkThemeTest do
     end
   end
 
+  # The inverse reaches what a frame paints and nothing else. A document that sets no background, such
+  # as a page without a layout, paints nothing under its text and icons, so the stage behind the frame
+  # shows through, and the root's filter turns the stage near-black: black text on a dark ground. The
+  # frame's own background is inside its filter, so it comes out as the white a published page has.
+  test "the canvas draws on the page's white, not on the stage behind it", %{
+    conn: conn,
+    page: page
+  } do
+    {:ok, view, _html} = open_builder(conn, page)
+
+    assert "bg-white" in classes(view, "#pb-frame-desktop")
+
+    view |> element("#pb-device-frames") |> render_click()
+
+    for width <- [1180, 900, 560] do
+      assert "bg-white" in classes(view, "#pb-frame-#{width}"), "the #{width}px frame"
+    end
+  end
+
   test "so does the preview a palette card opens", %{conn: conn, page: page} do
     {:ok, view, _html} = open_builder(conn, page)
 
