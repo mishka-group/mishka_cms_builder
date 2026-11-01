@@ -5116,6 +5116,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
         {:ok, editor} =
           EditorSession.edit_draft(socket.assigns.token, draft, draft_template(socket, draft))
 
+        # THE DRAFT'S SETTINGS ARE THE ONES DRAWN NOW, its layout among them. A canvas that opened
+        # on the live page kept the page's layout around the draft until it was reloaded.
+        EditorSession.announce(socket.assigns.token, {:layout, :draft})
+
         # The draft's own element CSS is the hold now, so the box and the canvas show it.
         rules = held_rules(socket, editor)
 
