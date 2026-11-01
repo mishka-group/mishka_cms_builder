@@ -997,7 +997,11 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     EditorSession.apply_op(socket.assigns.token, %{
       kind: :set_text,
       node_id: id,
-      text: text |> unwrapped(params["pre"]) |> escape_typed()
+      text:
+        text
+        |> unwrapped(params["pre"])
+        |> escape_typed()
+        |> with_lead_break(socket.assigns.tree, id)
     })
 
     {:noreply, socket}
@@ -2264,16 +2268,20 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   #
   # Only inside a COMPONENT, which is where a positional rule the editor did not write can see it.
   defp visible_node(%{node: %Node{kind: :text, meta: %{whitespace?: true}} = node} = assigns) do
+    assigns = assign(assigns, :shown_text, shown_text(assigns.tree, node))
+
     case trailing_in_component?(assigns, node) do
       true ->
-        ~H"{@node.text}"
+        ~H"{@shown_text}"
 
       false ->
-        ~H|<span data-node-id={@node.id} data-kind="text" data-ws="true">{@node.text}</span>|
+        ~H|<span data-node-id={@node.id} data-kind="text" data-ws="true">{@shown_text}</span>|
     end
   end
 
   defp visible_node(%{node: %Node{kind: :text}} = assigns) do
+    assigns = assign(assigns, :shown_text, shown_text(assigns.tree, assigns.node))
+
     ~H"""
     <span
       draggable="true"
@@ -2282,7 +2290,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       {wrapper_attrs(assigns)}
       phx-click="select"
       phx-value-id={@node.id}
-    >{text_html(@node.text)}</span>
+    >{text_html(@shown_text)}</span>
     """
   end
 
@@ -2493,6 +2501,41 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   defp trailing_in_component?(_assigns, _node), do: false
+
+  # THE LINE BREAK A `<pre>` OPENS WITH IS NOT SHOWN. The browser drops one line break right after a
+  # `<pre>`'s or a `<listing>`'s start tag, so `<pre>\nlead</pre>` starts at "lead" on the page. On
+  # the canvas the text is drawn in a box of its own, where that break is the box's first character
+  # and stays, a blank line the page does not have, so the box leaves it out. Words typed into the
+  # box get it back (`with_lead_break/3`), so the source keeps it. A `<textarea>` writes its text
+  # right after its start tag (`raw_text/2`), where the browser drops it.
+  @lead_break ~r/\A\r?\n/
+  @drops_lead_break ~w(pre listing)
+
+  defp shown_text(tree, %Node{text: text} = node) when is_binary(text) do
+    case opens_pre?(tree, node) do
+      true -> String.replace(text, @lead_break, "")
+      false -> text
+    end
+  end
+
+  defp shown_text(_tree, %Node{text: text}), do: text
+
+  defp opens_pre?(tree, %Node{id: id, parent_id: parent_id}) do
+    case Tree.get(tree, parent_id) do
+      %Node{kind: :tag, tag: tag, children: [^id | _rest]} -> tag in @drops_lead_break
+      _other -> false
+    end
+  end
+
+  defp with_lead_break(typed, tree, id) do
+    with %Node{text: text} = node when is_binary(text) <- Tree.get(tree, id),
+         true <- opens_pre?(tree, node),
+         [break] <- Regex.run(@lead_break, text) || Regex.run(@lead_break, typed) do
+      break <> typed
+    else
+      _shown_as_stored -> typed
+    end
+  end
 
   defp raw_text(node, tree) do
     Enum.map_join(node.children, fn id ->

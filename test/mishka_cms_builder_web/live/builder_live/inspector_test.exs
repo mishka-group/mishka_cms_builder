@@ -3482,6 +3482,57 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       assert canvas |> LazyHTML.query("pre > code") |> Enum.count() == 1
       assert canvas |> LazyHTML.query("pre") |> LazyHTML.text() == "line1\n  line2\nline3"
     end
+
+    # The browser drops the one newline right after a `<pre>`'s start tag, so a block written
+    # `<pre>` and then its first line below starts at that line on the page, and on the canvas too.
+    test "a pre that opens on a new line starts at its first line", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            "<pre>\nlead\n  indented\n</pre>" <>
+              "<listing>\n<code>one\n  two</code></listing>"
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      canvas =
+        conn
+        |> get("/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert canvas |> LazyHTML.query("pre") |> LazyHTML.text() == "lead\n  indented\n"
+      assert canvas |> LazyHTML.query("listing") |> LazyHTML.text() == "one\n  two"
+
+      # The words typed into that first line are what the page shows, and the line break the page
+      # drops stays in the source.
+      {:ok, live_canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      text =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :text and &1.text =~ "lead"))
+
+      render_click(live_canvas, "set_text", %{
+        "id" => text.id,
+        "text" => "lead\n  indented\n",
+        "pre" => true
+      })
+
+      assert Tree.get(editor(view).tree, text.id).text == "\nlead\n  indented\n"
+
+      render_click(live_canvas, "set_text", %{
+        "id" => text.id,
+        "text" => "lead\n  typed\n",
+        "pre" => true
+      })
+
+      assert Tree.get(editor(view).tree, text.id).text == "\nlead\n  typed\n"
+    end
   end
 
   describe "the controls a node can actually take" do
