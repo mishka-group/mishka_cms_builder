@@ -67,6 +67,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DarkThemeTest do
     assert @frame_filter in classes(view, "[data-role=pb-card-preview-frame]")
   end
 
+  # The same cause as the canvas: the card's preview is a document with no background of its own, so
+  # the card's body behind it, which the root's filter turns near-black, showed through under the
+  # component's dark text.
+  test "and the preview draws on white too", %{conn: conn, page: page} do
+    {:ok, view, _html} = open_builder(conn, page)
+
+    assert "bg-white" in classes(view, "[data-role=pb-card-preview-frame]")
+  end
+
   # THE INVERSE OF THE AMOUNT THE ROOT SETS, not of a number copied beside it. `invert(p)` maps a tone
   # `x` to `p + (1 - 2p) x`; `invert(1)` then `contrast(c)` maps it back when `c = 1 / (2p - 1)`, and
   # `hue-rotate(180deg)` is its own inverse. Change the root's amount and this says the frames no

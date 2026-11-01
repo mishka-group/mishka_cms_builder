@@ -174,8 +174,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # The inverse reaches only what the frame paints. A document that sets no background of its own,
   # such as a page without a layout, paints nothing there, so the stage behind the frame shows
   # through, and the root's filter turns that stage near-black under black text and black icons. The
-  # frames that show a whole page carry `bg-white` beside this filter: the white a browser draws under
-  # a published page, which the frame's filter and the root's filter hand back as white.
+  # frames that show a document (the canvas, a component's example and a palette card's preview)
+  # carry `bg-white` beside this filter: the white a browser draws under a published page, which the
+  # frame's filter and the root's filter hand back as white.
   @document_frame "[[data-theme=dark]_&]:[filter:hue-rotate(180deg)_invert(1)_contrast(1.1905)]"
 
   defp document_frame, do: @document_frame
@@ -2044,7 +2045,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             sandbox="allow-same-origin"
             scrolling="no"
             class={[
-              "pointer-events-none absolute left-0 top-0 origin-top-left border-0 opacity-0 transition-opacity duration-150",
+              "pointer-events-none absolute left-0 top-0 origin-top-left border-0 bg-white opacity-0 transition-opacity duration-150",
               document_frame()
             ]}
           ></iframe>
