@@ -361,6 +361,35 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
       assert live_assigns(view).element_css_rules == %{}
     end
 
+    # A REFUSED CUSTOM CSS IS ABOUT THE ELEMENT IT WAS TYPED FOR. Another selection puts that
+    # element's own CSS in the Inspector box and the drawer's pane, and the refusal stayed under both.
+    test "a Custom CSS refusal stays with its element and goes when another is selected", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      view
+      |> element("#pb-drawer-css-form")
+      |> render_submit(%{"node_id" => heading.id, "css" => "main { color: red"})
+
+      assert has_element?(view, "#pb-css-error")
+      assert has_element?(view, "#pb-drawer-css-error")
+
+      render_click(view, "select", %{"id" => heading.id})
+      assert has_element?(view, "#pb-css-error"), "it went while its element stayed selected"
+      assert has_element?(view, "#pb-drawer-css-error")
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+      refute has_element?(view, "#pb-css-error"), "it stayed under another element"
+      refute has_element?(view, "#pb-drawer-css-error"), "it stayed in the drawer's pane"
+    end
+
     # The upper Code menu. What it shows has to be what a save WRITES, which is `to_heex/1`
     # (serialised, re-parsed, formatted) and not the drawer's raw `serialize/1`.
     # ATTACHING A HOOK, NOT WRITING ONE. Writing stays on Runtime → JS hooks — the right amount of

@@ -1450,6 +1450,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> expand_to_selection(editor)
     |> expand_selected(editor)
     |> forget_heex_error(editor)
+    |> forget_element_css_error(editor)
     |> assign(:editor, editor)
     |> assign(:tree, editor.tree)
     |> assign_presets(editor)
@@ -1492,6 +1493,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
        do: socket
 
   defp forget_heex_error(socket, _editor), do: assign(socket, :heex_error, nil)
+
+  # A REFUSED CUSTOM CSS IS ABOUT THE ELEMENT IT WAS TYPED FOR. Another selection puts that
+  # element's own CSS in the box, and the refusal stayed under it. Only the selection clears it: a
+  # save from another tab moves the revision, and the author has not fixed the CSS yet.
+  defp forget_element_css_error(
+         %{assigns: %{editor: %{selection: selection}}} = socket,
+         %{selection: selection}
+       ),
+       do: socket
+
+  defp forget_element_css_error(socket, _editor), do: assign(socket, :element_css_error, nil)
 
   # ASKED AGAIN ONLY WHEN THE ANSWER CAN CHANGE: a new revision of the document, or the palette
   # arriving, which is what `Inspector.unmet/3` reads the declarations from. `assign_editor/2` also
