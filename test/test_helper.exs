@@ -50,12 +50,13 @@ if Mix.Project.config()[:app] == :mishka_cms_builder do
   # second failed that wait while a second suite shared the machine.
   ExUnit.configure(assert_receive_timeout: :timer.seconds(30))
 
-  # A DRAFT HOLDS ITS ELEMENT CSS from mishka_cms_core 0.0.5 on (`Drafts.autosave/8`). Against an
-  # older core, the tests tagged `:draft_css` have nothing to test and are left out.
+  # A DRAFT HOLDS ITS ELEMENT CSS from mishka_cms_core 0.0.5 on (`Drafts.autosave/8`), and a `<pre>`
+  # keeps the elements in it, both from mishka-group/mishka_cms_core#110. Against an older core, the
+  # tests tagged `:draft_css` or `:pre_elements` have nothing to test and are left out.
   drafts = MishkaCmsCore.Runtime.Authoring.Drafts
 
   unless Code.ensure_loaded?(drafts) and function_exported?(drafts, :autosave, 8),
-    do: ExUnit.configure(exclude: [:draft_css])
+    do: ExUnit.configure(exclude: [:draft_css, :pre_elements])
 
   ExUnit.start()
   Ecto.Adapters.SQL.Sandbox.mode(MishkaCmsBuilder.Repo, :manual)

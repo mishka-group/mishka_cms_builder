@@ -3438,6 +3438,50 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.InspectorTest do
       tree = view |> editor() |> Map.fetch!(:tree)
       assert Tree.get(tree, text.id).text == "one\n  two\n    three"
     end
+
+    # A `<pre>` shows every character inside it, and so does anything whose `white-space` keeps
+    # what it holds. The canvas puts nothing of its own between an element and its children, at any
+    # level, so the text there is the text on the published page.
+    test "a pre shows the same text on the canvas as on the page", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            "<pre>line1\nline2\nline3</pre>" <>
+              ~s(<div class="whitespace-pre"><p><code>one\n  two</code></p></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      # The markup as it is sent: the test client's own render drops the whitespace between tags.
+      canvas =
+        conn
+        |> get("/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert canvas |> LazyHTML.query("pre") |> LazyHTML.text() == "line1\nline2\nline3"
+      assert canvas |> LazyHTML.query(".whitespace-pre") |> LazyHTML.text() == "one\n  two"
+    end
+
+    # A code block: the `<code>` is an element of its own inside the `<pre>`, which a core before
+    # mishka-group/mishka_cms_core#110 reads as text.
+    @tag :pre_elements
+    test "and so does a code block in a pre", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: "<pre><code>line1\n  line2\nline3</code></pre>")
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      canvas =
+        conn
+        |> get("/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert canvas |> LazyHTML.query("pre > code") |> Enum.count() == 1
+      assert canvas |> LazyHTML.query("pre") |> LazyHTML.text() == "line1\n  line2\nline3"
+    end
   end
 
   describe "the controls a node can actually take" do

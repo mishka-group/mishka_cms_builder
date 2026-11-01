@@ -2446,6 +2446,10 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     """
   end
 
+  # NOTHING OF THE CANVAS'S OWN BETWEEN AN ELEMENT AND ITS CHILDREN. A `<pre>`, or anything whose
+  # `white-space` keeps what it holds, shows every character inside it, and the newline and indent
+  # this template put around the children were a blank line and a margin the page does not have,
+  # one more at every level. `phx-no-format` keeps the formatter from putting them back.
   defp visible_node(assigns) do
     assigns =
       assign(
@@ -2463,8 +2467,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       phx-click="select"
       phx-value-id={@node.id}
       {@html_attrs}
-    >
-      <.pb_node
+      phx-no-format
+    ><.pb_node
         :for={child <- @node.children}
         id={child}
         tree={@tree}
@@ -2479,8 +2483,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         shapers={@shapers}
         holders={@holders}
         form_marks={@form_marks}
-      />
-    </.dynamic_tag>
+      /></.dynamic_tag>
     """
   end
 
