@@ -148,22 +148,20 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasCssRefreshTest do
 
     # The generator resolves a typed class through the kit's `@theme`, and the variables it already
     # emitted would beat the new bundle's, so a theme saved since the frame opened has to reach it.
+    #
+    # The row is seeded past the action: a core that checks a stylesheet when it is saved
+    # (mishka-group/mishka_cms_core#110) runs Tailwind inside the write's transaction, holding the
+    # test's one sandbox connection while the editor just opened reads its notifications.
     test "reads the kit's @theme again", %{canvas: canvas, html: html, site: site} do
       refute html =~ "--color-natural-refresh"
 
-      MishkaCmsCore.Runtime.Stylesheet
-      |> Ash.Changeset.for_create(
-        :create,
-        %{
-          name: "refresh-theme",
-          content: "@theme { --color-natural-refresh: #abcdef; }",
-          kind: :theme,
-          active: true
-        },
-        tenant: site.id,
-        authorize?: false
-      )
-      |> Ash.create!()
+      Ash.Seed.seed!(MishkaCmsCore.Runtime.Stylesheet, %{
+        name: "refresh-theme",
+        content: "@theme { --color-natural-refresh: #abcdef; }",
+        kind: :theme,
+        active: true,
+        site_id: site.id
+      })
 
       rebuilt(site.name)
 
