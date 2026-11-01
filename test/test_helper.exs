@@ -52,11 +52,19 @@ if Mix.Project.config()[:app] == :mishka_cms_builder do
 
   # A DRAFT HOLDS ITS ELEMENT CSS from mishka_cms_core 0.0.5 on (`Drafts.autosave/8`), and a `<pre>`
   # keeps the elements in it, both from mishka-group/mishka_cms_core#110. Against an older core, the
-  # tests tagged `:draft_css` or `:pre_elements` have nothing to test and are left out.
-  drafts = MishkaCmsCore.Runtime.Authoring.Drafts
+  # tests tagged `:draft_css` or `:pre_elements` have nothing to test and are left out. So are the
+  # ones tagged `:apply_check` against a core without `ElementCss.place/4`, which has Tailwind build
+  # an element's `@apply` before it is taken.
+  older_core =
+    for {tags, module, fun, arity} <- [
+          {[:draft_css, :pre_elements], MishkaCmsCore.Runtime.Authoring.Drafts, :autosave, 8},
+          {[:apply_check], MishkaCmsCore.Runtime.Authoring.ElementCss, :place, 4}
+        ],
+        not (Code.ensure_loaded?(module) and function_exported?(module, fun, arity)),
+        tag <- tags,
+        do: tag
 
-  unless Code.ensure_loaded?(drafts) and function_exported?(drafts, :autosave, 8),
-    do: ExUnit.configure(exclude: [:draft_css, :pre_elements])
+  ExUnit.configure(exclude: older_core)
 
   ExUnit.start()
   Ecto.Adapters.SQL.Sandbox.mode(MishkaCmsBuilder.Repo, :manual)

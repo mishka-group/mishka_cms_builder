@@ -7391,10 +7391,15 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  # Draft stage checks the CSS and keeps it, and `prune_element_css/3` writes it with the markup
-  # carrying the class it is keyed on.
-  defp staged_or_written(%{assigns: %{stage: :draft}} = socket, scope, css),
-    do: ElementCss.place(socket.assigns.element_css_rules, scope, css)
+  # Draft stage checks the CSS as `put/5` does and keeps it, and `prune_element_css/3` writes it
+  # with the markup carrying the class it is keyed on.
+  defp staged_or_written(%{assigns: %{stage: :draft}} = socket, scope, css) do
+    apply(
+      ElementCss,
+      :place,
+      for_site([socket.assigns.element_css_rules, scope, css], socket.assigns.editor.site_id)
+    )
+  end
 
   # Publish stage writes the row — pressing Apply under a chip reading Publish asks for the live page
   # — and `put/5` reads the row to write it, so the rule lands beside whatever else is in there now
@@ -7407,6 +7412,18 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       scope,
       css
     )
+  end
+
+  # TAILWIND BUILDS AN `@apply` AT APPLY. The parser takes `@apply not-a-real-class;`, so with the
+  # parser's check alone it was held and handed to the canvas, whose in-browser build then failed on
+  # it. `ElementCss.place/4` also builds a body that holds an `@apply` for the editor's site and
+  # refuses it in Tailwind's words; a core without it has `place/3`, the parser's check alone.
+  # Called through `apply/3` so this compiles against either.
+  defp for_site(args, site_id) do
+    case Code.ensure_loaded?(ElementCss) and function_exported?(ElementCss, :place, 4) do
+      true -> args ++ [site_id]
+      false -> args
+    end
   end
 
   # WHERE THE STYLE WENT, IN THE SENTENCE THAT SAYS IT WAS SAVED. Both stages said "Style applied."

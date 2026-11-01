@@ -1022,6 +1022,34 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       assert body =~ "teal", "the live row was not written under a chip reading Publish"
     end
 
+    # The parser takes `@apply not-a-real-class;`, and Tailwind does not. Held, it reached the
+    # canvas's in-browser build, which failed on it, and the refusal came at the draft's autosave.
+    @tag :apply_check
+    test "draft-stage CSS Tailwind cannot build is refused at Apply", ctx do
+      %{view: view, site: site, owner: owner, actor: actor, heading: heading} = ctx
+
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      html =
+        render_click(view, "save_element_css", %{
+          "node_id" => heading.id,
+          "css" => "@apply not-a-real-class;"
+        })
+
+      assert has_element?(
+               view,
+               "#pb-css-error",
+               "Cannot apply unknown utility class `not-a-real-class`"
+             ),
+             "the refusal was not shown under the box"
+
+      refute html =~ "Style applied."
+      refute editor(view).staged_element_css, "the refused rule was held for the publish"
+      refute editor(view).element_css =~ "not-a-real-class", "the canvas was handed the rule"
+      assert ElementCss.all(actor, site.id, owner) == %{}
+    end
+
     # THE HOLD IS NOT A PLACE WORK GOES MISSING FROM. Nothing but the publish writes it to a row, so
     # every route that leaves a draft behind — a reload, Start fresh, opening another draft — has to
     # leave it alone: the markup of that sitting is a Drafts row and survives, and dropping the CSS
