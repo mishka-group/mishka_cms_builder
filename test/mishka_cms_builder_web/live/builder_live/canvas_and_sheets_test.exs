@@ -1760,8 +1760,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       assert html =~ ~s(data-node-id="#{textarea.id}")
     end
 
-    # A BLOCK DROPPED INTO ONE IS STILL NOT DRAWN AS MARKUP. Containment lets it in; the canvas does
-    # not leak it into the field.
+    # A BLOCK DROPPED INTO ONE IS STILL NOT DRAWN AS MARKUP. Containment up to mishka_cms_core 0.0.4
+    # lets it in, and the canvas does not leak it into the field; from
+    # mishka-group/mishka_cms_core#110 on a textarea holds text only, so the drop is refused and says
+    # so. Either way the field shows its text alone.
     test "and a child element in a textarea is not drawn into it", %{conn: conn, site: site} do
       page =
         create_page!(
@@ -1772,14 +1774,18 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.CanvasAndSheetsTest do
       {:ok, view, _html} = open_builder(conn, page)
       textarea = editor(view).tree |> Tree.walk() |> Enum.find(&(&1.tag == "textarea"))
 
-      render_click(view, "op", %{
-        "kind" => "insert",
-        "parent_id" => textarea.id,
-        "index" => "1",
-        "template" => ~s(<p id="inside">inside</p>)
-      })
+      html =
+        render_click(view, "op", %{
+          "kind" => "insert",
+          "parent_id" => textarea.id,
+          "index" => "1",
+          "template" => ~s(<p id="inside">inside</p>)
+        })
 
-      assert [_text, _element] = Tree.get(editor(view).tree, textarea.id).children
+      case Tree.get(editor(view).tree, textarea.id).children do
+        [_text, _element] -> :ok
+        [_text] -> assert html =~ "holds text only"
+      end
 
       {:ok, _canvas, html} =
         live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
