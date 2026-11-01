@@ -1029,7 +1029,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ChromeControlsTest do
           "css" => "gap: 1px; } body { display: none; "
         })
 
-      assert html =~ "unmatched"
+      # "an unmatched { or }" up to mishka_cms_core 0.0.4; the core that checks an element's CSS with
+      # igniter_css's parser points at the `}` itself.
+      assert html =~ ~r/unmatched|closes the block it is written in/
       assert live_assigns(view).element_css_rules == %{}
     end
 

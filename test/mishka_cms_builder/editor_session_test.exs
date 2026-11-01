@@ -132,7 +132,10 @@ defmodule MishkaCmsBuilder.EditorSessionTest do
       assert {:error, %{message: message}} =
                EditorSession.open(%{section: "page", template: "<div><span></div>"})
 
-      assert message =~ "closing tag"
+      # The core's words for it: "end of template reached without closing tag for <div>" up to
+      # mishka_cms_core 0.0.4, and from mishka-group/mishka_cms_core#110 on the closing tag where it
+      # is written, "</div> does not close <span>".
+      assert message =~ ~r{closing tag|</div> does not close <span>}
     end
 
     test "an unknown section is refused" do
