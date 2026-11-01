@@ -297,10 +297,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # happened to use the same one. `chelekom-alert`'s maintenance example asks for
     # `hero-wrench-screwdriver`, no page used it, and the reader saw a heading with a blank space
     # where the icon belongs — the class was in the code pane and had no rule behind it.
-    |> assign(
-      :icon_css,
-      Icons.css(Enum.uniq(icons_set_by(rewritten) ++ icons_defaulted_by(session.components)))
-    )
+    |> assign(:icon_css, icon_css(rewritten, icons_defaulted_by(session.components)))
     |> assign(:missing?, false)
     |> assign(:selection, nil)
     |> assign(:selection_anchor, nil)
@@ -456,6 +453,15 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     end
   end
 
+  # The stylesheet rules for the icons the frame draws: the ones the document could render
+  # (`icons_set_by/1`, `icons_defaulted_by/1`) and the stand-in for an icon name the canvas cannot
+  # compute (`stand_in/4`). No page names the stand-in, so the site's stylesheet has no rule for it
+  # and an icon drawn with it would be 0x0.
+  @icon_stand_in "hero-sparkles"
+
+  defp icon_css(tree, defaults),
+    do: Icons.css(Enum.uniq([@icon_stand_in | icons_set_by(tree) ++ defaults]))
+
   # Every heroicon class this document could render: the ones its nodes SET, and the default of every
   # icon-typed attribute on every component it uses — a component renders its default when the page
   # says nothing, and that value appears nowhere in the tree.
@@ -547,13 +553,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     # WHERE THE FRAME'S LINK POINTS NOW. The root layout linked `canvas_css_hrefs`, and a root
     # layout is never patched, so a rebuild moves the link from the browser (`follow_css/2`).
     |> assign_new(:canvas_css_linked, fn assigns -> assigns.canvas_css_hrefs end)
-    |> then(
-      &assign(
-        &1,
-        :icon_css,
-        Icons.css(Enum.uniq(icons_set_by(session.tree) ++ &1.assigns.icon_defaults))
-      )
-    )
+    |> then(&assign(&1, :icon_css, icon_css(session.tree, &1.assigns.icon_defaults)))
     |> assign_new(:canvas_theme, fn -> theme_source(session.site_id) end)
     |> assign(:element_css, session.element_css || "")
     # `suppress_site_js` keeps the site's own bundle (and its LiveSocket) out — a second LiveSocket
@@ -3376,8 +3376,6 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # was handed `pb-<id>-name`, and core logged "body did not apply" on every render; core's own
   # `<.icon>` drew the "could not render" box. An attribute the Inspector gives its icon picker
   # stands in as a real icon instead. That is read off the attribute, not off the palette.
-  @icon_stand_in "hero-sparkles"
-
   defp stand_in(:string, _node, _name, :icon), do: @icon_stand_in
   defp stand_in(type, node, name, _widget), do: stand_in(type, node, name)
 

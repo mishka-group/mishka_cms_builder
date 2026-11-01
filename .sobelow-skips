@@ -5,4 +5,4 @@ XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:1614,3693811
 XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:2256,5581D12
 XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:2642,6A42A0D
 XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:3122,647F37B
-XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:3642,2BA2D92
+XSS.Raw: XSS,lib/mishka_cms_builder_web/live/canvas_live.ex:3640,1B293BA

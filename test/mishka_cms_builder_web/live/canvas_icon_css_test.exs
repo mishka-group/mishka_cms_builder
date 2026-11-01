@@ -131,6 +131,14 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
     html
   end
 
+  # The icon rules the frame emits itself (`#pb-canvas-icons`), apart from the site's stylesheet.
+  defp frame_icon_rules(html) do
+    case Regex.run(~r/<style[^>]*id="pb-canvas-icons"[^>]*>(.*?)<\/style>/s, html) do
+      [_style, rules] -> rules
+      nil -> ""
+    end
+  end
+
   describe "the rules the frame carries" do
     test "cover an icon a component defaults to inside a map", %{conn: conn, page: page} do
       html = canvas_html(conn, page)
@@ -178,6 +186,18 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasIconCssTest do
       assert html =~ "hero-sparkles size-4"
       refute html =~ ~r/pb-n[a-z0-9]{8}-name/
       refute html =~ "could not render"
+    end
+
+    # No page names the stand-in, so the site's stylesheet has no rule for it: without the frame's
+    # own, the icon is a 0x0 element.
+    test "has a rule in the frame, so it draws at a size", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="w4b"><.icon name={assigns[:icon]} /></div>)
+        )
+
+      assert canvas_html(conn, page) |> frame_icon_rules() =~ ".hero-sparkles{"
     end
 
     test "and on a kit component whose attribute is an icon", %{conn: conn, site: site} do
