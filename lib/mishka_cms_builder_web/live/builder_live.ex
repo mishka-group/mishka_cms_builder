@@ -5639,7 +5639,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
     socket
     |> assign(right_tab: :assistant, right_hidden: false)
-    |> ask_assistant(audit_prompt(rule))
+    |> ask_assistant(audit_prompt(rule, noun(section(socket))))
     |> then(&{:noreply, &1})
   end
 
@@ -5975,6 +5975,21 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp audit_label(rule), do: gettext("Fixed %{rule}", rule: rule)
 
+  # The document's own noun, so a component's prompt does not ask about a page.
+  defp audit_prompt("no-h1", noun),
+    do: gettext("Make the first heading on this %{noun} an h1.", noun: noun)
+
+  defp audit_prompt("no-heading", noun),
+    do: gettext("Add a top-level heading to this %{noun}.", noun: noun)
+
+  defp audit_prompt("form-duplicate-token", noun),
+    do: gettext("Give this form event names no other form on this %{noun} shares.", noun: noun)
+
+  defp audit_prompt(rule, noun),
+    do:
+      audit_prompt(rule) ||
+        gettext("Fix the %{rule} issue on this %{noun}.", rule: rule, noun: noun)
+
   defp audit_prompt("img-alt"), do: gettext("Write an alt attribute describing this image.")
 
   defp audit_prompt("img-alt-empty"),
@@ -5985,9 +6000,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp audit_prompt("heading-skip"),
     do: gettext("Fix the heading order so it does not skip a level.")
-
-  defp audit_prompt("no-h1"), do: gettext("Make the first heading on this page an h1.")
-  defp audit_prompt("no-heading"), do: gettext("Add a top-level heading to this page.")
 
   defp audit_prompt("nested-html"),
     do: gettext("Remove the nested <html> element from this template.")
@@ -6006,9 +6018,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp audit_prompt("form-duplicate-seed"),
     do: gettext("Rename this form so no other form shares its name.")
 
-  defp audit_prompt("form-duplicate-token"),
-    do: gettext("Give this form event names no other form on this page shares.")
-
   defp audit_prompt("form-duplicate-source"),
     do: gettext("Give this form its own place to keep what is typed into it.")
 
@@ -6019,7 +6028,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   defp audit_prompt("form-no-submit"), do: gettext("Add a submit button to this form.")
   defp audit_prompt("submit-no-form"), do: gettext("Put this submit button inside a form.")
-  defp audit_prompt(rule), do: gettext("Fix the %{rule} issue on this page.", rule: rule)
+  defp audit_prompt(_rule), do: nil
 
   defp ask_assistant(socket, text) do
     scope = %{

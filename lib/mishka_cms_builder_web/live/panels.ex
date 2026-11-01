@@ -1300,7 +1300,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               {gettext("While you work")}
             </span>
             <button
-              :for={{key, label, hint} <- stages()}
+              :for={{key, label, hint} <- stages(@section)}
               type="button"
               id={"pb-stage-#{key}"}
               phx-click={menu_close("#pb-stage-ways") |> JS.push("set_stage")}
@@ -15938,6 +15938,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # this page" read as the act, and choosing it did not publish: it stopped the draft and waited for
   # a press. So the two are named as the modes they are, each with what happens next; publishing is
   # "Publish now", above them.
+  # A component has no drafts, so its menu offers no Draft mode.
+  defp stages("component"), do: Enum.reject(stages(), &match?({:draft, _label, _hint}, &1))
+  defp stages(_section), do: stages()
+
   defp stages do
     [
       {:published, gettext("Publish mode"),

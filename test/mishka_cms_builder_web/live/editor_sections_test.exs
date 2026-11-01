@@ -1731,9 +1731,9 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       assert MishkaCmsCore.Runtime.Authoring.Drafts.resource("component") == nil
     end
 
-    # AND IT SAYS SO RATHER THAN DOING NOTHING. The stage control still offers Draft — it is one
-    # control for four sections — so asking for one has to come back with the reason and the way
-    # round it, not with a silent no-op that reads as a save.
+    # AND IT SAYS SO RATHER THAN DOING NOTHING. A component opens in the Draft stage like every
+    # section, though its menu offers no Draft mode, so asking for one has to come back with the
+    # reason and the way round it, not with a silent no-op that reads as a save.
     test "and asking a component for a draft reports why it cannot", %{conn: conn, site: site} do
       {view, _record} = open(conn, :component, site)
 
@@ -1764,6 +1764,31 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
       assert html =~ "The component itself is untouched."
     end
 
+    # Its stage menu offers no Draft mode, and the Audit tab's Fix asks about the component.
+    test "a component's stage menu and audit prompts leave out the page", %{
+      conn: conn,
+      site: site
+    } do
+      Application.put_env(:mishka_cms_builder, :ai_backend, MishkaCmsBuilder.Test.AiBackendStub)
+      MishkaCmsBuilder.Test.AiBackendStub.answer([])
+
+      on_exit(fn ->
+        Application.delete_env(:mishka_cms_builder, :ai_backend)
+        Application.delete_env(:mishka_cms_core, :test_ai_answer)
+      end)
+
+      {view, _record} = open(conn, :component, site)
+
+      assert has_element?(view, "#pb-stage-published")
+      refute has_element?(view, "#pb-stage-draft")
+
+      render_click(view, "audit_fix", %{"rule" => "no-h1"})
+      assert_receive {:asked, "Make the first heading on this component an h1.", _opts}
+
+      render_click(view, "audit_fix", %{"rule" => "contrast"})
+      assert_receive {:asked, "Fix the contrast issue on this component.", _opts}
+    end
+
     for section <- [:page, :layout, :error_page] do
       test "a #{section} keeps drafts, and saving one writes a row", %{conn: conn, site: site} do
         {view, _record} = open(conn, unquote(section), site)
@@ -1777,6 +1802,7 @@ defmodule MishkaCmsBuilderWeb.Live.EditorSectionsTest do
 
         render_click(view, "save_as_draft", %{"label" => "A named draft"})
 
+        assert has_element?(view, "#pb-stage-draft")
         assert has_element?(view, "#pb-draft-target")
         assert editor(view) |> Map.fetch!(:draft_id)
       end
