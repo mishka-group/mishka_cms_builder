@@ -276,6 +276,78 @@ defmodule MishkaCmsBuilder.PlacementTest do
     end
   end
 
+  # WHY A BOX REFUSES, sent with the verdict. The canvas outlines a box the drop goes after and names
+  # the rule beside it, so a paragraph that will not take a form says "can only hold text and inline
+  # elements" instead of leaving a line after it as the only clue.
+  describe "the reasons a drag names with its hints" do
+    @form ~s(<form><input name="phone" /></form>)
+
+    test "a paragraph that will not take a form says why, in the rule's own words" do
+      session = open(~s(<div id="root"><p>hello</p><section></section></div>))
+
+      {:ok, %{accepts: accepts, refusals: refusals}} =
+        EditorSession.drop_verdict(session.token, %{"template" => @form})
+
+      refute accepts[id(session, "p")]
+      assert refusals[id(session, "p")] == "A <p> can only hold text and inline elements."
+    end
+
+    test "and a box that takes the drag has no reason" do
+      session = open(~s(<div id="root"><p>hello</p><section></section></div>))
+
+      {:ok, %{accepts: accepts, refusals: refusals}} =
+        EditorSession.drop_verdict(session.token, %{"template" => @form})
+
+      assert accepts[id(session, "section")]
+      assert Map.keys(refusals) == [id(session, "p")]
+    end
+
+    # Nobody aims a drop into a run of words or a picture, so the canvas has nothing to say there and
+    # the line beside them stays the only clue.
+    test "a run of text and an image have none, since they hold no children at all" do
+      session = open(~s(<div id="root"><p>hello</p><img src="a.png" /></div>))
+      text = Enum.find(Tree.walk(session.tree), &(&1.kind == :text))
+
+      {:ok, %{accepts: accepts, refusals: refusals}} =
+        EditorSession.drop_verdict(session.token, %{"template" => @form})
+
+      refute accepts[text.id]
+      refute accepts[id(session, "img")]
+      refute Map.has_key?(refusals, text.id)
+      refute Map.has_key?(refusals, id(session, "img"))
+    end
+
+    test "a locked box says it is locked even though the rules would take the drag" do
+      session = open(~s(<div id="root"><section></section></div>))
+      section = id(session, "section")
+      {:ok, locked} = EditorSession.toggle_lock(session.token, section)
+
+      {:ok, %{refusals: refusals}} =
+        EditorSession.drop_verdict(locked.token, %{"template" => "<h2>Title</h2>"})
+
+      assert refusals[section] == "That element is locked."
+    end
+
+    test "and a locked thing being dragged is locked wherever the pointer goes" do
+      session = open(~s(<div id="root"><section><p>hello</p></section></div>))
+      paragraph = id(session, "p")
+      {:ok, locked} = EditorSession.toggle_lock(session.token, paragraph)
+
+      {:ok, %{refusals: refusals}} =
+        EditorSession.drop_verdict(locked.token, %{"node_id" => paragraph})
+
+      assert refusals[id(session, "section")] == "That element is locked."
+    end
+
+    test "the verdict also says whether a field is being dragged, as drop_field? does" do
+      session = open(~s(<div id="root"><p>hello</p></div>))
+
+      {:ok, verdict} = EditorSession.drop_verdict(session.token, %{"template" => @form})
+
+      assert verdict.field == EditorSession.drop_field?(session.token, %{"template" => @form})
+    end
+  end
+
   describe "a drop that the tree refuses" do
     test "a legal drop is simply applied" do
       session = open(~s(<div id="root"><section></section></div>))

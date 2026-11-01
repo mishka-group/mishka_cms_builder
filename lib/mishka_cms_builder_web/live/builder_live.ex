@@ -4671,16 +4671,9 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # canvas across the frame boundary) the whole tree's verdict for this one drag, so its drop line is
   # a lookup rather than a round trip. See `EditorSession.drop_hints/2`.
   def handle_event("drag_start", params, socket) do
-    case EditorSession.drop_hints(socket.assigns.token, params) do
-      {:ok, accepts} ->
-        {:noreply,
-         push_event(socket, "pb:drop-hints", %{
-           accepts: accepts,
-           field: EditorSession.drop_field?(socket.assigns.token, params)
-         })}
-
-      {:error, _reason} ->
-        {:noreply, socket}
+    case EditorSession.drop_verdict(socket.assigns.token, params) do
+      {:ok, verdict} -> {:noreply, push_event(socket, "pb:drop-hints", verdict)}
+      {:error, _reason} -> {:noreply, socket}
     end
   end
 

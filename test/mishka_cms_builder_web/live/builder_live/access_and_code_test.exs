@@ -708,6 +708,25 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.AccessAndCodeTest do
       assert accepts[section.id] == true
     end
 
+    # A drag that begins inside the canvas is answered by the canvas's own LiveView, so the reasons
+    # have to come from there too: the frame is where the pointer is, and where the box is outlined.
+    test "and says why a box that refuses refuses", %{view: view, canvas: canvas} do
+      h1 = node_with_tag(view, "h1")
+      section = node_with_tag(view, "section")
+
+      render_click(canvas, "drag_start", %{"template" => "<section></section>"})
+
+      assert_push_event(canvas, "pb:drop-hints", %{refusals: refusals})
+      assert refusals[h1.id] =~ "<h1>"
+      refute Map.has_key?(refusals, section.id)
+    end
+
+    # The no-symbol on the refusal chip is drawn by the frame, and no page names it, so the site's
+    # stylesheet has no rule for it: the frame carries its own, or the icon is a 0x0 box.
+    test "the frame carries the rule for the no-symbol the drag draws", %{canvas: canvas} do
+      assert render(canvas) =~ ".hero-no-symbol{"
+    end
+
     test "inline text editing writes through the canvas", %{view: view, canvas: canvas} do
       text =
         view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == :text))

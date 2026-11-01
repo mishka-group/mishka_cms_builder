@@ -1456,6 +1456,22 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.ComponentsTest do
       assert map_size(accepts) == view |> editor() |> Map.fetch!(:tree) |> Tree.size()
     end
 
+    # THE CANVAS NAMES THE RULE beside a box the pointer is aimed into and the drop goes after. The
+    # reason rides with the verdict: a box that takes the drag has none, a heading that will not hold
+    # a section has its own sentence.
+    test "dragstart also says why each box that refuses refuses", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drag_start", %{"template" => "<section></section>"})
+      assert_push_event(view, "pb:drop-hints", %{accepts: accepts, refusals: refusals})
+
+      assert accepts[h1.id] == false
+      assert refusals[h1.id] =~ "<h1>"
+      refute Map.has_key?(refusals, section.id)
+    end
+
     # The hint is only worth having if the drop keeps its promise, so this asserts the promise on both
     # sides: where it says yes the node lands inside, where it says no the node lands beside instead.
     test "the drop keeps the promise the hint made", %{conn: conn, page: page} do

@@ -60,12 +60,15 @@ const INSIDE_TO = 0.67;
  *   - `idOf(el)` / `labelOf(el)` → the node's id and the name to show for it
  *   - `accepts(id)` → may this parent take the node at all
  *   - `nests(el)` → may this element hold children
+ *   - `refuses(el)` → the server's verdict says this element could hold children and will not take
+ *     this node; optional, and false until the verdict has arrived
  * @returns {{parent_id: string, index: number, rect: object|null, axis: string,
  *            anchor_id?: string, anchor_before?: boolean, fallback_before?: boolean,
  *            inside?: boolean, before?: boolean, redirected?: boolean, label?: string|null}}
  */
 export function resolveDrop(point, node, lookup) {
   const { rectOf, styleOf, parentOf, childrenOf, idOf, labelOf, accepts, nests } = lookup;
+  const refuses = lookup.refuses || (() => false);
 
   if (!node) return { parent_id: "root", index: 9999, rect: null, axis: "y" };
 
@@ -73,8 +76,9 @@ export function resolveDrop(point, node, lookup) {
   let rect = rectOf(current);
   let flow = axisOf(styleOf(parentOf(current)));
   const ratio = along(point, rect, flow.axis);
+  const aimedInside = ratio > INSIDE_FROM && ratio < INSIDE_TO;
 
-  if (nests(current) && ratio > INSIDE_FROM && ratio < INSIDE_TO) {
+  if (nests(current) && aimedInside) {
     return {
       parent_id: idOf(current),
       index: 9999,
@@ -91,9 +95,15 @@ export function resolveDrop(point, node, lookup) {
     };
   }
 
-  let before = ratio < 0.5;
+  // AIMED INTO A BOX THAT WILL NOT TAKE IT, such as a form over a paragraph: the drop goes right
+  // after that box, as it does for a box the pointer is in that a parent refuses, so the line is
+  // below it for the whole middle and says so (`redirected`) instead of flipping above it in the
+  // first half.
+  const aimedAtRefusal = aimedInside && refuses(current);
+
+  let before = ratio < 0.5 && !aimedAtRefusal;
   let parent = parentOf(current);
-  let redirected = false;
+  let redirected = aimedAtRefusal;
 
   // A parent that will not take this node is not a place to point at. Climb to the nearest one that
   // will and land after the branch that could not be entered, rather than promising a spot the

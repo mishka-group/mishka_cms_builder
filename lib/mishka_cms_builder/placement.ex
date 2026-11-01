@@ -98,6 +98,66 @@ defmodule MishkaCmsBuilder.Placement do
   end
 
   @doc """
+  Why each box that will not take `dragged` refuses it, keyed by node id — the sentence the canvas
+  shows beside a box the pointer is aimed into, so a refusal says what the rule is and not only that
+  there is one.
+
+  `accepts` is the map `hints/3` answered for the same drag: only the nodes it marks `false` are
+  asked again, so a node that takes the drag has no entry. So has one that holds no children at all
+  (a run of text, an image, an input), since nobody aims a drop into it and `Containment` has
+  nothing to add to that. `opts` takes what `hints/3` takes. The words are the ones
+  `Containment.can_drop?/4` gives a refused drop, minus the code ticks, since the canvas shows them
+  as plain text. A locked box, or a locked thing being dragged, says so.
+  """
+  @spec refusals(Tree.t(), term(), %{String.t() => boolean()}, keyword()) :: %{
+          String.t() => String.t()
+        }
+  def refusals(%Tree{} = tree, dragged, accepts, opts \\ []) do
+    locked = Keyword.get(opts, :locked, MapSet.new())
+    dragged_locked? = MapSet.member?(locked, Keyword.get(opts, :dragged_id))
+    containment = containment_opts(tree, opts)
+
+    for {id, false} <- accepts,
+        box?(tree, id, containment),
+        reason =
+          refusal(tree, dragged, id, containment, dragged_locked? or MapSet.member?(locked, id)),
+        into: %{},
+        do: {id, reason}
+  end
+
+  defp box?(tree, id, containment) do
+    case Tree.get(tree, id) do
+      nil -> false
+      node -> Containment.holds_children?(node, Keyword.take(containment, [:components]))
+    end
+  end
+
+  defp refusal(_tree, _dragged, _id, _containment, true), do: gettext("That element is locked.")
+
+  # What `Containment` says about the node. `nil` when it takes the drag after all, which a stale
+  # `accepts` can leave.
+  defp refusal(tree, dragged, id, containment, false) do
+    case Containment.can_drop?(tree, dragged, id, containment) do
+      {:error, message} -> String.replace(message, "`", "")
+      :ok -> nil
+    end
+  end
+
+  # The roles of the whole drag are decided once, so a page of refusals parses each component once
+  # and not once per node.
+  defp containment_opts(tree, opts) do
+    opts = Keyword.take(opts, @containment_opts)
+
+    Keyword.put_new_lazy(opts, :roles, fn ->
+      nodes = Tree.walk(tree) ++ dragged_nodes(Keyword.get(opts, :dragged_tree))
+      Fields.roles(nodes, Keyword.get(opts, :components, []))
+    end)
+  end
+
+  defp dragged_nodes(%Tree{} = dragged_tree), do: Tree.walk(dragged_tree)
+  defp dragged_nodes(_none), do: []
+
+  @doc """
   The `{parent_id, index}` a click on `node_id` means for `head`, the first root of the template
   being placed.
 

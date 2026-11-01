@@ -454,13 +454,15 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   end
 
   # The stylesheet rules for the icons the frame draws: the ones the document could render
-  # (`icons_set_by/1`, `icons_defaulted_by/1`) and the stand-in for an icon name the canvas cannot
-  # compute (`stand_in/4`). No page names the stand-in, so the site's stylesheet has no rule for it
-  # and an icon drawn with it would be 0x0.
+  # (`icons_set_by/1`, `icons_defaulted_by/1`), the stand-in for an icon name the canvas cannot
+  # compute (`stand_in/4`), and the no-symbol the drag draws beside a box that will not take what is
+  # dragged (`PbCanvas` in `hooks.js`). No page names either, so the site's stylesheet has no rule
+  # for them and an icon drawn with one would be 0x0.
   @icon_stand_in "hero-sparkles"
+  @icon_refusal "hero-no-symbol"
 
   defp icon_css(tree, defaults),
-    do: Icons.css(Enum.uniq([@icon_stand_in | icons_set_by(tree) ++ defaults]))
+    do: Icons.css(Enum.uniq([@icon_stand_in, @icon_refusal | icons_set_by(tree) ++ defaults]))
 
   # Every heroicon class this document could render: the ones its nodes SET, and the default of every
   # icon-typed attribute on every component it uses — a component renders its default when the page
@@ -1097,16 +1099,9 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   # Answered once, when the drag STARTS: the whole tree's verdict for this one thing being dragged, so
   # the blue line is a local lookup for the rest of the gesture. See `EditorSession.drop_hints/2`.
   def handle_event("drag_start", params, socket) do
-    case EditorSession.drop_hints(socket.assigns.token, params) do
-      {:ok, accepts} ->
-        {:noreply,
-         push_event(socket, "pb:drop-hints", %{
-           accepts: accepts,
-           field: EditorSession.drop_field?(socket.assigns.token, params)
-         })}
-
-      {:error, _reason} ->
-        {:noreply, socket}
+    case EditorSession.drop_verdict(socket.assigns.token, params) do
+      {:ok, verdict} -> {:noreply, push_event(socket, "pb:drop-hints", verdict)}
+      {:error, _reason} -> {:noreply, socket}
     end
   end
 
