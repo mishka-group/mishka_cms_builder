@@ -5,7 +5,7 @@
 defmodule MishkaCmsBuilder.MixProject do
   use Mix.Project
 
-  @version "0.0.1-alpha.4"
+  @version "0.0.1-alpha.5"
   @source_url "https://github.com/mishka-group/mishka_cms_builder"
 
   def project do
@@ -78,7 +78,7 @@ defmodule MishkaCmsBuilder.MixProject do
       # 0.0.3 is the first core release with the seams this package plugs into
       # (`runtime:document:editor_url`, `runtime:provision:snippets`, `activity:sources`,
       # `MishkaCmsCore.Supervision`, `MishkaCmsCore.Test.Boot`).
-      mishka_dep(:mishka_cms_core, "~> 0.0.4"),
+      mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.1"),
       mishka_dep(:mishka_gervaz, "~> 0.0.3"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
