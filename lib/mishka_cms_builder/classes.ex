@@ -156,7 +156,7 @@ defmodule MishkaCmsBuilder.Classes do
   defp valid_name(_name), do: {:error, gettext("A class needs a name.")}
 
   # NOT `Tokens.sane_value/1`'s reject list, which would refuse the utilities people actually write:
-  # an arbitrary value carries brackets and parens — `bg-[url('/a.png')]`,
+  # an arbitrary value carries brackets and parens — a `bg-` arbitrary url value,
   # `grid-cols-[repeat(2,minmax(0,1fr))]`. What is refused is what `@apply #{utilities};` cannot
   # survive. A `}` closes the rule and everything after it is loose CSS on the whole site, which is
   # the escape `ElementCss.valid_body/1` refuses for the same reason. A `;` ends the `@apply`, so
