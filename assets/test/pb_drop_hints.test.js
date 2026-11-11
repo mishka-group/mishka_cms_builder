@@ -321,7 +321,7 @@ describe("a field dragged over the canvas", () => {
     expect(base.textContent).toBe("inside <div>");
     expect(form.textContent).toBe("· joins Contact form");
     expect(form.style.background).toBe("rgb(124, 58, 237)");
-    expect(ctx.indicator.style.transform).toBe("translate3d(250px, 220px, 0)");
+    expect(ctx.indicator.style.transform).toBe("translate3d(250px, 220px, 0px)");
     expect(ctx.indicator.style.width).toBe("2px");
   });
 
