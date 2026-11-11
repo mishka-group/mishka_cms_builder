@@ -5,7 +5,7 @@
 defmodule MishkaCmsBuilder.MixProject do
   use Mix.Project
 
-  @version "0.0.1-alpha.6"
+  @version "0.0.1-alpha.7"
   @source_url "https://github.com/mishka-group/mishka_cms_builder"
 
   def project do
@@ -74,12 +74,12 @@ defmodule MishkaCmsBuilder.MixProject do
       # 1.2.10 brought `navigation_type/2`, which the editor asks before it leaves.
       {:phoenix_live_view, "~> 1.2 and >= 1.2.10"},
       mishka_dep(:mishka_installer, "~> 0.1.16"),
-      {:guarded_struct, "~> 0.1.6"},
+      {:guarded_struct, "~> 0.1.7"},
       # 0.0.3 is the first core release with the seams this package plugs into
       # (`runtime:document:editor_url`, `runtime:provision:snippets`, `activity:sources`,
       # `MishkaCmsCore.Supervision`, `MishkaCmsCore.Test.Boot`).
-      mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.4"),
-      mishka_dep(:mishka_gervaz, "~> 0.0.4"),
+      mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.13"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.8"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},

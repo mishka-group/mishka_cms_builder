@@ -224,7 +224,7 @@ describe("the canvas, with a form dragged over a paragraph", () => {
     ctx.onDragOver(at("dragover", paragraph, dt(), 250));
 
     const style = refusal(ctx).style;
-    expect(style.transform).toContain("translate3d(-4px, 196px, 0)");
+    expect(style.transform).toContain("translate3d(-4px, 196px, 0px)");
     expect(style.width).toBe("308px");
     expect(style.height).toBe("108px");
   });
@@ -265,7 +265,7 @@ describe("the canvas, with a form dragged over a paragraph", () => {
 
     expect(shown(ctx)).toBe(true);
     expect(reason(ctx)).toBe(REASON);
-    expect(refusal(ctx).style.transform).toContain("translate3d(-4px, 196px, 0)");
+    expect(refusal(ctx).style.transform).toContain("translate3d(-4px, 196px, 0px)");
   });
 
   it("says nothing over a box that takes the drag", () => {
