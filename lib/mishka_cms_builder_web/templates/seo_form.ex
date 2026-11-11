@@ -1234,10 +1234,16 @@ defmodule MishkaCmsBuilderWeb.Templates.SeoForm do
 
   defp preview_host(_no_url), do: nil
 
-  # `example.com › en › about`, as a search result writes an address.
+  # `example.com › en › about`, as a search result writes an address: each segment decoded, so a
+  # capture reads `{slug}` and a Persian path reads in Persian, not percent-encoded.
   defp preview_crumb(url) when is_binary(url) do
     segments =
-      url |> URI.parse() |> Map.get(:path) |> to_string() |> String.split("/", trim: true)
+      url
+      |> URI.parse()
+      |> Map.get(:path)
+      |> to_string()
+      |> String.split("/", trim: true)
+      |> Enum.map(&URI.decode/1)
 
     Enum.join(Enum.filter([preview_host(url) | segments], &is_binary/1), " › ")
   end
