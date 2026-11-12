@@ -5021,12 +5021,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  def handle_event("bulk", %{"action" => action}, socket) do
-    case EditorSession.bulk(socket.assigns.token, action) do
-      {:ok, _editor} -> {:noreply, socket}
-      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
-    end
-  end
+  def handle_event("bulk", %{"action" => action}, socket),
+    do: {:noreply, run_bulk(socket, action)}
 
   def handle_event("ctx", %{"action" => action, "node_id" => node_id}, socket)
       when is_binary(node_id) do
@@ -7946,7 +7942,38 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   # The right-click menu SELECTS what it acts on, the way every other builder does — without it the
   # menu edits one node while the inspector beside it still describes another.
-  defp run_context_action(socket, action, node_id) do
+  #
+  # A right-click on one of several held elements acts on all of them, as the held bar does. Outside
+  # the held set, or for an entry that names one element, it selects that element alone.
+  @held_actions ~w(duplicate wrap delete paste_styles)
+
+  defp run_context_action(socket, action, node_id) when action in @held_actions do
+    case held?(socket.assigns.token, node_id) do
+      true -> run_bulk(socket, action)
+      false -> run_single_action(socket, action, node_id)
+    end
+  end
+
+  defp run_context_action(socket, action, node_id),
+    do: run_single_action(socket, action, node_id)
+
+  defp held?(token, node_id) do
+    with {:ok, session} <- EditorSession.fetch(token),
+         [_first, _second | _rest] = ids <- EditorSession.chosen(session) do
+      node_id in ids
+    else
+      _one_or_none -> false
+    end
+  end
+
+  defp run_bulk(socket, action) do
+    case EditorSession.bulk(socket.assigns.token, action) do
+      {:ok, _editor} -> socket
+      {:error, reason} -> put_flash(socket, :error, human(reason))
+    end
+  end
+
+  defp run_single_action(socket, action, node_id) do
     EditorSession.select(socket.assigns.token, node_id)
 
     case EditorSession.context_action(socket.assigns.token, action, node_id) do

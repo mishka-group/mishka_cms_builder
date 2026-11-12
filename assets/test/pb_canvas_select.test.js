@@ -179,6 +179,35 @@ describe("canvas click resolution", () => {
 
     expect(ctx.pushed).toEqual([["mark", { id: "h2" }]]);
   });
+
+  // Ctrl-click (Windows, Linux) is the same gesture, and a link, a submit or anything in a form is
+  // still held rather than selected: a plain select there would drop the held ones.
+  it("holds on ctrl-click, also on a link, a submit or inside a form", () => {
+    const ctx = canvas(
+      '<p data-node-id="p1" data-kind="tag"><b id="plain">x</b></p>' +
+        '<a id="link" href="/about" data-node-id="a1" data-kind="tag">About</a>' +
+        '<form data-node-id="f1" data-kind="tag">' +
+        '<input id="field" data-node-id="i1" data-kind="tag" />' +
+        '<button id="submit" type="submit" data-node-id="b1" data-kind="tag">Go</button>' +
+        "</form>",
+    );
+
+    const prevented = ["plain", "link", "field", "submit"].map((id) => {
+      const event = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true });
+      document.getElementById(id).dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+
+    expect(ctx.pushed).toEqual([
+      ["mark", { id: "p1" }],
+      ["mark", { id: "a1" }],
+      ["mark", { id: "i1" }],
+      ["mark", { id: "b1" }],
+    ]);
+    expect(prevented).toEqual([true, true, true, true]);
+    expect(selected()).toBe(null);
+  });
+
   // A LINK'S WORDS ARE STILL THE LINK. Clicks on links and submits are answered by a separate
   // capture guard, which must not navigate the canvas away from the document being edited — it also
   // selects, and for a while it selected the raw node while the ordinary path resolved. A nav link

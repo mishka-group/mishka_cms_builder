@@ -1528,6 +1528,19 @@ const PbCanvas = {
       }
 
       if (previewing()) return;
+
+      const node = styleableNode(event.target);
+
+      // ⌘ OR CTRL HOLDS A SECOND ELEMENT rather than replacing the first. The `phx-click="select"`
+      // on the node would still fire and throw the held ones away, so the click is stopped here and
+      // re-sent as a mark. Checked before the link guard: `onCapture` answers links, submits and
+      // anything in a form with a plain select, which dropped the held ones there.
+      if (node && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return this.pushEvent("mark", { id: node.dataset.nodeId });
+      }
+
       if (event.target.closest("a[href], button[type=submit], form")) return;
       // THE TOOLBAR IS NOT THE DOCUMENT. It lives in the top layer, outside every `[data-node-id]`,
       // so a click on its own buttons read as "clicked empty space" and dropped the ring — then
@@ -1547,17 +1560,6 @@ const PbCanvas = {
       }
 
       if (event.target.closest("#pb-el-toolbar")) return;
-
-      const node = styleableNode(event.target);
-
-      // ⌘ OR CTRL HOLDS A SECOND ELEMENT rather than replacing the first. The `phx-click="select"`
-      // on the node would still fire and throw the held ones away, so the click is stopped here and
-      // re-sent as a mark.
-      if (node && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        event.stopPropagation();
-        return this.pushEvent("mark", { id: node.dataset.nodeId });
-      }
 
       // A COMPONENT'S OWN BEHAVIOUR IS NOT THE EDITOR'S. A kit component may carry its own
       // `phx-click` — flash, toast, banner, badge, rating and pagination all do — and a dismiss is

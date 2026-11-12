@@ -160,6 +160,20 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
   defp source(view),
     do: view |> tree() |> MishkaCmsCore.Runtime.Authoring.Tree.Serializer.serialize()
 
+  # The heading selected and the paragraph held beside it, as a ⌘-click leaves them.
+  defp hold_both(view) do
+    h1 = node_with_tag(view, "h1")
+    p = node_with_tag(view, "p")
+
+    render_click(view, "select", %{"id" => h1.id})
+    render_click(view, "mark", %{"id" => p.id})
+
+    {h1, p}
+  end
+
+  defp set_class(node_id, value),
+    do: %{"kind" => "set_attr", "node_id" => node_id, "name" => "class", "value" => value}
+
   defp form_node?(%Node{tag: tag}), do: tag in ~w(form .form)
   defp form_node?(_node), do: false
 
@@ -292,6 +306,83 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
         })
 
         assert Enum.count(nodes(view), &(&1.tag == "p")) == before + 1
+      end
+
+      test "a right-click on a held element wraps all of them in one container",
+           %{conn: conn, site: site} do
+        {view, _record} = open(conn, unquote(section), site.id)
+        render_async(view)
+
+        {h1, p} = hold_both(view)
+
+        render_click(view, "ctx", %{"action" => "wrap", "node_id" => p.id})
+
+        tree = tree(view)
+        wrapper = Tree.get(tree, Tree.get(tree, h1.id).parent_id)
+
+        assert wrapper.tag == "div"
+        assert Tree.get(tree, p.id).parent_id == wrapper.id
+        assert Enum.map(Tree.children(tree, wrapper.id), & &1.id) == [h1.id, p.id]
+        assert EditorSession.chosen(editor(view)) == [wrapper.id]
+      end
+
+      test "a right-click on a held element duplicates and deletes all of them",
+           %{conn: conn, site: site} do
+        {view, _record} = open(conn, unquote(section), site.id)
+        render_async(view)
+
+        count = fn tag -> Enum.count(nodes(view), &(&1.tag == tag)) end
+        before = {count.("h1"), count.("p")}
+        {_h1, p} = hold_both(view)
+
+        render_click(view, "ctx", %{"action" => "duplicate", "node_id" => p.id})
+        assert {count.("h1"), count.("p")} == {elem(before, 0) + 1, elem(before, 1) + 1}
+
+        {h1, p} = hold_both(view)
+        render_click(view, "ctx", %{"action" => "delete", "node_id" => h1.id})
+
+        refute Tree.get(tree(view), h1.id)
+        refute Tree.get(tree(view), p.id)
+        assert EditorSession.chosen(editor(view)) == []
+
+        render_click(view, "undo", %{})
+        assert Tree.get(tree(view), h1.id) && Tree.get(tree(view), p.id)
+      end
+
+      test "a right-click on a held element pastes the copied look onto all of them",
+           %{conn: conn, site: site} do
+        {view, _record} = open(conn, unquote(section), site.id)
+        render_async(view)
+
+        section_node = node_with_tag(view, "section")
+        render_click(view, "op", set_class(section_node.id, "bg-red-500 p-4"))
+        render_click(view, "ctx", %{"action" => "copy_styles", "node_id" => section_node.id})
+
+        {h1, p} = hold_both(view)
+        render_click(view, "ctx", %{"action" => "paste_styles", "node_id" => h1.id})
+
+        for id <- [h1.id, p.id] do
+          assert view |> tree() |> Tree.get(id) |> Node.attr_text("class") =~ "bg-red-500"
+        end
+      end
+
+      test "a right-click outside the held elements acts on that one and lets go of the rest",
+           %{conn: conn, site: site} do
+        {view, _record} = open(conn, unquote(section), site.id)
+        render_async(view)
+
+        section_node = node_with_tag(view, "section")
+        {h1, p} = hold_both(view)
+
+        render_click(view, "ctx", %{"action" => "wrap", "node_id" => section_node.id})
+
+        tree = tree(view)
+        wrapper = Tree.get(tree, Tree.get(tree, section_node.id).parent_id)
+
+        assert wrapper.tag == "div"
+        assert Tree.get(tree, h1.id).parent_id == section_node.id
+        assert Tree.get(tree, p.id).parent_id == section_node.id
+        assert EditorSession.chosen(editor(view)) == [wrapper.id]
       end
     end
 
