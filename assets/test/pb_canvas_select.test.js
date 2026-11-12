@@ -180,6 +180,23 @@ describe("canvas click resolution", () => {
     expect(ctx.pushed).toEqual([["mark", { id: "h2" }]]);
   });
 
+  // A frame mounted (or reloaded) while elements are held has had no `pb:marked` push, so the root's
+  // `data-held` is what outlines them.
+  it("outlines the held elements it is handed at mount", () => {
+    document.body.innerHTML =
+      '<div id="pb-canvas-root" data-held="p1 p3">' +
+      '<p data-node-id="p1" data-kind="tag">a</p>' +
+      '<p data-node-id="p2" data-kind="tag">b</p>' +
+      '<p data-node-id="p3" data-kind="tag">c</p>' +
+      "</div>";
+    const ctx = context(document.getElementById("pb-canvas-root"));
+    hooks.PbCanvas.mounted.call(ctx);
+    live.push(ctx);
+
+    const held = [...document.querySelectorAll("[data-marked='true']")].map((el) => el.dataset.nodeId);
+    expect(held).toEqual(["p1", "p3"]);
+  });
+
   // Ctrl-click (Windows, Linux) is the same gesture, and a link, a submit or anything in a form is
   // still held rather than selected: a plain select there would drop the held ones.
   it("holds on ctrl-click, also on a link, a submit or inside a form", () => {

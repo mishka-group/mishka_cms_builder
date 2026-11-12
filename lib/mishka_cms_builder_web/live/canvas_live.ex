@@ -545,6 +545,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     |> assign(:revision, session.revision)
     |> assign(:selection, session.selection)
     |> assign(:selection_anchor, selection_anchor(session.tree, session.selection))
+    |> assign(:held, Enum.join(session.marked || MapSet.new(), " "))
     |> assign(:locked, session.locked)
     |> assign(:hidden, session.hidden)
     |> assign(:pinned, session.pinned || MapSet.new())
@@ -1555,6 +1556,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       dir={@dir}
       data-token={@token}
       {%{"data-selection" => @selection, "data-selection-anchor" => @selection_anchor}}
+      data-held={@held}
       data-preview={to_string(@preview?)}
       data-example={to_string(@example?)}
       data-revision={@revision}

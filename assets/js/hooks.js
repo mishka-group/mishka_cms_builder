@@ -1456,7 +1456,9 @@ const PbCanvas = {
 
     // The held elements, painted the same way the ring is: an id list the client applies, never
     // `data-marked` rendered per node — that would re-render the whole document on every ⌘-click.
-    this.handleEvent("pb:marked", ({ ids }) => {
+    // A frame that has just mounted paints them from the root's `data-held`, the same handover
+    // `data-selection` gives the ring.
+    this.paintMarked = (ids) => {
       const doc = this.el.ownerDocument;
       const held = new Set(ids);
 
@@ -1467,7 +1469,9 @@ const PbCanvas = {
       for (const id of held) {
         doc.querySelector(`[data-node-id="${CSS.escape(id)}"]`)?.setAttribute("data-marked", "true");
       }
-    });
+    };
+
+    this.handleEvent("pb:marked", ({ ids }) => this.paintMarked(ids));
 
     // PREVIEW IS READ-ONLY, AND THAT HAS TO MEAN EVERY WAY IN. The flag was read here and nowhere
     // else, so selection was off while double-click still rewrote text and a drag still moved
@@ -2322,6 +2326,7 @@ const PbCanvas = {
     // One attribute on the root, read once. Not `data-selected` per node — that is still the
     // client's to paint, and rendering it per node would fight every patch.
     this.markSelected(this.el.dataset.selection || null, this.el.dataset.selectionAnchor || null);
+    this.paintMarked((this.el.dataset.held || "").split(" ").filter(Boolean));
 
     this.placeToolbar();
     window.addEventListener("scroll", this.placeToolbar, { passive: true });

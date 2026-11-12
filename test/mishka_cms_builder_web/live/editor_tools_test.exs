@@ -366,6 +366,40 @@ defmodule MishkaCmsBuilderWeb.Live.EditorToolsTest do
         end
       end
 
+      # The held bar appearing must not move the canvas: a moved iframe reloads and drops the outlines.
+      test "the held bar leaves the canvas column's own children where they were",
+           %{conn: conn, site: site} do
+        {view, _record} = open(conn, unquote(section), site.id)
+        render_async(view)
+
+        column = fn ->
+          view
+          |> render()
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.query("#pb-canvaswrap > *")
+          |> Enum.map(&{LazyHTML.tag(&1), LazyHTML.attribute(&1, "id")})
+        end
+
+        before = column.()
+        hold_both(view)
+
+        assert has_element?(view, "#pb-canvas-bars #pb-multi-bar")
+        assert column.() == before
+      end
+
+      test "a canvas that mounts while elements are held is handed them to outline",
+           %{conn: conn, site: site} do
+        {view, _record} = open(conn, unquote(section), site.id)
+        render_async(view)
+
+        {_h1, p} = hold_both(view)
+
+        {:ok, canvas, _html} =
+          live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+        assert has_element?(canvas, ~s(#pb-canvas-root[data-held="#{p.id}"]))
+      end
+
       test "a right-click outside the held elements acts on that one and lets go of the rest",
            %{conn: conn, site: site} do
         {view, _record} = open(conn, unquote(section), site.id)
