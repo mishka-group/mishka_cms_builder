@@ -26,5 +26,6 @@ jobs:
       credo: false
       dialyzer: false
       ex_dna: false
+      unused-deps: false
       assets: true
       bun-version: "1.4.4"
