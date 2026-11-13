@@ -10,6 +10,17 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
   alias MishkaCmsCore.Runtime.Authoring.Strict
 
+  # A relation select opens through its `.SearchSelect` hook, which sends `relation_focus` from the
+  # select's root: `#search-select-`, `#multi-select-` or `#load-more-select-` with the form's scope
+  # and the field.
+  defp open_select(view, form, field) do
+    scope = form |> String.trim_leading("#") |> String.replace_suffix("-form", "")
+
+    view
+    |> element("[id$='-select-#{scope}-#{field}']")
+    |> render_hook("relation_focus", %{"filter" => field})
+  end
+
   # §1 — THE TWO FIELDS A DOCUMENT IS MOST LIKELY TO HAVE WRONG on a first draft, changeable from
   # the one screen the author is actually on. Everything past the click is the resource's own Gervaz
   # form, so what is pinned here is which fields survive, that a save reaches the record, and that
@@ -19,7 +30,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
     # Picks, in `form`, the kind of record each address of the page shows: `"__nil__"` for none.
     defp pick_kind(view, form, kind) do
-      view |> element("#{form} input[name='_search_record']") |> render_focus()
+      open_select(view, form, "record")
 
       view
       |> element("#{form} [phx-click='relation_select'][phx-value-id='#{kind}']")
@@ -93,7 +104,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       open_settings(view)
 
       picker = "#multi-select-pb-settings-page-permissions"
-      view |> element("#{picker} input[name='_search_permissions']") |> render_focus()
+      view |> element(picker) |> render_hook("relation_focus", %{"filter" => "permissions"})
       view |> element("#{picker} [phx-value-id='#{permission.name}']") |> render_click()
 
       view |> form(settings_form("page")) |> render_submit()
@@ -150,7 +161,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       open_settings(view)
       form = settings_form("page")
-      view |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+      open_select(view, form, "layout_id")
 
       view
       |> element("#{form} [phx-click='relation_select'][phx-value-id='__nil__']")
@@ -268,7 +279,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       open_settings(view)
       form = settings_form("page-draft")
-      view |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+      open_select(view, form, "layout_id")
 
       view
       |> element("#{form} [phx-click='relation_select'][phx-value-id='#{layout.id}']")
@@ -366,7 +377,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       open_settings(view)
       form = settings_form("page-draft")
-      view |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+      open_select(view, form, "layout_id")
 
       view
       |> element("#{form} [phx-click='relation_select'][phx-value-id='__nil__']")
@@ -1118,7 +1129,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
       open_settings(view)
 
       form = settings_form("page")
-      view |> element("#{form} input[name='_search_record']") |> render_focus()
+      open_select(view, form, "record")
       assert has_element?(view, "#{form} [phx-value-id='__nil__']", "Custom page")
 
       # Each extension's kinds under its name, and a kind says its extension once picked.
@@ -1302,9 +1313,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
     test "a created error page is addressed at its site", %{conn: conn, site: site} do
       {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page")
 
-      view
-      |> element("#pb-new-error-page-form input[name='_search_site_id']")
-      |> render_focus()
+      open_select(view, "#pb-new-error-page-form", "site_id")
 
       view
       |> element("#search-select-pb-new-error-page-site_id button", site.name)
@@ -1388,9 +1397,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page")
 
-      view
-      |> element("#pb-new-error-page-form input[name='_search_site_id']")
-      |> render_focus()
+      open_select(view, "#pb-new-error-page-form", "site_id")
 
       view
       |> element("#search-select-pb-new-error-page-site_id button", site.name)
@@ -1432,9 +1439,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
     end
 
     defp pick_essentials_site(view, section, site) do
-      view
-      |> element("#{essentials_form(section)} input[name='_search_site_id']")
-      |> render_focus()
+      open_select(view, essentials_form(section), "site_id")
 
       view
       |> element("#search-select-pb-new-#{section}-site_id button", site.name)
@@ -1623,11 +1628,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
   describe "create and open the editor" do
     # A RELATION FIELD IS PICKED, NOT TYPED. Its value lives on a hidden input the form only writes
     # through `relation_select`, so `form/3` refuses to set it directly — the way in is the way a
-    # reader takes: focus the search box, then choose from what it offers.
+    # reader takes: open the select, then choose from what it offers.
     defp pick_site(view, form_id, site) do
       scope = String.replace_suffix(form_id, "-form", "")
 
-      view |> element("##{form_id} input[name='_search_site_id']") |> render_focus()
+      open_select(view, "##{form_id}", "site_id")
       view |> element("#search-select-#{scope}-site_id button", site.name) |> render_click()
       view
     end
@@ -1860,7 +1865,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive.DocumentsTest do
 
       open_settings(first)
       form = settings_form("page-draft")
-      first |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+      open_select(first, form, "layout_id")
 
       first
       |> element("#{form} [phx-click='relation_select'][phx-value-id='#{layout.id}']")
