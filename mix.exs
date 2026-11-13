@@ -5,7 +5,7 @@
 defmodule MishkaCmsBuilder.MixProject do
   use Mix.Project
 
-  @version "0.0.1-alpha.8"
+  @version "0.0.1-alpha.9"
   @source_url "https://github.com/mishka-group/mishka_cms_builder"
 
   def project do
@@ -79,7 +79,7 @@ defmodule MishkaCmsBuilder.MixProject do
       # (`runtime:document:editor_url`, `runtime:provision:snippets`, `activity:sources`,
       # `MishkaCmsCore.Supervision`, `MishkaCmsCore.Test.Boot`).
       mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.13"),
-      mishka_dep(:mishka_gervaz, "~> 0.0.8"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.10"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
