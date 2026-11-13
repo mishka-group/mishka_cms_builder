@@ -8497,95 +8497,99 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       data-role="pb-canvaswrap"
       class="flex min-w-0 flex-1 flex-col bg-[#f6f5f2]"
     >
-      <%!-- HOLDING SEVERAL. It appears only once a second element is held, says how many, and every
+      <%!-- The bars above the canvas come and go, so they share one keyed slot. Inserted straight
+            into this column, a bar shifted the canvas below it, LiveView moved its iframe to keep
+            the order, and the moved frame reloaded. --%>
+      <div id="pb-canvas-bars" class="contents">
+        <%!-- HOLDING SEVERAL. It appears only once a second element is held, says how many, and every
             button on it acts on all of them as ONE undo step. Above the canvas rather than floating
             over it: a bar that covers the page hides the thing it is about. --%>
-      <div
-        :if={marked_count(@marked) > 0}
-        id="pb-multi-bar"
-        class="flex h-10 flex-none items-center gap-2 border-b border-[#dcdbf5] bg-[#f2f1fc] px-3"
-      >
-        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#e4e2f7] text-[#4f4bcc]">
-          <.icon name={:layers} size={12} />
-        </span>
-        <span class="flex-1 text-[11.5px] font-bold text-[#2e2b6b]">
-          {ngettext("%{count} element held", "%{count} elements held", marked_count(@marked) + 1)}
-        </span>
-        <button
-          :for={
-            {action, label} <- [
-              {"wrap", gettext("Wrap together")},
-              {"duplicate", gettext("Duplicate")},
-              {"paste_styles", gettext("Paste styles")},
-              {"delete", gettext("Delete")}
-            ]
-          }
-          type="button"
-          id={"pb-multi-#{action}"}
-          phx-click="bulk"
-          phx-value-action={action}
-          class={[
-            "h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-white px-2.5",
-            "font-['Space_Grotesk'] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#faf9fe]",
-            action == "delete" && "text-[#c0473d] hover:bg-[#fdf3f1]"
-          ]}
+        <div
+          :if={marked_count(@marked) > 0}
+          id="pb-multi-bar"
+          class="flex h-10 flex-none items-center gap-2 border-b border-[#dcdbf5] bg-[#f2f1fc] px-3"
         >
-          {label}
-        </button>
-        <button
-          type="button"
-          id="pb-multi-clear"
-          phx-click="clear_marks"
-          title={gettext("Back to one element")}
-          class="grid size-7 flex-none place-items-center rounded-[8px] text-[#6d6a63] hover:bg-white hover:text-[#1b1a18]"
-        >
-          <.icon name={:close} size={13} />
-        </button>
-      </div>
-      <%!-- An error page is a LIST of per-status templates, not one document, so it gets a strip to
+          <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#e4e2f7] text-[#4f4bcc]">
+            <.icon name={:layers} size={12} />
+          </span>
+          <span class="flex-1 text-[11.5px] font-bold text-[#2e2b6b]">
+            {ngettext("%{count} element held", "%{count} elements held", marked_count(@marked) + 1)}
+          </span>
+          <button
+            :for={
+              {action, label} <- [
+                {"wrap", gettext("Wrap together")},
+                {"duplicate", gettext("Duplicate")},
+                {"paste_styles", gettext("Paste styles")},
+                {"delete", gettext("Delete")}
+              ]
+            }
+            type="button"
+            id={"pb-multi-#{action}"}
+            phx-click="bulk"
+            phx-value-action={action}
+            class={[
+              "h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-white px-2.5",
+              "font-['Space_Grotesk'] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#faf9fe]",
+              action == "delete" && "text-[#c0473d] hover:bg-[#fdf3f1]"
+            ]}
+          >
+            {label}
+          </button>
+          <button
+            type="button"
+            id="pb-multi-clear"
+            phx-click="clear_marks"
+            title={gettext("Back to one element")}
+            class="grid size-7 flex-none place-items-center rounded-[8px] text-[#6d6a63] hover:bg-white hover:text-[#1b1a18]"
+          >
+            <.icon name={:close} size={13} />
+          </button>
+        </div>
+        <%!-- An error page is a LIST of per-status templates, not one document, so it gets a strip to
             choose which status the canvas is showing. Every other section has nothing to switch. --%>
-      <div
-        :if={@statuses != []}
-        id="pb-statuses"
-        class="flex h-10 flex-none items-center gap-1.5 border-b border-[#e6e4de] bg-white px-3"
-      >
-        <span class="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#8a877f]">
-          {gettext("Status")}
-        </span>
-        <%!-- `navigate`, not `patch`: each status is a separate document with its own editing
-              session, so switching has to re-mount rather than swap assigns under a live tree. --%>
-        <.link
-          :for={status <- @statuses}
-          navigate={Paths.builder_path("error-page", @record.id, status)}
-          id={"pb-status-#{status}"}
-          class={[
-            "h-7 rounded-[8px] px-2.5 font-['Space_Grotesk'] text-[11.5px] font-bold leading-7",
-            (@status == status && "bg-[#17161a] text-white") ||
-              "bg-[#f2f1ec] text-[#6d6a63] hover:bg-[#e9e7e0]"
-          ]}
+        <div
+          :if={@statuses != []}
+          id="pb-statuses"
+          class="flex h-10 flex-none items-center gap-1.5 border-b border-[#e6e4de] bg-white px-3"
         >
-          {(status == :offline && gettext("offline")) || status}
-        </.link>
-        <%!-- A STATUS IS ADDED BY OPENING IT. The page an offline site shows, a 403, a 503: the entry
+          <span class="mr-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#8a877f]">
+            {gettext("Status")}
+          </span>
+          <%!-- `navigate`, not `patch`: each status is a separate document with its own editing
+              session, so switching has to re-mount rather than swap assigns under a live tree. --%>
+          <.link
+            :for={status <- @statuses}
+            navigate={Paths.builder_path("error-page", @record.id, status)}
+            id={"pb-status-#{status}"}
+            class={[
+              "h-7 rounded-[8px] px-2.5 font-['Space_Grotesk'] text-[11.5px] font-bold leading-7",
+              (@status == status && "bg-[#17161a] text-white") ||
+                "bg-[#f2f1ec] text-[#6d6a63] hover:bg-[#e9e7e0]"
+            ]}
+          >
+            {(status == :offline && gettext("offline")) || status}
+          </.link>
+          <%!-- A STATUS IS ADDED BY OPENING IT. The page an offline site shows, a 403, a 503: the entry
               is written when what is built for it is saved. --%>
-        <details id="pb-status-add" class="relative">
-          <summary class="flex h-7 cursor-pointer list-none items-center rounded-[8px] bg-[#f2f1ec] px-2.5 font-['Space_Grotesk'] text-[11.5px] font-bold text-[#6d6a63] hover:bg-[#e9e7e0]">
-            {gettext("+ Status")}
-          </summary>
-          <div class="absolute left-0 top-8 z-30 flex max-h-72 w-56 flex-col overflow-y-auto rounded-[10px] border border-[#ecebe6] bg-white p-1 shadow-[0_12px_30px_rgba(20,18,26,.12)]">
-            <.link
-              :for={status <- Section.offered_statuses() -- @statuses}
-              navigate={Paths.builder_path("error-page", @record.id, status)}
-              id={"pb-status-add-#{status}"}
-              class="rounded-[7px] px-2.5 py-1.5 text-[11.5px] font-semibold text-[#3a382f] hover:bg-[#f6f5f2]"
-            >
-              {translate(MishkaCmsCore.Runtime.ErrorStatus.label(status))}
-            </.link>
-          </div>
-        </details>
-      </div>
+          <details id="pb-status-add" class="relative">
+            <summary class="flex h-7 cursor-pointer list-none items-center rounded-[8px] bg-[#f2f1ec] px-2.5 font-['Space_Grotesk'] text-[11.5px] font-bold text-[#6d6a63] hover:bg-[#e9e7e0]">
+              {gettext("+ Status")}
+            </summary>
+            <div class="absolute left-0 top-8 z-30 flex max-h-72 w-56 flex-col overflow-y-auto rounded-[10px] border border-[#ecebe6] bg-white p-1 shadow-[0_12px_30px_rgba(20,18,26,.12)]">
+              <.link
+                :for={status <- Section.offered_statuses() -- @statuses}
+                navigate={Paths.builder_path("error-page", @record.id, status)}
+                id={"pb-status-add-#{status}"}
+                class="rounded-[7px] px-2.5 py-1.5 text-[11.5px] font-semibold text-[#3a382f] hover:bg-[#f6f5f2]"
+              >
+                {translate(MishkaCmsCore.Runtime.ErrorStatus.label(status))}
+              </.link>
+            </div>
+          </details>
+        </div>
 
-      <%!-- Work a previous session left behind. OFFERED, never loaded: opening a page and silently
+        <%!-- Work a previous session left behind. OFFERED, never loaded: opening a page and silently
             being handed something else is exactly the surprise this feature exists to remove.
 
             It has nothing to say once the editor is pointed at a draft. Every word of it is then
@@ -8593,149 +8597,150 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             chose for a different one. The condition is the editor's target rather than a flag
             cleared per route, so opening a draft, forking one, and the first change of a session
             all put the bar away without each having to remember to. --%>
-      <%!-- YOU WALKED BACK INTO A DRAFT. The editing session outlives a reload — which is what stops
+        <%!-- YOU WALKED BACK INTO A DRAFT. The editing session outlives a reload — which is what stops
             a refresh throwing work away — so reopening the page put you inside whatever draft was
             open, showing something other than the live page, and said nothing about it. This asks,
             once per visit: keep going in it, or leave it alone and start again from the live page.
             Either way the draft survives; neither button throws anything away. --%>
-      <div
-        :if={@inherited_draft}
-        id="pb-inherited-bar"
-        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#dcdbf5] bg-[#f2f1fc] px-4 py-[9px]"
-      >
-        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#e4e2f7] text-[#4f4bcc]">
-          <.icon name={:draft} size={12} />
-        </span>
-        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#2e2b6b]">
-          {inherited_question(@inherited_draft)}
-        </span>
-        <button
-          type="button"
-          id="pb-inherited-continue"
-          phx-click="continue_draft"
-          class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white"
+        <div
+          :if={@inherited_draft}
+          id="pb-inherited-bar"
+          class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#dcdbf5] bg-[#f2f1fc] px-4 py-[9px]"
         >
-          {inherited_action(@inherited_draft)}
-        </button>
-        <button
-          type="button"
-          id="pb-inherited-fresh"
-          phx-click="start_fresh"
-          class="h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#faf9fe]"
-        >
-          {inherited_decline(@inherited_draft)}
-        </button>
-      </div>
+          <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#e4e2f7] text-[#4f4bcc]">
+            <.icon name={:draft} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#2e2b6b]">
+            {inherited_question(@inherited_draft)}
+          </span>
+          <button
+            type="button"
+            id="pb-inherited-continue"
+            phx-click="continue_draft"
+            class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white"
+          >
+            {inherited_action(@inherited_draft)}
+          </button>
+          <button
+            type="button"
+            id="pb-inherited-fresh"
+            phx-click="start_fresh"
+            class="h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#faf9fe]"
+          >
+            {inherited_decline(@inherited_draft)}
+          </button>
+        </div>
 
-      <div
-        :if={@resumable && is_nil(@editor.draft_id) && is_nil(@inherited_draft)}
-        id="pb-resume-bar"
-        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0e3c9] bg-[#fbf1df] px-4 py-[9px]"
-      >
-        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f6e5c6] text-[#8a5514]">
-          <.icon name={:history} size={12} />
-        </span>
-        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a5514]">
-          {gettext("“%{label}” — %{ago}, never published. You are looking at the live page.",
-            label: @resumable.label,
-            ago: ago(@resumable.updated_at)
-          )}
-        </span>
-        <button
-          type="button"
-          id="pb-resume"
-          phx-click="resume_autosave"
-          class="h-7 flex-none rounded-[8px] bg-[#17161a] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:bg-[#2e2c33]"
+        <div
+          :if={@resumable && is_nil(@editor.draft_id) && is_nil(@inherited_draft)}
+          id="pb-resume-bar"
+          class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0e3c9] bg-[#fbf1df] px-4 py-[9px]"
         >
-          {gettext("Resume")}
-        </button>
-        <button
-          type="button"
-          id="pb-resume-discard"
-          phx-click="discard_autosave"
-          class="h-7 flex-none rounded-[8px] border border-[#e8d9bb] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#8a5514] hover:bg-[#fdf7ec]"
+          <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f6e5c6] text-[#8a5514]">
+            <.icon name={:history} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a5514]">
+            {gettext("“%{label}” — %{ago}, never published. You are looking at the live page.",
+              label: @resumable.label,
+              ago: ago(@resumable.updated_at)
+            )}
+          </span>
+          <button
+            type="button"
+            id="pb-resume"
+            phx-click="resume_autosave"
+            class="h-7 flex-none rounded-[8px] bg-[#17161a] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:bg-[#2e2c33]"
+          >
+            {gettext("Resume")}
+          </button>
+          <button
+            type="button"
+            id="pb-resume-discard"
+            phx-click="discard_autosave"
+            class="h-7 flex-none rounded-[8px] border border-[#e8d9bb] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#8a5514] hover:bg-[#fdf7ec]"
+          >
+            {gettext("Discard")}
+          </button>
+        </div>
+
+        <div
+          :if={@original_changed?}
+          id="pb-original-changed"
+          class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0e3c9] bg-[#fbf1df] px-4 py-[9px]"
         >
-          {gettext("Discard")}
-        </button>
-      </div>
+          <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f6e5c6] text-[#8a5514]">
+            <.icon name={:tip} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a5514]">
+            {gettext(
+              "The original was changed after this draft was made. Publishing the draft writes it over those changes."
+            )}
+          </span>
+        </div>
 
-      <div
-        :if={@original_changed?}
-        id="pb-original-changed"
-        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0e3c9] bg-[#fbf1df] px-4 py-[9px]"
-      >
-        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f6e5c6] text-[#8a5514]">
-          <.icon name={:tip} size={12} />
-        </span>
-        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a5514]">
-          {gettext(
-            "The original was changed after this draft was made. Publishing the draft writes it over those changes."
-          )}
-        </span>
-      </div>
-
-      <%!-- A BUNDLE DID NOT BUILD. Nothing on screen says so on its own: the canvas and the live site
+        <%!-- A BUNDLE DID NOT BUILD. Nothing on screen says so on its own: the canvas and the live site
             keep the last bundle that built, which is right for a visitor and a trap for an author,
             whose change is simply not there. The reason is here; the link is to the page that shows
             it beside the rows, for whoever that page opens to. --%>
-      <div
-        :for={failure <- @asset_failures}
-        id={"pb-asset-build-#{failure.type}-#{:erlang.phash2(failure.bundle)}"}
-        role="alert"
-        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0d9d9] bg-[#fdf1f1] px-4 py-[9px]"
-      >
-        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f9e2e2] text-[#a33a3a]">
-          <.icon name={:alert} size={12} />
-        </span>
-        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
-          {asset_failure_title(failure)}
-          <span class="block truncate font-normal" title={failure.reason}>{failure.reason}</span>
-        </span>
-        <.link
-          :if={failure.link}
-          href={failure.link}
-          class="flex h-7 flex-none items-center rounded-[8px] border border-[#f0d9d9] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#a33a3a] hover:bg-[#fef7f7]"
+        <div
+          :for={failure <- @asset_failures}
+          id={"pb-asset-build-#{failure.type}-#{:erlang.phash2(failure.bundle)}"}
+          role="alert"
+          class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0d9d9] bg-[#fdf1f1] px-4 py-[9px]"
         >
-          {gettext("See the error")}
-        </.link>
-      </div>
+          <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f9e2e2] text-[#a33a3a]">
+            <.icon name={:alert} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
+            {asset_failure_title(failure)}
+            <span class="block truncate font-normal" title={failure.reason}>{failure.reason}</span>
+          </span>
+          <.link
+            :if={failure.link}
+            href={failure.link}
+            class="flex h-7 flex-none items-center rounded-[8px] border border-[#f0d9d9] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#a33a3a] hover:bg-[#fef7f7]"
+          >
+            {gettext("See the error")}
+          </.link>
+        </div>
 
-      <%!-- PUBLISH MODE KEEPS NOTHING, AND HAS TO SAY SO. Every other mode writes as you work; this
+        <%!-- PUBLISH MODE KEEPS NOTHING, AND HAS TO SAY SO. Every other mode writes as you work; this
             one deliberately does not, because a publish is meant to be a deliberate act. Silence
             about that is indistinguishable from a save that is failing — so this appears the moment
             there is unsaved work and offers the way to keep it.
             `keeping_draft?` is the one thing that takes it down early: the draft it offered is
             being written, and it comes back if that write fails. --%>
-      <div
-        :if={@stage == :published and @dirty? and not @keeping_draft?}
-        id="pb-publish-bar"
-        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0d9d9] bg-[#fdf1f1] px-4 py-[9px]"
-      >
-        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f9e2e2] text-[#a33a3a]">
-          <.icon name={:alert} size={12} />
-        </span>
-        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
-          {gettext(
-            "Publish mode: these changes are not live or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
-          )}
-        </span>
-        <%!-- The bar names Publish, so it carries it: the same press as the top bar's button. --%>
-        <button
-          type="button"
-          id="pb-publish-bar-publish"
-          phx-click="apply_stage"
-          class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:opacity-95"
+        <div
+          :if={@stage == :published and @dirty? and not @keeping_draft?}
+          id="pb-publish-bar"
+          class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0d9d9] bg-[#fdf1f1] px-4 py-[9px]"
         >
-          {gettext("Publish")}
-        </button>
-        <button
-          type="button"
-          id="pb-publish-keep"
-          phx-click="keep_as_draft"
-          class="h-7 flex-none rounded-[8px] border border-[#f0d9d9] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#a33a3a] hover:bg-[#fef7f7]"
-        >
-          {gettext("Keep as a draft")}
-        </button>
+          <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f9e2e2] text-[#a33a3a]">
+            <.icon name={:alert} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
+            {gettext(
+              "Publish mode: these changes are not live or in a draft yet. Publish puts them live; Keep as a draft saves them aside."
+            )}
+          </span>
+          <%!-- The bar names Publish, so it carries it: the same press as the top bar's button. --%>
+          <button
+            type="button"
+            id="pb-publish-bar-publish"
+            phx-click="apply_stage"
+            class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:opacity-95"
+          >
+            {gettext("Publish")}
+          </button>
+          <button
+            type="button"
+            id="pb-publish-keep"
+            phx-click="keep_as_draft"
+            class="h-7 flex-none rounded-[8px] border border-[#f0d9d9] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#a33a3a] hover:bg-[#fef7f7]"
+          >
+            {gettext("Keep as a draft")}
+          </button>
+        </div>
       </div>
 
       <div class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#e6e4de] bg-[#faf9f6] px-4 py-[9px]">

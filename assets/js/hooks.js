@@ -1456,7 +1456,9 @@ const PbCanvas = {
 
     // The held elements, painted the same way the ring is: an id list the client applies, never
     // `data-marked` rendered per node — that would re-render the whole document on every ⌘-click.
-    this.handleEvent("pb:marked", ({ ids }) => {
+    // A frame that has just mounted paints them from the root's `data-held`, the same handover
+    // `data-selection` gives the ring.
+    this.paintMarked = (ids) => {
       const doc = this.el.ownerDocument;
       const held = new Set(ids);
 
@@ -1467,7 +1469,9 @@ const PbCanvas = {
       for (const id of held) {
         doc.querySelector(`[data-node-id="${CSS.escape(id)}"]`)?.setAttribute("data-marked", "true");
       }
-    });
+    };
+
+    this.handleEvent("pb:marked", ({ ids }) => this.paintMarked(ids));
 
     // PREVIEW IS READ-ONLY, AND THAT HAS TO MEAN EVERY WAY IN. The flag was read here and nowhere
     // else, so selection was off while double-click still rewrote text and a drag still moved
@@ -1528,6 +1532,19 @@ const PbCanvas = {
       }
 
       if (previewing()) return;
+
+      const node = styleableNode(event.target);
+
+      // ⌘ OR CTRL HOLDS A SECOND ELEMENT rather than replacing the first. The `phx-click="select"`
+      // on the node would still fire and throw the held ones away, so the click is stopped here and
+      // re-sent as a mark. Checked before the link guard: `onCapture` answers links, submits and
+      // anything in a form with a plain select, which dropped the held ones there.
+      if (node && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return this.pushEvent("mark", { id: node.dataset.nodeId });
+      }
+
       if (event.target.closest("a[href], button[type=submit], form")) return;
       // THE TOOLBAR IS NOT THE DOCUMENT. It lives in the top layer, outside every `[data-node-id]`,
       // so a click on its own buttons read as "clicked empty space" and dropped the ring — then
@@ -1547,17 +1564,6 @@ const PbCanvas = {
       }
 
       if (event.target.closest("#pb-el-toolbar")) return;
-
-      const node = styleableNode(event.target);
-
-      // ⌘ OR CTRL HOLDS A SECOND ELEMENT rather than replacing the first. The `phx-click="select"`
-      // on the node would still fire and throw the held ones away, so the click is stopped here and
-      // re-sent as a mark.
-      if (node && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        event.stopPropagation();
-        return this.pushEvent("mark", { id: node.dataset.nodeId });
-      }
 
       // A COMPONENT'S OWN BEHAVIOUR IS NOT THE EDITOR'S. A kit component may carry its own
       // `phx-click` — flash, toast, banner, badge, rating and pagination all do — and a dismiss is
@@ -2320,6 +2326,7 @@ const PbCanvas = {
     // One attribute on the root, read once. Not `data-selected` per node — that is still the
     // client's to paint, and rendering it per node would fight every patch.
     this.markSelected(this.el.dataset.selection || null, this.el.dataset.selectionAnchor || null);
+    this.paintMarked((this.el.dataset.held || "").split(" ").filter(Boolean));
 
     this.placeToolbar();
     window.addEventListener("scroll", this.placeToolbar, { passive: true });
