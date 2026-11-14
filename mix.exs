@@ -78,7 +78,7 @@ defmodule MishkaCmsBuilder.MixProject do
       # 0.0.3 is the first core release with the seams this package plugs into
       # (`runtime:document:editor_url`, `runtime:provision:snippets`, `activity:sources`,
       # `MishkaCmsCore.Supervision`, `MishkaCmsCore.Test.Boot`).
-      mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.13"),
+      mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.18"),
       mishka_dep(:mishka_gervaz, "~> 0.0.10"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
