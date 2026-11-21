@@ -25,6 +25,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   import MishkaCmsCore.CoreComponents, only: [roadmap_notice: 1, select_chevron: 1]
 
   alias MishkaCmsBuilder.Collection
+  alias MishkaCmsBuilder.ComponentNotes
   alias MishkaCmsCore.Builder.Literal
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.Descriptor
@@ -2970,6 +2971,38 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     """
   end
 
+  attr(:notes, :list, required: true, doc: "the notes `ComponentNotes.for_node/2` answered")
+
+  defp component_notes(assigns) do
+    ~H"""
+    <div
+      :for={note <- @notes}
+      data-role="pb-insp-note"
+      data-severity={note.severity}
+      class={[
+        "mt-1.5 flex items-start gap-1.5 rounded-[8px] border px-2 py-1.5",
+        severity_card(note.severity)
+      ]}
+    >
+      <.icon name={:warning} size={12} class={note_icon_class(note.severity)} />
+      <div class="min-w-0">
+        <div class="text-[10.5px] font-semibold leading-[1.45] text-[#1b1a18]">
+          {note.message}
+        </div>
+        <div
+          :if={note[:detail]}
+          class="text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+        >
+          {note.detail}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp note_icon_class(:warning), do: "mt-0.5 flex-none text-[#a5691a]"
+  defp note_icon_class(_note), do: "mt-0.5 flex-none text-[#4f4bcc]"
+
   defp inspector(assigns) do
     ~H"""
     <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3.5 pb-4 pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -3027,6 +3060,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             <div class="text-[10.5px] font-medium text-[#6d6a63]">
               {selection_meta(@selected_node)}
             </div>
+            <%!-- WHAT THE BLOCK'S EXTENSION SAYS ABOUT IT, under the name it is about: a product
+                  that was archived, a list pointed at something gone. Only the editor asks
+                  (`ComponentNotes`); a visitor gets the block's own quiet fallback. --%>
+            <.component_notes notes={
+              ComponentNotes.for_node(@selected_node, notes_scope(@editor))
+            } />
             <.form_part part={Inspector.form_part(@editor, @selected_node)} />
             <.overlay_open
               :if={@selected_node.kind == :component and overlay?(component_entry(assigns))}
@@ -11084,6 +11123,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           {:structure, gettext("Structure")},
           {:accessibility, gettext("Accessibility")},
           {:forms, gettext("Forms")},
+          {:content, gettext("Content")},
           {:seo, gettext("SEO & Meta")},
           {:performance, gettext("Performance")}
         ],
@@ -11097,6 +11137,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # field raises nothing here and earns no ticks either, and an empty "Forms" group reads as a
   # warning about something that is not on the page.
   defp shown?(:forms, items), do: items != []
+
+  # Content is what an extension says about a block it ships — a product that was archived, a list
+  # pointed at something gone. A page with nothing to say has no heading for it, as Forms has none.
+  defp shown?(:content, items), do: items != []
 
   # Structure asks a question only a layout has an answer to, so on a page there is nothing to show
   # and an empty heading would read as a check that failed to run.
@@ -17356,7 +17400,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           document_findings(nodes, editor) ++
           structure_findings(tree, editor) ++
           FormChecks.findings(tree, record, editor) ++
-          seo_findings(record) ++ Demo.audit_findings()
+          seo_findings(record) ++
+          component_findings(nodes, editor) ++ Demo.audit_findings()
       )
 
     issues ++
@@ -17368,6 +17413,30 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       ) ++
       performance_checks(editor)
   end
+
+  # WHAT THE EXTENSIONS SAY ABOUT THE BLOCKS THEY SHIP, one finding per note, each pointing at its
+  # block so the title selects it. `fixes: []` because there is no edit to make: the author picks
+  # another product, or takes the block out, and the assistant cannot know which. The asks are kept
+  # for a moment by `ComponentNotes`, so a keystroke does not read every block again.
+  defp component_findings(nodes, editor) do
+    scope = notes_scope(editor)
+
+    for %Node{kind: :component} = node <- nodes,
+        note <- ComponentNotes.for_node(node, scope) do
+      %{
+        node_id: node.id,
+        group: :content,
+        severity: note.severity,
+        rule: "component-note",
+        message: note.message,
+        detail: note[:detail],
+        fixes: []
+      }
+    end
+  end
+
+  defp notes_scope(editor),
+    do: %{site_id: Map.get(editor || %{}, :site_id), site_name: Map.get(editor || %{}, :site_name)}
 
   # THE ONE CHECK THAT IS ABOUT WHAT THE DOCUMENT IS FOR. A layout exists to wrap a page, and it does
   # that through `@inner_content`; without it the layout renders perfectly and every page on it comes

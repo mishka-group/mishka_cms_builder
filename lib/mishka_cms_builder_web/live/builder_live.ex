@@ -4530,9 +4530,13 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  def handle_event("audit_rerun", _params, socket),
-    do:
-      {:noreply, put_flash(socket, :info, gettext("Checks re-run against the current document."))}
+  # Re-run asks the extensions again too: their notes are kept for a moment
+  # (`MishkaCmsBuilder.ComponentNotes`), and an author who just archived a product and pressed Re-run
+  # means now.
+  def handle_event("audit_rerun", _params, socket) do
+    :ok = MishkaCmsBuilder.ComponentNotes.forget()
+    {:noreply, put_flash(socket, :info, gettext("Checks re-run against the current document."))}
+  end
 
   # A Forms finding names an edit rather than a decision — wrap this field, rename that form, move
   # this button — so Fix makes it, in one history entry, and where there is no edit to make it says
