@@ -197,4 +197,49 @@ describe("the leave guard", () => {
     expect(ctx.pushEvent).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
   });
+
+  // Typed in the Code Editor and not applied, so no server has it: a publish would leave it out.
+  describe("a Publish button", () => {
+    const editor = `
+      <button id="publish" data-unapplied="Not applied. Publish without it?">Publish</button>
+      <div data-pane="heex"><textarea name="source"><p>Stored</p></textarea></div>`;
+
+    const type = (text) => {
+      document.querySelector("textarea").value = text;
+    };
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it("asks when the Code Editor holds text nobody applied, and publishes on yes", () => {
+      const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+      guard({ armed: false, links: editor });
+      type("<p>Typed</p>");
+
+      click("#publish");
+
+      expect(ask).toHaveBeenCalledWith("Not applied. Publish without it?");
+      expect(reached).toBe(true);
+    });
+
+    it("does nothing on no", () => {
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      guard({ armed: false, links: editor });
+      type("<p>Typed</p>");
+
+      expect(click("#publish").defaultPrevented).toBe(true);
+      expect(reached).toBe(false);
+    });
+
+    it("asks nothing when everything is applied", () => {
+      const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+      guard({ armed: false, links: editor });
+      type("<p>Typed</p>");
+      type("<p>Stored</p>");
+
+      click("#publish");
+
+      expect(ask).not.toHaveBeenCalled();
+      expect(reached).toBe(true);
+    });
+  });
 });

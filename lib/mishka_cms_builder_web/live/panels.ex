@@ -1216,6 +1216,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-stage"
             type="button"
             phx-click={(@stage == @applied_stage && menu_toggle("#pb-stage-ways")) || "apply_stage"}
+            data-unapplied={
+              (@stage == :published and @applied_stage != :published) && unapplied_text()
+            }
             title={stage_tooltip(@section, @stage, @applied_stage)}
             class={[
               "inline-flex h-8 items-center gap-[7px] rounded-l-[9px] border-r-0 px-[13px] text-[12px] font-bold max-[1000px]:px-2.5",
@@ -1269,6 +1272,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               type="button"
               id="pb-stage-publish-now"
               phx-click={menu_close("#pb-stage-ways") |> JS.push("publish_now")}
+              data-unapplied={unapplied_text()}
               class="flex w-full items-start gap-[9px] rounded-[9px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2]"
             >
               <span class="grid size-[26px] flex-none place-items-center rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] text-white">
@@ -3063,9 +3067,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             <%!-- WHAT THE BLOCK'S EXTENSION SAYS ABOUT IT, under the name it is about: a product
                   that was archived, a list pointed at something gone. Only the editor asks
                   (`ComponentNotes`); a visitor gets the block's own quiet fallback. --%>
-            <.component_notes notes={
-              ComponentNotes.for_node(@selected_node, notes_scope(@editor))
-            } />
+            <.component_notes notes={ComponentNotes.for_node(@selected_node, notes_scope(@editor))} />
             <.form_part part={Inspector.form_part(@editor, @selected_node)} />
             <.overlay_open
               :if={@selected_node.kind == :component and overlay?(component_entry(assigns))}
@@ -8767,6 +8769,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             type="button"
             id="pb-publish-bar-publish"
             phx-click="apply_stage"
+            data-unapplied={unapplied_text()}
             class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:opacity-95"
           >
             {gettext("Publish")}
@@ -13107,6 +13110,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             type="button"
             id="pb-leave-publish"
             phx-click="publish_and_leave"
+            data-unapplied={unapplied_text()}
             class="flex w-full items-start gap-3 rounded-[11px] border border-transparent bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] p-3 text-left shadow-[0_4px_14px_rgba(79,75,204,.28)] hover:brightness-[1.06]"
           >
             <span class="grid size-7 flex-none place-items-center rounded-[9px] bg-white/20 text-white">
@@ -16105,6 +16109,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp stage_title(:published), do: gettext("Published — visitors can see this")
   defp stage_title(_draft), do: gettext("Draft — kept aside, not in front of visitors")
 
+  # What the browser asks (`PbLeaveGuard`) in front of a publish that would leave it behind.
+  defp unapplied_text,
+    do:
+      gettext(
+        "The Code Editor has changes you have not applied, so they would not be published. Press Cancel to go back and press Apply, or OK to publish without them."
+      )
+
   # The dot is the draft light, so its tooltip is what the last write did.
   defp autosave_title(%{updated_at: %DateTime{} = at}),
     do:
@@ -17439,7 +17450,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   end
 
   defp notes_scope(editor),
-    do: %{site_id: Map.get(editor || %{}, :site_id), site_name: Map.get(editor || %{}, :site_name)}
+    do: %{
+      site_id: Map.get(editor || %{}, :site_id),
+      site_name: Map.get(editor || %{}, :site_name)
+    }
 
   # THE ONE CHECK THAT IS ABOUT WHAT THE DOCUMENT IS FOR. A layout exists to wrap a page, and it does
   # that through `@inner_content`; without it the layout renders perfectly and every page on it comes

@@ -1087,6 +1087,11 @@ const PbTheme = {
 //
 // When the server lets the author go it redirects or navigates, and LiveView destroys this hook
 // before the page unloads, so the browser does not ask a second time.
+//
+// A PUBLISH LEAVES BEHIND WHAT IS TYPED IN THE CODE EDITOR AND NOT APPLIED: the text is in this
+// browser alone, as a pane's field that no longer holds what the server put in it. So a button that
+// publishes carries the question to ask (`data-unapplied`), and it is asked here, in front of
+// LiveView's own click, in either mode. An apply that succeeds brings a new field.
 const PbLeaveGuard = {
   mounted() {
     this.armed = () => this.el.dataset.armed === "true";
@@ -1110,14 +1115,30 @@ const PbLeaveGuard = {
       this.pushEvent("leaving", { to });
     };
 
+    this.ask = (event) => {
+      const publish = event.target.closest && event.target.closest("[data-unapplied]");
+      if (!publish || !unapplied() || window.confirm(publish.dataset.unapplied)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
     window.addEventListener("beforeunload", this.warn);
     document.addEventListener("click", this.intercept, true);
+    document.addEventListener("click", this.ask, true);
   },
   destroyed() {
     window.removeEventListener("beforeunload", this.warn);
     document.removeEventListener("click", this.intercept, true);
+    document.removeEventListener("click", this.ask, true);
   },
 };
+
+// Whether a pane of the Code Editor holds text nobody applied.
+function unapplied() {
+  const fields = [...document.querySelectorAll("[data-pane] textarea")];
+  return fields.some((field) => field.value !== field.defaultValue);
+}
 
 // WHERE A CLICK ON `link` LEAVES THIS PAGE FOR, as a path of this app, or null when it does not
 // leave it. Left alone: a `patch` link, which changes the URL of the editor you are already in; a

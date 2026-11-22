@@ -174,6 +174,25 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
     assert %{template: "<p>Not here</p>"} = hd(stored(row).error_pages)
   end
 
+  # What is typed in the Code Editor and not applied is the browser's, so it is the browser that asks
+  # (`PbLeaveGuard`); every button that publishes carries what it asks.
+  test "every Publish button carries the question about code that is not applied", %{
+    conn: conn,
+    row: row
+  } do
+    {:ok, builder, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page/#{row.id}")
+    render_async(builder)
+
+    assert has_element?(builder, "#pb-stage-publish-now[data-unapplied*='Apply']")
+
+    refute has_element?(builder, "#pb-stage[data-unapplied]"),
+           "the draft button publishes nothing"
+
+    render_click(builder, "set_stage", %{"stage" => "published"})
+    assert has_element?(builder, "#pb-stage[data-unapplied]")
+    assert has_element?(builder, "#pb-leave-guard")
+  end
+
   @tag skip: @no_default_entry
   test "the builder adds the default page, whose tab, preview and invitation name it", %{
     conn: conn,
