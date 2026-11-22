@@ -18,7 +18,9 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
 
   alias MishkaCmsBuilderWeb.Live.BuilderLive
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
   alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.{ErrorAddress, ErrorPage}
   alias MishkaCmsCore.Runtime.States.SiteState
 
@@ -172,6 +174,56 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
 
     assert render_click(builder, "publish", %{}) =~ "this error page is empty"
     assert %{template: "<p>Not here</p>"} = hd(stored(row).error_pages)
+  end
+
+  defp problems(markup),
+    do: BuilderLive.problems(%{section: "error-page", tree: Tree.parse!(markup), components: []})
+
+  test "nor is one that shows a visitor nothing", %{conn: conn, row: row} do
+    for markup <- [
+          "",
+          "<div></div>",
+          "<!-- to do -->",
+          "<%!-- to do --%>",
+          PageStarter.blank(),
+          "<section class=\"p-8\">\n  <div><p> </p><br /></div>\n  <!-- here -->\n</section>",
+          "<div data-pb-hidden><h1>Back soon</h1></div>",
+          "<style>p { color: red }</style><div></div>"
+        ] do
+      assert [%{kind: :empty}] = problems(markup), "published as it is: #{markup}"
+    end
+
+    for markup <- [
+          "<h1>Not here</h1>",
+          "<div><p>{@status}</p></div>",
+          "<%= if @status == 404 do %>Gone<% end %>",
+          "<div><img src=\"/gone.png\" alt=\"\" /></div>",
+          "<video src=\"/gone.mp4\"></video>",
+          "<form><input name=\"q\" /></form>",
+          "<svg viewBox=\"0 0 1 1\"><path d=\"M0 0\" /></svg>",
+          "<div><hr /></div>",
+          "<my-widget></my-widget>",
+          "<div id=\"drawn\" phx-hook=\"Drawn\"></div>",
+          "<div class=\"h-screen bg-[url(/gone.png)]\"></div>",
+          "<div style=\"background: url(/gone.png)\"></div>",
+          "<.component component_name=\"site-footer\" site=\"Global\" />"
+        ] do
+      refute Enum.any?(problems(markup), &(&1.kind == :empty)), "refused as empty: #{markup}"
+    end
+
+    {:ok, builder, _html} =
+      live(conn, "/admin/dashboard/runtime/builder/error-page/#{row.id}?status=offline")
+
+    render_async(builder)
+
+    render_click(builder, "drop", %{
+      "template" => PageStarter.scratch(),
+      "parent_id" => "root",
+      "index" => "0"
+    })
+
+    assert render_click(builder, "publish", %{}) =~ "this error page is empty"
+    assert Enum.map(stored(row).error_pages, & &1.status) == [404, 500]
   end
 
   # What is typed in the Code Editor and not applied is the browser's, so it is the browser that asks

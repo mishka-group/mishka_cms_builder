@@ -79,7 +79,6 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks
   alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
-  alias MishkaCmsCore.Runtime.Authoring.PageStarter
   alias MishkaCmsBuilder.Mentions
   alias MishkaCmsBuilder.PageComment
   alias MishkaCmsCore.Settings
@@ -6562,7 +6561,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     * a required property left empty, a required slot never added, and text where a component takes
       a list or a map — `Inspector.unmet/3`, which the layers badge and the Inspector read too;
     * a layout that no longer renders `@inner_content`, or hides it from visitors;
-    * an error page's entry with nothing on it;
+    * an error page's entry that shows a visitor nothing;
     * markup that will not compile.
 
   Only Publish is gated. A draft, the autosave and Code Apply still save a document with problems,
@@ -6664,10 +6663,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  # AN ENTRY NOBODY HAS BUILT ON. It compiles, so it was published, and each error it answers, every
-  # one of them for the default entry, was a blank page.
+  # AN ENTRY THAT SHOWS NOTHING. It compiles, so it was published, and each error it answers, every
+  # one of them for the default entry, was a blank page. `PageStarter.empty?/1` is a narrower
+  # question: whether the document still is the one it was born as.
   defp empty_entry(editor) do
-    case Section.normalize(editor.section) == "error-page" and PageStarter.empty?(editor.tree) do
+    case Section.normalize(editor.section) == "error-page" and shows_nothing?(editor.tree) do
       true ->
         [
           document_problem(
@@ -6679,6 +6679,43 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       false ->
         []
     end
+  end
+
+  # Elements that draw without anything in them, a script among them, which may.
+  @drawn ~w(audio canvas embed hr iframe img input math meter object progress script select svg) ++
+           ~w(textarea video)
+
+  # Elements whose text no visitor reads.
+  @unread ~w(head style template title)
+
+  @comments Node.comment_kinds()
+
+  defp shows_nothing?(tree) do
+    shown = Visibility.prune(tree)
+    Enum.all?(shown.roots, &shows_nothing?(shown, &1))
+  end
+
+  defp shows_nothing?(tree, id), do: tree |> Tree.get(id) |> shows_nothing_in?(tree)
+
+  defp shows_nothing_in?(%Node{kind: kind}, _tree) when kind in @comments, do: true
+  defp shows_nothing_in?(%Node{kind: :text, text: text}, _tree), do: String.trim(text) == ""
+  defp shows_nothing_in?(%Node{kind: :tag, tag: tag}, _tree) when tag in @unread, do: true
+  defp shows_nothing_in?(%Node{kind: :tag, tag: tag}, _tree) when tag in @drawn, do: false
+
+  defp shows_nothing_in?(%Node{kind: :tag} = node, tree) do
+    not (draws?(node) or pictured?(node)) and Enum.all?(node.children, &shows_nothing?(tree, &1))
+  end
+
+  defp shows_nothing_in?(_component_or_expression, _tree), do: false
+
+  # A custom element, and one a hook draws in.
+  defp draws?(node), do: String.contains?(node.tag, "-") or Node.attr(node, "phx-hook") != nil
+
+  defp pictured?(%Node{meta: meta} = node) do
+    styles = meta |> Map.get(:styles, %{}) |> Map.values() |> Enum.flat_map(&Map.values/1)
+
+    [Node.attr_text(node, "class"), Node.attr_text(node, "style") | styles]
+    |> Enum.any?(&(is_binary(&1) and String.contains?(&1, "url(")))
   end
 
   # THE TOKENIZER IS NOT THE COMPILER, AND NEITHER IS THE SERIALIZER. The document in the editor
