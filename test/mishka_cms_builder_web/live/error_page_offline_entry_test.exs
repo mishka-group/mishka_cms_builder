@@ -248,11 +248,12 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
   end
 
   # What is typed in the Code Editor and not applied is the browser's, so it is the browser that asks
-  # (`PbLeaveGuard`); every button that publishes carries what it asks.
-  test "every Publish button carries the question about code that is not applied", %{
-    conn: conn,
-    row: row
-  } do
+  # (`PbLeaveGuard`); every button that publishes carries what it asks, and so does the guard.
+  test "every Publish button, and leaving, carries the question about code that is not applied",
+       %{
+         conn: conn,
+         row: row
+       } do
     {:ok, builder, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page/#{row.id}")
     render_async(builder)
 
@@ -263,7 +264,7 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
 
     render_click(builder, "set_stage", %{"stage" => "published"})
     assert has_element?(builder, "#pb-stage[data-unapplied]")
-    assert has_element?(builder, "#pb-leave-guard")
+    assert has_element?(builder, "#pb-leave-guard[data-unapplied*='leaving']")
   end
 
   @tag skip: @no_default_entry

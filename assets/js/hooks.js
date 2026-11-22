@@ -1092,18 +1092,31 @@ const PbTheme = {
 // browser alone, as a pane's field that no longer holds what the server put in it. So a button that
 // publishes carries the question to ask (`data-unapplied`), and it is asked here, in front of
 // LiveView's own click, in either mode. An apply that succeeds brings a new field.
+//
+// LEAVING LOSES IT TOO, in either mode, so a guard that carries a question of its own
+// (`data-unapplied`) asks it before the page is left, and then the server says where to as above.
+// `phx:before-navigate` is LiveView's, and is heard here for Back and Forward alone, which no click
+// starts: it puts the entry back when the answer is no. A guard without the question, another
+// extension's, asks nothing of this.
 const PbLeaveGuard = {
   mounted() {
     this.armed = () => this.el.dataset.armed === "true";
+    this.typed = () => Boolean(this.el.dataset.unapplied) && unapplied();
+    this.stays = () => this.typed() && !window.confirm(this.el.dataset.unapplied);
 
     this.warn = (event) => {
-      if (!this.armed()) return;
+      if (!this.armed() && !this.typed()) return;
       event.preventDefault();
       event.returnValue = "";
     };
 
+    this.traverse = (event) => {
+      const { pop, patch } = event.detail;
+      if (pop && !patch && this.stays()) event.preventDefault();
+    };
+
     this.intercept = (event) => {
-      if (!this.armed() || event.defaultPrevented || event.button > 0) return;
+      if (!(this.armed() || this.typed()) || event.defaultPrevented || event.button > 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
       const link = event.target.closest && event.target.closest("a[href]");
@@ -1112,7 +1125,7 @@ const PbLeaveGuard = {
 
       event.preventDefault();
       event.stopPropagation();
-      this.pushEvent("leaving", { to });
+      if (!this.stays()) this.pushEvent("leaving", { to });
     };
 
     this.ask = (event) => {
@@ -1124,11 +1137,13 @@ const PbLeaveGuard = {
     };
 
     window.addEventListener("beforeunload", this.warn);
+    window.addEventListener("phx:before-navigate", this.traverse);
     document.addEventListener("click", this.intercept, true);
     document.addEventListener("click", this.ask, true);
   },
   destroyed() {
     window.removeEventListener("beforeunload", this.warn);
+    window.removeEventListener("phx:before-navigate", this.traverse);
     document.removeEventListener("click", this.intercept, true);
     document.removeEventListener("click", this.ask, true);
   },

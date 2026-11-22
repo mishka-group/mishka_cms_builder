@@ -679,6 +679,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         id="pb-leave-guard"
         phx-hook="PbLeaveGuard"
         data-armed={to_string(@stage == :published and @dirty?)}
+        data-unapplied={unapplied_leave_text()}
         class="hidden"
       />
       <div data-role="pb-identity" class="flex min-w-0 flex-1 items-center gap-2.5">
@@ -16122,6 +16123,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     do:
       gettext(
         "The Code Editor has changes you have not applied, so they would not be published. Press Cancel to go back and press Apply, or OK to publish without them."
+      )
+
+  # And in front of leaving, which would lose it.
+  defp unapplied_leave_text,
+    do:
+      gettext(
+        "The Code Editor has changes you have not applied, and leaving loses them. Press Cancel to go back and press Apply, or OK to leave without them."
       )
 
   # The dot is the draft light, so its tooltip is what the last write did.
