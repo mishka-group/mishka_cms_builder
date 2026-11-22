@@ -79,6 +79,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   alias MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks
   alias MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
   alias MishkaCmsBuilder.Mentions
   alias MishkaCmsBuilder.PageComment
   alias MishkaCmsCore.Settings
@@ -6561,6 +6562,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     * a required property left empty, a required slot never added, and text where a component takes
       a list or a map — `Inspector.unmet/3`, which the layers badge and the Inspector read too;
     * a layout that no longer renders `@inner_content`, or hides it from visitors;
+    * an error page's entry with nothing on it;
     * markup that will not compile.
 
   Only Publish is gated. A draft, the autosave and Code Apply still save a document with problems,
@@ -6577,7 +6579,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp publish_check(editor) do
     {heex, uncompilable} = compiled(editor.tree)
 
-    case unmet(editor) ++ slotless_layout(editor) ++ uncompilable do
+    case unmet(editor) ++ slotless_layout(editor) ++ empty_entry(editor) ++ uncompilable do
       [] -> {:ok, heex}
       problems -> {:refused, problems}
     end
@@ -6662,16 +6664,34 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
+  # AN ENTRY NOBODY HAS BUILT ON. It compiles, so it was published, and each error it answers, every
+  # one of them for the default entry, was a blank page.
+  defp empty_entry(editor) do
+    case Section.normalize(editor.section) == "error-page" and PageStarter.empty?(editor.tree) do
+      true ->
+        [
+          document_problem(
+            :empty,
+            gettext("this error page is empty, so every error it answers would be a blank page")
+          )
+        ]
+
+      false ->
+        []
+    end
+  end
+
   # THE TOKENIZER IS NOT THE COMPILER, AND NEITHER IS THE SERIALIZER. The document in the editor
   # arrived through `Tree.parse/1`, which takes `{@a + }` — the braces delimit an expression and the
   # expression is a token to it. `to_heex/1` reads every expression on the way out and catches that
   # one; what neither of them reads is the HEEx itself, so `<div :foo={@a}>` — a special attribute
   # that does not exist — survives both and is refused by the engine that has to build the module.
   #
-  # `Validations.PageCodeCompiles` catches all of this for a PAGE at the action boundary. A layout,
-  # an error page and a component have no such validation, so for three of the four sections this is
-  # the last place it can be caught before the site stops compiling — and the document does not have
-  # to have been typed here to be broken: a seed, an import or a hand edit is enough.
+  # `Validations.PageCodeCompiles` catches all of this for a PAGE at the action boundary, and a core
+  # with `Validations.ErrorPageCompiles` does for an error page. A layout and a component have no such
+  # validation, so for them this is the last place it can be caught before the site stops compiling,
+  # and the document does not have to have been typed here to be broken: a seed, an import or a hand
+  # edit is enough.
   #
   # `CodeCheck.template/1` rather than `check/1`: this is the syntax question, it costs milliseconds
   # rather than the second a page compile does, which is what lets the red dot ask it on every change.

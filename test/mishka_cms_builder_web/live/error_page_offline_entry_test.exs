@@ -137,6 +137,43 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
     assert Enum.find(stored(row).error_pages, &(&1.status == :offline)).template =~ "Back soon"
   end
 
+  # An entry nobody has built on answers its errors with a blank page.
+  test "an entry that is still empty is not published, and is once something is on it", %{
+    conn: conn,
+    row: row
+  } do
+    {:ok, builder, _html} =
+      live(conn, "/admin/dashboard/runtime/builder/error-page/#{row.id}?status=offline")
+
+    render_async(builder)
+    refused = render_click(builder, "publish", %{})
+
+    assert refused =~ "Not published"
+    assert refused =~ "this error page is empty"
+    assert Enum.map(stored(row).error_pages, & &1.status) == [404, 500]
+
+    render_click(builder, "drop", %{
+      "template" => "<h1>Back soon</h1>",
+      "parent_id" => "root",
+      "index" => "0"
+    })
+
+    render_click(builder, "publish", %{})
+    assert Enum.map(stored(row).error_pages, & &1.status) == [404, 500, :offline]
+  end
+
+  test "nor is one whose content was taken away", %{conn: conn, row: row} do
+    {:ok, builder, _html} =
+      live(conn, "/admin/dashboard/runtime/builder/error-page/#{row.id}?status=404")
+
+    render_async(builder)
+    [root] = live_assigns(builder).editor.tree.roots
+    render_click(builder, "op", %{"kind" => "delete", "node_id" => root})
+
+    assert render_click(builder, "publish", %{}) =~ "this error page is empty"
+    assert %{template: "<p>Not here</p>"} = hd(stored(row).error_pages)
+  end
+
   @tag skip: @no_default_entry
   test "the builder adds the default page, whose tab, preview and invitation name it", %{
     conn: conn,
