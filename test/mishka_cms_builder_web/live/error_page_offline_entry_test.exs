@@ -4,24 +4,31 @@
 
 defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
   @moduledoc """
-  The offline page in the Error Pages admin, as the visual editor adds it: the editor opens a status
-  the row lacks empty, and saving what is built there writes the entry beside the others. The form
-  that offers the status and the preview's picker are asserted in the core.
+  The offline page and the default page in the Error Pages admin, as the visual editor adds them: the
+  editor opens a status the row lacks empty, and saving what is built there writes the entry beside
+  the others. The form that offers the statuses and the preview's picker are asserted in the core.
 
   Its own file: nothing else drives the Error Pages index as a LiveView.
   """
   use MishkaCmsCore.ConnCase
 
+  import MishkaCmsBuilder.LiveCase, only: [live_assigns: 1]
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsBuilderWeb.Live.BuilderLive
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.{ErrorAddress, ErrorPage}
   alias MishkaCmsCore.Runtime.States.SiteState
 
   require Ash.Query
 
   @password "Password123!"
+
+  # A core release older than the default entry does not offer it.
+  @no_default_entry :default not in Section.offered_statuses() &&
+                      "this core has no default entry"
 
   setup %{conn: conn} do
     SiteState.clear()
@@ -128,5 +135,38 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
              %{404 => "<p>Not here</p>", 500 => "<p>Broke</p>"}
 
     assert Enum.find(stored(row).error_pages, &(&1.status == :offline)).template =~ "Back soon"
+  end
+
+  @tag skip: @no_default_entry
+  test "the builder adds the default page, whose tab, preview and invitation name it", %{
+    conn: conn,
+    row: row
+  } do
+    {:ok, builder, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page/#{row.id}")
+    refute has_element?(builder, "#pb-status-default")
+    assert has_element?(builder, "#pb-status-add-offline + #pb-status-add-default", "Default")
+
+    assert {:error, {:live_redirect, %{to: to}}} =
+             builder |> element("#pb-status-add-default") |> render_click()
+
+    {:ok, builder, _html} = live(conn, to)
+    assert has_element?(builder, "#pb-status-default", "Default")
+
+    render_click(builder, "drop", %{
+      "template" => "<h1>Something went wrong</h1>",
+      "parent_id" => "root",
+      "index" => "0"
+    })
+
+    render_click(builder, "publish", %{})
+
+    by_status = Map.new(stored(row).error_pages, &{&1.status, &1.template})
+    assert %{404 => "<p>Not here</p>", 500 => "<p>Broke</p>"} = by_status
+    assert by_status[:default] =~ "Something went wrong"
+
+    render_click(builder, "save_as_draft", %{"label" => "Shareable"})
+    assert has_element?(builder, "#pb-preview-tab[href*='?status=default']")
+
+    assert BuilderLive.share_url(live_assigns(builder)) =~ "status=default"
   end
 end

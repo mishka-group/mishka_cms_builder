@@ -41,6 +41,11 @@ defmodule MishkaCmsBuilderWeb.PathsTest do
                "/admin/dashboard/runtime/builder/error-page/e1?status=offline"
     end
 
+    test "and so is its default entry" do
+      assert Paths.builder_path("error-page", "e1", :default) ==
+               "/admin/dashboard/runtime/builder/error-page/e1?status=default"
+    end
+
     # Where a mention's notification points: the editor, opened at the note.
     test "a note is addressed as its document's builder, at the note" do
       assert Paths.note_path(:error_page, "e1", "n1") ==

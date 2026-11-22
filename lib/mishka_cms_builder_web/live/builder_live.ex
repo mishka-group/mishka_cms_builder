@@ -866,9 +866,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   # And the status rides with a RECORD. A document being made has no entries yet, so naming one of
   # them is a query string with nothing behind it.
-  defp invitation(token, %{record: %{}, editor: %{status: status}})
-       when is_integer(status) or status == :offline,
-       do: "?" <> URI.encode_query(session: token, status: status)
+  defp invitation(token, %{record: %{}, editor: %{status: status}}) when not is_nil(status),
+    do: "?" <> URI.encode_query(session: token, status: status)
 
   defp invitation(token, _assigns), do: "?" <> URI.encode_query(session: token)
 

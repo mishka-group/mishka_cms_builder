@@ -8607,10 +8607,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 "bg-[#f2f1ec] text-[#6d6a63] hover:bg-[#e9e7e0]"
             ]}
           >
-            {(status == :offline && gettext("offline")) || status}
+            {status_tab(status)}
           </.link>
-          <%!-- A STATUS IS ADDED BY OPENING IT. The page an offline site shows, a 403, a 503: the entry
-              is written when what is built for it is saved. --%>
+          <%!-- A STATUS IS ADDED BY OPENING IT. The page an offline site shows, the default page, a
+              403: the entry is written when what is built for it is saved. --%>
           <details id="pb-status-add" class="relative">
             <summary class="flex h-7 cursor-pointer list-none items-center rounded-[8px] bg-[#f2f1ec] px-2.5 font-['Space_Grotesk'] text-[11.5px] font-bold text-[#6d6a63] hover:bg-[#e9e7e0]">
               {gettext("+ Status")}
@@ -16281,8 +16281,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # THE STATUS TRAVELS WITH THE LINK. An error page holds one template per status and the editor is
   # looking at exactly one of them, but the shareable URL carried no `?status=` — so
   # `MishkaCmsWeb.DraftPreviewLive` fell back to its default and the author previewing the 500 they
-  # were editing was shown the 404. The offline page is an entry too, carried as `?status=offline`.
-  # Every other section has one template and needs nothing.
+  # were editing was shown the 404. The offline page is an entry too, carried as `?status=offline`,
+  # and so is the default page, as `?status=default`. Every other section has one template and needs
+  # nothing.
   defp preview_href(section, draft, editor) do
     base = "/_preview/#{Drafts.preview_segment(section)}/#{draft.preview_token}"
 
@@ -16292,10 +16293,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     end
   end
 
-  defp editor_status(%{status: status}) when is_integer(status) or status == :offline,
-    do: status
-
+  defp editor_status(%{status: status}), do: status
   defp editor_status(_editor), do: nil
+
+  # A tab of the status strip: a code by its number, and the entries that are no code by their name.
+  defp status_tab(status) when is_integer(status), do: status
+  defp status_tab(status), do: translate(MishkaCmsCore.Runtime.ErrorStatus.label(status))
 
   # WHAT THE CHIP IS OFFERING TO LEAVE. "Live page" was written into the markup, so a layout, a
   # component and an error page all called their live record a page — in the one control whose whole

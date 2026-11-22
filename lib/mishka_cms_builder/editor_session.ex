@@ -132,8 +132,8 @@ defmodule MishkaCmsBuilder.EditorSession do
     # WHICH OF THE DOCUMENT'S TEMPLATES THIS TREE CAME FROM. `nil` for every section but an error
     # page, which stores a LIST of `%{status, template, layout}` — so "the document" there is the
     # record AND a status, and a session that knows only the record is a session for five different
-    # templates at once — a code, or `:offline` for the page an offline site shows. See
-    # `MishkaCmsBuilder.States.EditorSessionState.find/4`.
+    # templates at once — a code, `:default` for the page of every other code, or `:offline` for the
+    # page an offline site shows. See `MishkaCmsBuilder.States.EditorSessionState.find/4`.
     field(:status, MishkaCmsCore.Runtime.ErrorStatus.t())
     field(:site_id, String.t())
     field(:site_name, String.t())
