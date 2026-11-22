@@ -8628,6 +8628,14 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               </.link>
             </div>
           </details>
+          <span
+            :if={@status not in Section.statuses("error-page", @record)}
+            id="pb-status-unpublished"
+            title={unpublished_text()}
+            class="min-w-0 truncate text-[11px] font-medium text-[#8a5514]"
+          >
+            {unpublished_text()}
+          </span>
         </div>
 
         <%!-- Work a previous session left behind. OFFERED, never loaded: opening a page and silently
@@ -16310,6 +16318,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # A tab of the status strip: a code by its number, and the entries that are no code by their name.
   defp status_tab(status) when is_integer(status), do: status
   defp status_tab(status), do: translate(MishkaCmsCore.Runtime.ErrorStatus.label(status))
+
+  # An entry is written when it is published, so until then the strip holds it only while it is open.
+  defp unpublished_text,
+    do:
+      gettext(
+        "Not published yet. It leaves this list when you open another status, unless you publish it first."
+      )
 
   # WHAT THE CHIP IS OFFERING TO LEAVE. "Live page" was written into the markup, so a layout, a
   # component and an error page all called their live record a page — in the one control whose whole

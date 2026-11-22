@@ -226,6 +226,27 @@ defmodule MishkaCmsBuilderWeb.Live.ErrorPageOfflineEntryTest do
     assert Enum.map(stored(row).error_pages, & &1.status) == [404, 500]
   end
 
+  # Opening another status leaves it out of the strip, so it says so while it is open.
+  test "a status being added says it is not published yet, until it is", %{conn: conn, row: row} do
+    path = "/admin/dashboard/runtime/builder/error-page/#{row.id}"
+
+    {:ok, builder, _html} = live(conn, path <> "?status=404")
+    refute has_element?(builder, "#pb-status-unpublished")
+
+    {:ok, builder, _html} = live(conn, path <> "?status=offline")
+    render_async(builder)
+    assert has_element?(builder, "#pb-status-unpublished", "Not published yet")
+
+    render_click(builder, "drop", %{
+      "template" => "<h1>Back soon</h1>",
+      "parent_id" => "root",
+      "index" => "0"
+    })
+
+    render_click(builder, "publish", %{})
+    refute has_element?(builder, "#pb-status-unpublished")
+  end
+
   # What is typed in the Code Editor and not applied is the browser's, so it is the browser that asks
   # (`PbLeaveGuard`); every button that publishes carries what it asks.
   test "every Publish button carries the question about code that is not applied", %{
