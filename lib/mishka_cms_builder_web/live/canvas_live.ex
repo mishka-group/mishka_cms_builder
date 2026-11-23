@@ -92,6 +92,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
 
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.Events
+  alias MishkaCmsBuilder.ComponentNotes
   alias MishkaCmsBuilder.PaletteEntry
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.LiveViewHelpers
@@ -1254,6 +1255,28 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       [data-pb-hidden] { opacity: .38; filter: grayscale(1); }
       [data-pb-hidden] [data-pb-hidden] { opacity: 1; }
       [data-pb-hidden]:not([data-selected="true"]):not(:hover) { outline: 1px dashed #b4b1c8; outline-offset: 2px; }
+      /* AN EXTENSION HAS SOMETHING TO SAY ABOUT THIS BLOCK (`first_note/1`): amber edge, and the
+         first note as a badge in its corner. The block itself still draws what a visitor would get. */
+      [data-pb-note]:not([data-selected="true"]):not(:hover) { outline: 1px dashed #cf8a24; outline-offset: 1px; }
+      [data-pb-note][data-pb-frame] { position: relative; }
+      [data-role="pb-component-note"] {
+        position: absolute;
+        top: 4px;
+        inset-inline-end: 4px;
+        z-index: 5;
+        max-width: calc(100% - 8px);
+        padding: 2px 8px;
+        border: 1px solid #f0e6c8;
+        border-radius: 6px;
+        background: #fdf9ec;
+        color: #8a5514;
+        font: 700 11px/1.5 ui-sans-serif, system-ui;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        pointer-events: none;
+      }
+      [data-role="pb-component-note"][data-severity="note"] { border-color: #dcdbf5; background: #f6f5ff; color: #4f4bcc; }
       /* A field is being dragged: every form it could join is outlined until the drag ends. */
       html[data-pb-field-drag] [data-pb-form] { outline: 2px dashed #8b5cf6; outline-offset: 3px; }
 
@@ -2610,6 +2633,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       |> assign(:reveal, reveal(assigns))
       |> assign(:persistent, persistent(assigns))
       |> assign(:hollow, hollow(assigns))
+      |> assign(:note, first_note(assigns))
       |> then(&assign(&1, :sealed, sealed(&1)))
 
     assigns
@@ -2754,8 +2778,21 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       tag_name={frame_tag(assigns)}
       {Map.merge(marker_attrs(assigns), %{"data-pb-live" => assigns[:live], "data-pb-frame" => "true"})}
       phx-no-format
-    >{@body}</.dynamic_tag>
+    ><span :if={assigns[:note]} data-role="pb-component-note" data-severity={@note.severity} title={@note.message}>{@note.message}</span>{@body}</.dynamic_tag>
     """
+  end
+
+  # WHAT THE BLOCK'S EXTENSION SAYS ABOUT IT, ON THE BLOCK ITSELF: a product block whose product was
+  # archived draws nothing to a visitor, so on the canvas it was an empty box with no reason. The
+  # first note becomes the frame's `data-pb-note` and the badge `#pb-canvas-chrome` draws; the rest
+  # are in the Inspector and the Audit rail. Never in preview, which is the page a visitor gets. The
+  # frame's process holds the document's site (`Translations.put_site/1` in `assign_session/2`).
+  defp first_note(%{preview?: true}), do: nil
+
+  defp first_note(%{node: node, site_scope: site}) do
+    node
+    |> ComponentNotes.for_node(%{site_id: Translations.site(), site_name: site})
+    |> List.first()
   end
 
   # A BOX WHERE WORDS RUN IS A `<span>`. A `<div>` inside a `<p>` is markup the parser answers by
@@ -2849,6 +2886,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       "data-pb-hollow" => assigns[:hollow],
       "data-pb-sealed" => assigns[:sealed],
       "data-pb-hidden" => Visibility.hidden?(assigns.node) && "true",
+      "data-pb-note" => assigns[:note] && to_string(assigns.note.severity),
       "phx-click" => "select",
       "phx-value-id" => assigns.node.id,
       "phx-value-prop" => assigns[:wants_media] || List.first(missing)

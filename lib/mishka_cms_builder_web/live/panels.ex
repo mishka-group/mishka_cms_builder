@@ -25,6 +25,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   import MishkaCmsCore.CoreComponents, only: [roadmap_notice: 1, select_chevron: 1]
 
   alias MishkaCmsBuilder.Collection
+  alias MishkaCmsBuilder.ComponentNotes
   alias MishkaCmsCore.Builder.Literal
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.Descriptor
@@ -678,6 +679,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         id="pb-leave-guard"
         phx-hook="PbLeaveGuard"
         data-armed={to_string(@stage == :published and @dirty?)}
+        data-unapplied={unapplied_leave_text()}
         class="hidden"
       />
       <div data-role="pb-identity" class="flex min-w-0 flex-1 items-center gap-2.5">
@@ -1215,6 +1217,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             id="pb-stage"
             type="button"
             phx-click={(@stage == @applied_stage && menu_toggle("#pb-stage-ways")) || "apply_stage"}
+            data-unapplied={
+              (@stage == :published and @applied_stage != :published) && unapplied_text()
+            }
             title={stage_tooltip(@section, @stage, @applied_stage)}
             class={[
               "inline-flex h-8 items-center gap-[7px] rounded-l-[9px] border-r-0 px-[13px] text-[12px] font-bold max-[1000px]:px-2.5",
@@ -1268,6 +1273,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               type="button"
               id="pb-stage-publish-now"
               phx-click={menu_close("#pb-stage-ways") |> JS.push("publish_now")}
+              data-unapplied={unapplied_text()}
               class="flex w-full items-start gap-[9px] rounded-[9px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2]"
             >
               <span class="grid size-[26px] flex-none place-items-center rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] text-white">
@@ -2970,6 +2976,38 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     """
   end
 
+  attr(:notes, :list, required: true, doc: "the notes `ComponentNotes.for_node/2` answered")
+
+  defp component_notes(assigns) do
+    ~H"""
+    <div
+      :for={note <- @notes}
+      data-role="pb-insp-note"
+      data-severity={note.severity}
+      class={[
+        "mt-1.5 flex items-start gap-1.5 rounded-[8px] border px-2 py-1.5",
+        severity_card(note.severity)
+      ]}
+    >
+      <.icon name={:warning} size={12} class={note_icon_class(note.severity)} />
+      <div class="min-w-0">
+        <div class="text-[10.5px] font-semibold leading-[1.45] text-[#1b1a18]">
+          {note.message}
+        </div>
+        <div
+          :if={note[:detail]}
+          class="text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+        >
+          {note.detail}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp note_icon_class(:warning), do: "mt-0.5 flex-none text-[#a5691a]"
+  defp note_icon_class(_note), do: "mt-0.5 flex-none text-[#4f4bcc]"
+
   defp inspector(assigns) do
     ~H"""
     <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3.5 pb-4 pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -3027,6 +3065,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             <div class="text-[10.5px] font-medium text-[#6d6a63]">
               {selection_meta(@selected_node)}
             </div>
+            <%!-- WHAT THE BLOCK'S EXTENSION SAYS ABOUT IT, under the name it is about: a product
+                  that was archived, a list pointed at something gone. Only the editor asks
+                  (`ComponentNotes`); a visitor gets the block's own quiet fallback. --%>
+            <.component_notes notes={ComponentNotes.for_node(@selected_node, notes_scope(@editor))} />
             <.form_part part={Inspector.form_part(@editor, @selected_node)} />
             <.overlay_open
               :if={@selected_node.kind == :component and overlay?(component_entry(assigns))}
@@ -8568,10 +8610,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
                 "bg-[#f2f1ec] text-[#6d6a63] hover:bg-[#e9e7e0]"
             ]}
           >
-            {(status == :offline && gettext("offline")) || status}
+            {status_tab(status)}
           </.link>
-          <%!-- A STATUS IS ADDED BY OPENING IT. The page an offline site shows, a 403, a 503: the entry
-              is written when what is built for it is saved. --%>
+          <%!-- A STATUS IS ADDED BY OPENING IT. The page an offline site shows, the default page, a
+              403: the entry is written when what is built for it is saved. --%>
           <details id="pb-status-add" class="relative">
             <summary class="flex h-7 cursor-pointer list-none items-center rounded-[8px] bg-[#f2f1ec] px-2.5 font-['Space_Grotesk'] text-[11.5px] font-bold text-[#6d6a63] hover:bg-[#e9e7e0]">
               {gettext("+ Status")}
@@ -8587,6 +8629,14 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
               </.link>
             </div>
           </details>
+          <span
+            :if={@status not in Section.statuses("error-page", @record)}
+            id="pb-status-unpublished"
+            title={unpublished_text()}
+            class="min-w-0 truncate text-[11px] font-medium text-[#8a5514]"
+          >
+            {unpublished_text()}
+          </span>
         </div>
 
         <%!-- Work a previous session left behind. OFFERED, never loaded: opening a page and silently
@@ -8728,6 +8778,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             type="button"
             id="pb-publish-bar-publish"
             phx-click="apply_stage"
+            data-unapplied={unapplied_text()}
             class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:opacity-95"
           >
             {gettext("Publish")}
@@ -11084,6 +11135,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           {:structure, gettext("Structure")},
           {:accessibility, gettext("Accessibility")},
           {:forms, gettext("Forms")},
+          {:content, gettext("Content")},
           {:seo, gettext("SEO & Meta")},
           {:performance, gettext("Performance")}
         ],
@@ -11097,6 +11149,10 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # field raises nothing here and earns no ticks either, and an empty "Forms" group reads as a
   # warning about something that is not on the page.
   defp shown?(:forms, items), do: items != []
+
+  # Content is what an extension says about a block it ships — a product that was archived, a list
+  # pointed at something gone. A page with nothing to say has no heading for it, as Forms has none.
+  defp shown?(:content, items), do: items != []
 
   # Structure asks a question only a layout has an answer to, so on a page there is nothing to show
   # and an empty heading would read as a check that failed to run.
@@ -13063,6 +13119,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             type="button"
             id="pb-leave-publish"
             phx-click="publish_and_leave"
+            data-unapplied={unapplied_text()}
             class="flex w-full items-start gap-3 rounded-[11px] border border-transparent bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] p-3 text-left shadow-[0_4px_14px_rgba(79,75,204,.28)] hover:brightness-[1.06]"
           >
             <span class="grid size-7 flex-none place-items-center rounded-[9px] bg-white/20 text-white">
@@ -16061,6 +16118,20 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   defp stage_title(:published), do: gettext("Published — visitors can see this")
   defp stage_title(_draft), do: gettext("Draft — kept aside, not in front of visitors")
 
+  # What the browser asks (`PbLeaveGuard`) in front of a publish that would leave it behind.
+  defp unapplied_text,
+    do:
+      gettext(
+        "The Code Editor has changes you have not applied, so they would not be published. Press Cancel to go back and press Apply, or OK to publish without them."
+      )
+
+  # And in front of leaving, which would lose it.
+  defp unapplied_leave_text,
+    do:
+      gettext(
+        "The Code Editor has changes you have not applied, and leaving loses them. Press Cancel to go back and press Apply, or OK to leave without them."
+      )
+
   # The dot is the draft light, so its tooltip is what the last write did.
   defp autosave_title(%{updated_at: %DateTime{} = at}),
     do:
@@ -16237,8 +16308,9 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   # THE STATUS TRAVELS WITH THE LINK. An error page holds one template per status and the editor is
   # looking at exactly one of them, but the shareable URL carried no `?status=` — so
   # `MishkaCmsWeb.DraftPreviewLive` fell back to its default and the author previewing the 500 they
-  # were editing was shown the 404. The offline page is an entry too, carried as `?status=offline`.
-  # Every other section has one template and needs nothing.
+  # were editing was shown the 404. The offline page is an entry too, carried as `?status=offline`,
+  # and so is the default page, as `?status=default`. Every other section has one template and needs
+  # nothing.
   defp preview_href(section, draft, editor) do
     base = "/_preview/#{Drafts.preview_segment(section)}/#{draft.preview_token}"
 
@@ -16248,10 +16320,19 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     end
   end
 
-  defp editor_status(%{status: status}) when is_integer(status) or status == :offline,
-    do: status
-
+  defp editor_status(%{status: status}), do: status
   defp editor_status(_editor), do: nil
+
+  # A tab of the status strip: a code by its number, and the entries that are no code by their name.
+  defp status_tab(status) when is_integer(status), do: status
+  defp status_tab(status), do: translate(MishkaCmsCore.Runtime.ErrorStatus.label(status))
+
+  # An entry is written when it is published, so until then the strip holds it only while it is open.
+  defp unpublished_text,
+    do:
+      gettext(
+        "Not published yet. It leaves this list when you open another status, unless you publish it first."
+      )
 
   # WHAT THE CHIP IS OFFERING TO LEAVE. "Live page" was written into the markup, so a layout, a
   # component and an error page all called their live record a page — in the one control whose whole
@@ -17356,7 +17437,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           document_findings(nodes, editor) ++
           structure_findings(tree, editor) ++
           FormChecks.findings(tree, record, editor) ++
-          seo_findings(record) ++ Demo.audit_findings()
+          seo_findings(record) ++
+          component_findings(nodes, editor) ++ Demo.audit_findings()
       )
 
     issues ++
@@ -17368,6 +17450,33 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       ) ++
       performance_checks(editor)
   end
+
+  # WHAT THE EXTENSIONS SAY ABOUT THE BLOCKS THEY SHIP, one finding per note, each pointing at its
+  # block so the title selects it. `fixes: []` because there is no edit to make: the author picks
+  # another product, or takes the block out, and the assistant cannot know which. The asks are kept
+  # for a moment by `ComponentNotes`, so a keystroke does not read every block again.
+  defp component_findings(nodes, editor) do
+    scope = notes_scope(editor)
+
+    for %Node{kind: :component} = node <- nodes,
+        note <- ComponentNotes.for_node(node, scope) do
+      %{
+        node_id: node.id,
+        group: :content,
+        severity: note.severity,
+        rule: "component-note",
+        message: note.message,
+        detail: note[:detail],
+        fixes: []
+      }
+    end
+  end
+
+  defp notes_scope(editor),
+    do: %{
+      site_id: Map.get(editor || %{}, :site_id),
+      site_name: Map.get(editor || %{}, :site_name)
+    }
 
   # THE ONE CHECK THAT IS ABOUT WHAT THE DOCUMENT IS FOR. A layout exists to wrap a page, and it does
   # that through `@inner_content`; without it the layout renders perfectly and every page on it comes

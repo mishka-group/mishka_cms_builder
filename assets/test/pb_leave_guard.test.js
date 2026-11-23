@@ -12,11 +12,12 @@ import hooks from "../js/index.js";
 const EDITOR = "/admin/dashboard/runtime/builder/page/p1";
 const live = [];
 
-function guard({ armed = true, links = "" } = {}) {
+function guard({ armed = true, links = "", unapplied = "" } = {}) {
   document.body.innerHTML = `
     <span id="pb-leave-guard" data-armed="${armed}" class="hidden"></span>
     ${links}
   `;
+  if (unapplied) document.getElementById("pb-leave-guard").dataset.unapplied = unapplied;
 
   const ctx = { el: document.getElementById("pb-leave-guard"), pushEvent: vi.fn() };
   hooks.PbLeaveGuard.mounted.call(ctx);
@@ -196,5 +197,183 @@ describe("the leave guard", () => {
 
     expect(ctx.pushEvent).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  // Typed in the Code Editor and not applied, so no server has it: a publish would leave it out.
+  describe("a Publish button", () => {
+    const editor = `
+      <button id="publish" data-unapplied="Not applied. Publish without it?">Publish</button>
+      <div data-pane="heex"><textarea name="source"><p>Stored</p></textarea></div>`;
+
+    const type = (text) => {
+      document.querySelector("textarea").value = text;
+    };
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it("asks when the Code Editor holds text nobody applied, and publishes on yes", () => {
+      const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+      guard({ armed: false, links: editor });
+      type("<p>Typed</p>");
+
+      click("#publish");
+
+      expect(ask).toHaveBeenCalledWith("Not applied. Publish without it?");
+      expect(reached).toBe(true);
+    });
+
+    it("does nothing on no", () => {
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      guard({ armed: false, links: editor });
+      type("<p>Typed</p>");
+
+      expect(click("#publish").defaultPrevented).toBe(true);
+      expect(reached).toBe(false);
+    });
+
+    it("asks nothing when everything is applied", () => {
+      const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+      guard({ armed: false, links: editor });
+      type("<p>Typed</p>");
+      type("<p>Stored</p>");
+
+      click("#publish");
+
+      expect(ask).not.toHaveBeenCalled();
+      expect(reached).toBe(true);
+    });
+  });
+
+  // Typed and not applied, in either mode: no save has it, so leaving is the end of it.
+  describe("with text in the Code Editor nobody applied", () => {
+    const text = "Not applied. Leave without it?";
+    const page = `
+      <a id="out" href="/admin/dashboard/runtime/pages">Back</a>
+      <a id="live" href="/admin/dashboard/runtime/builder/error-page/e1?status=500"
+         data-phx-link="redirect" data-phx-link-state="push">500</a>
+      <a id="stay" href="/x?tab=a" data-phx-link="patch">A patch</a>
+      <div data-pane="heex"><textarea name="source"><p>Stored</p></textarea></div>`;
+
+    const typed = (options = {}) => {
+      const ctx = guard({ armed: false, links: page, unapplied: text, ...options });
+      document.querySelector("textarea").value = "<p>Typed</p>";
+      return ctx;
+    };
+
+    const answer = (yes) => vi.spyOn(window, "confirm").mockReturnValue(yes);
+
+    const traverse = (detail) => {
+      const event = new CustomEvent("phx:before-navigate", { cancelable: true, detail });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    const unload = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    afterEach(() => vi.restoreAllMocks());
+
+    for (const [link, to] of [
+      ["#out", "/admin/dashboard/runtime/pages"],
+      ["#live", "/admin/dashboard/runtime/builder/error-page/e1?status=500"],
+    ]) {
+      it(`asks before ${link} is followed, and the server goes there on yes`, () => {
+        const ask = answer(true);
+        const ctx = typed();
+
+        click(link);
+
+        expect(ask).toHaveBeenCalledWith(text);
+        expect(ctx.pushEvent).toHaveBeenCalledWith("leaving", { to });
+      });
+
+      it(`stays on no to ${link}`, () => {
+        answer(false);
+        const ctx = typed();
+
+        expect(click(link).defaultPrevented).toBe(true);
+        expect(reached).toBe(false);
+        expect(ctx.pushEvent).not.toHaveBeenCalled();
+      });
+    }
+
+    it("asks in publish mode too, before the server offers to keep the rest", () => {
+      const ask = answer(false);
+      const ctx = typed({ armed: true });
+
+      click("#out");
+      expect(ctx.pushEvent).not.toHaveBeenCalled();
+
+      ask.mockReturnValue(true);
+      click("#out");
+      expect(ctx.pushEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it("objects when the tab is closed, reloaded or taken to another document", () => {
+      typed();
+
+      expect(unload()).toBe(true);
+    });
+
+    it("asks when Back or Forward goes to another of the editor's pages", () => {
+      const ask = answer(false);
+      typed();
+
+      expect(traverse({ pop: true, patch: false })).toBe(true);
+
+      ask.mockReturnValue(true);
+      expect(traverse({ pop: true, patch: false })).toBe(false);
+      expect(ask).toHaveBeenCalledTimes(2);
+    });
+
+    it("asks nothing of what stays in this editor", () => {
+      const ask = answer(false);
+      typed();
+
+      click("#stay");
+
+      expect(traverse({ pop: true, patch: true })).toBe(false);
+      expect(ask).not.toHaveBeenCalled();
+      expect(reached).toBe(true);
+    });
+
+    it("asks nothing once it is applied", () => {
+      const ask = answer(false);
+      const ctx = typed();
+      document.querySelector("textarea").value = "<p>Stored</p>";
+
+      click("#out");
+
+      expect(traverse({ pop: true, patch: false })).toBe(false);
+      expect(unload()).toBe(false);
+      expect(ask).not.toHaveBeenCalled();
+      expect(ctx.pushEvent).not.toHaveBeenCalled();
+    });
+
+    // Another extension's page arms the guard for a form of its own.
+    it("asks nothing on a page whose guard has no question about it", () => {
+      const ask = answer(false);
+      const ctx = typed({ unapplied: "" });
+
+      click("#out");
+
+      expect(traverse({ pop: true, patch: false })).toBe(false);
+      expect(unload()).toBe(false);
+      expect(ask).not.toHaveBeenCalled();
+      expect(ctx.pushEvent).not.toHaveBeenCalled();
+    });
+
+    it("stops asking once the hook is torn down", () => {
+      const ask = answer(false);
+      typed();
+      hooks.PbLeaveGuard.destroyed.call(live.pop());
+
+      expect(traverse({ pop: true, patch: false })).toBe(false);
+      expect(unload()).toBe(false);
+      expect(ask).not.toHaveBeenCalled();
+    });
   });
 });

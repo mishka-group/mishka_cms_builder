@@ -866,9 +866,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
 
   # And the status rides with a RECORD. A document being made has no entries yet, so naming one of
   # them is a query string with nothing behind it.
-  defp invitation(token, %{record: %{}, editor: %{status: status}})
-       when is_integer(status) or status == :offline,
-       do: "?" <> URI.encode_query(session: token, status: status)
+  defp invitation(token, %{record: %{}, editor: %{status: status}}) when not is_nil(status),
+    do: "?" <> URI.encode_query(session: token, status: status)
 
   defp invitation(token, _assigns), do: "?" <> URI.encode_query(session: token)
 
@@ -4530,9 +4529,13 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
-  def handle_event("audit_rerun", _params, socket),
-    do:
-      {:noreply, put_flash(socket, :info, gettext("Checks re-run against the current document."))}
+  # Re-run asks the extensions again too: their notes are kept for a moment
+  # (`MishkaCmsBuilder.ComponentNotes`), and an author who just archived a product and pressed Re-run
+  # means now.
+  def handle_event("audit_rerun", _params, socket) do
+    :ok = MishkaCmsBuilder.ComponentNotes.forget()
+    {:noreply, put_flash(socket, :info, gettext("Checks re-run against the current document."))}
+  end
 
   # A Forms finding names an edit rather than a decision — wrap this field, rename that form, move
   # this button — so Fix makes it, in one history entry, and where there is no edit to make it says
@@ -6558,6 +6561,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     * a required property left empty, a required slot never added, and text where a component takes
       a list or a map — `Inspector.unmet/3`, which the layers badge and the Inspector read too;
     * a layout that no longer renders `@inner_content`, or hides it from visitors;
+    * an error page's entry that shows a visitor nothing;
     * markup that will not compile.
 
   Only Publish is gated. A draft, the autosave and Code Apply still save a document with problems,
@@ -6574,7 +6578,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   defp publish_check(editor) do
     {heex, uncompilable} = compiled(editor.tree)
 
-    case unmet(editor) ++ slotless_layout(editor) ++ uncompilable do
+    case unmet(editor) ++ slotless_layout(editor) ++ empty_entry(editor) ++ uncompilable do
       [] -> {:ok, heex}
       problems -> {:refused, problems}
     end
@@ -6659,16 +6663,72 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
+  # AN ENTRY THAT SHOWS NOTHING. It compiles, so it was published, and each error it answers, every
+  # one of them for the default entry, was a blank page. `PageStarter.empty?/1` is a narrower
+  # question: whether the document still is the one it was born as.
+  defp empty_entry(editor) do
+    case Section.normalize(editor.section) == "error-page" and shows_nothing?(editor.tree) do
+      true ->
+        [
+          document_problem(
+            :empty,
+            gettext("this error page is empty, so every error it answers would be a blank page")
+          )
+        ]
+
+      false ->
+        []
+    end
+  end
+
+  # Elements that draw without anything in them, a script among them, which may.
+  @drawn ~w(audio canvas embed hr iframe img input math meter object progress script select svg) ++
+           ~w(textarea video)
+
+  # Elements whose text no visitor reads.
+  @unread ~w(head style template title)
+
+  @comments Node.comment_kinds()
+
+  defp shows_nothing?(tree) do
+    shown = Visibility.prune(tree)
+    Enum.all?(shown.roots, &shows_nothing?(shown, &1))
+  end
+
+  defp shows_nothing?(tree, id), do: tree |> Tree.get(id) |> shows_nothing_in?(tree)
+
+  defp shows_nothing_in?(%Node{kind: kind}, _tree) when kind in @comments, do: true
+  defp shows_nothing_in?(%Node{kind: :text, text: text}, _tree), do: String.trim(text) == ""
+  defp shows_nothing_in?(%Node{kind: :tag, tag: tag}, _tree) when tag in @unread, do: true
+  defp shows_nothing_in?(%Node{kind: :tag, tag: tag}, _tree) when tag in @drawn, do: false
+
+  defp shows_nothing_in?(%Node{kind: :tag} = node, tree) do
+    not (draws?(node) or pictured?(node)) and Enum.all?(node.children, &shows_nothing?(tree, &1))
+  end
+
+  defp shows_nothing_in?(_component_or_expression, _tree), do: false
+
+  # A custom element, and one a hook draws in.
+  defp draws?(node), do: String.contains?(node.tag, "-") or Node.attr(node, "phx-hook") != nil
+
+  defp pictured?(%Node{meta: meta} = node) do
+    styles = meta |> Map.get(:styles, %{}) |> Map.values() |> Enum.flat_map(&Map.values/1)
+
+    [Node.attr_text(node, "class"), Node.attr_text(node, "style") | styles]
+    |> Enum.any?(&(is_binary(&1) and String.contains?(&1, "url(")))
+  end
+
   # THE TOKENIZER IS NOT THE COMPILER, AND NEITHER IS THE SERIALIZER. The document in the editor
   # arrived through `Tree.parse/1`, which takes `{@a + }` — the braces delimit an expression and the
   # expression is a token to it. `to_heex/1` reads every expression on the way out and catches that
   # one; what neither of them reads is the HEEx itself, so `<div :foo={@a}>` — a special attribute
   # that does not exist — survives both and is refused by the engine that has to build the module.
   #
-  # `Validations.PageCodeCompiles` catches all of this for a PAGE at the action boundary. A layout,
-  # an error page and a component have no such validation, so for three of the four sections this is
-  # the last place it can be caught before the site stops compiling — and the document does not have
-  # to have been typed here to be broken: a seed, an import or a hand edit is enough.
+  # `Validations.PageCodeCompiles` catches all of this for a PAGE at the action boundary, and a core
+  # with `Validations.ErrorPageCompiles` does for an error page. A layout and a component have no such
+  # validation, so for them this is the last place it can be caught before the site stops compiling,
+  # and the document does not have to have been typed here to be broken: a seed, an import or a hand
+  # edit is enough.
   #
   # `CodeCheck.template/1` rather than `check/1`: this is the syntax question, it costs milliseconds
   # rather than the second a page compile does, which is what lets the red dot ask it on every change.
