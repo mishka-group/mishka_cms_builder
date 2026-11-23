@@ -97,7 +97,9 @@ defmodule MishkaCmsBuilderWeb.Live.ComponentNotesTest do
       html = canvas_html(conn, view)
 
       assert html =~ ~r/<div[^>]*data-pb-note="warning"/
-      assert html =~ ~r/<span[^>]*data-role="pb-component-note"[^>]*>The product gone was archived\./
+
+      assert html =~
+               ~r/<span[^>]*data-role="pb-component-note"[^>]*>The product gone was archived\./
     end
 
     test "a block whose product is fine has no note anywhere", %{conn: conn, site: site} do

@@ -105,7 +105,13 @@ defmodule MishkaCmsBuilder.ComponentNotes do
 
       _stale_or_new ->
         notes = Events.component_notes(Map.put(question, :node_id, node_id))
-        fresh = for {key, {_notes, at} = answer} <- kept, now - at < @fresh_ms, into: %{}, do: {key, answer}
+
+        fresh =
+          for {key, {_notes, at} = answer} <- kept,
+              now - at < @fresh_ms,
+              into: %{},
+              do: {key, answer}
+
         Process.put(@memo, Map.put(fresh, question, {notes, now}))
         notes
     end
