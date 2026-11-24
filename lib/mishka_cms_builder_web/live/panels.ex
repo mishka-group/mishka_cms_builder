@@ -24,6 +24,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   import MishkaCmsCore.CoreComponents, only: [roadmap_notice: 1, select_chevron: 1]
 
+  alias MishkaCmsBuilder.AttrChoices
   alias MishkaCmsBuilder.Collection
   alias MishkaCmsBuilder.ComponentNotes
   alias MishkaCmsCore.Builder.Literal
@@ -1978,7 +1979,12 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           >
             <.icon name={glyph} size={12} class="group-data-[on=true]/chip:text-[#e0a52a]" />{label}
           </button>
-          <.cat_chip :for={cat <- component_categories(@components)} cat={cat} active={@palette_cat} />
+          <.cat_chip
+            :for={cat <- component_categories(@components)}
+            cat={cat}
+            active={@palette_cat}
+            named={cat in extension_groups(@components)}
+          />
         </div>
 
         <%!-- The scope legend: without it the G/T badge on each card is an unexplained letter. --%>
@@ -3134,6 +3140,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           group_folds={@group_folds}
           typed={@typed}
           section={@section}
+          scope={notes_scope(@editor)}
         />
 
         <%!-- A SLOT AN AUTHOR HAS TO ADD IS NOT A DETAIL. Folded, the row that says "End section +"
@@ -3889,10 +3896,21 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
   attr(:typed, :map, default: %{}, doc: "what the forms hold, typed and not yet applied")
   attr(:section, :string, default: "page", doc: "which of the four documents is being edited")
 
+  attr(:scope, :map,
+    default: %{},
+    doc: "the site being edited, `:site_id` and `:site_name`, which a kit's read choices are for"
+  )
+
   defp props(assigns) do
     assigns =
       assigns
-      |> assign(:groups, assigns.entry |> grouped_attrs() |> without(assigns.hidden))
+      |> assign(
+        :groups,
+        assigns.entry
+        |> grouped_attrs()
+        |> without(assigns.hidden)
+        |> with_read_choices(assigns.entry, assigns.scope)
+      )
       |> assign(
         :extras,
         assigns.entry |> extra_attr_rows(assigns.node) |> without(assigns.hidden)
@@ -3910,11 +3928,11 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
         title={group}
         scope="prop"
         group_folds={@group_folds}
-        folded_by_default={group not in ~w(Content Properties)}
+        folded_by_default={folded_by_default?(group)}
       >
         <:meta>
           <span
-            :if={folded?(@group_folds, "prop", group, group not in ~w(Content Properties))}
+            :if={folded?(@group_folds, "prop", group, folded_by_default?(group))}
             class="flex-none font-['Space_Grotesk'] text-[9.5px] font-semibold text-[#a8a5a0]"
           >
             {length(attrs)}
@@ -4351,10 +4369,22 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       Enum.any?(Inspector.attrs(entry), &String.ends_with?(Inspector.name(&1) || "", "_text"))
   end
 
+  # The core's secondary sections start folded; Content, Properties and every section a kit names
+  # for its own attributes start open, since those are what an author came for.
+  defp folded_by_default?(group), do: group in ~w(Appearance Layout Behavior)
+
   defp grouped_attrs(entry) do
     entry
     |> Inspector.grouped()
     |> Enum.reject(fn {_group, attrs} -> attrs == [] end)
+  end
+
+  # AN ATTRIBUTE WHOSE CHOICES LIVE OUTSIDE THE BUNDLE, such as the site's products, is handed them
+  # here (`MishkaCmsBuilder.AttrChoices`), so its control is a select of their names.
+  defp with_read_choices(groups, entry, scope) do
+    for {group, attrs} <- groups do
+      {group, Enum.map(attrs, &AttrChoices.resolved(&1, entry.name, scope))}
+    end
   end
 
   # The whole style vocabulary `Tree.Styles` can express, split the way the panel groups it. A
@@ -4675,6 +4705,15 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       >
         {gettext("Using the component's default.")}
       </p>
+      <%!-- FOR THE CANVAS ONLY: the canvas draws it and a save leaves it out of the page
+            (`Tree.saved/2`), so an author who sets it is not surprised the page ignores it. --%>
+      <p
+        :if={Inspector.canvas_only?(@attr)}
+        data-role="pb-attr-canvas-only"
+        class="mt-1.5 text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+      >
+        {gettext("Only for the canvas. The saved page leaves it out.")}
+      </p>
       <%!-- BY DESIGN, SAID BESIDE THE PROPERTY. The component draws this only while one of its own
             switches is on, so until then what is typed here changes nothing on the canvas; without
             this an author concludes the field is broken. --%>
@@ -4829,7 +4868,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           (chosen?(@value, value) && "bg-white text-[#4f4bcc] shadow-sm") || "text-[#6d6a63]"
         ]}
       >
-        {value}
+        {Inspector.value_label(@attr, value)}
       </button>
     </div>
     """
@@ -4897,7 +4936,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
           class="h-8 w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[12px] font-semibold text-[#3a382f]"
         >
           <option value="">
-            {(default_text(@default) && gettext("%{value} (default)", value: default_text(@default))) ||
+            {(default_text(@default) not in [nil, ""] &&
+                gettext("%{value} (default)", value: Inspector.value_label(@attr, @default))) ||
               gettext("— default —")}
           </option>
           <option
@@ -4905,7 +4945,7 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
             value={option_value(value, @atom?)}
             selected={chosen?(@value, value)}
           >
-            {value}
+            {Inspector.value_label(@attr, value)}
           </option>
         </select>
         <.select_chevron />
@@ -16600,8 +16640,13 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
     |> MapSet.new(fn {prefix, _count} -> prefix end)
   end
 
-  @doc "A card's label with its kit prefix removed. Falls back to the full label."
+  @doc """
+  A card's label with its kit prefix removed. Falls back to the full label, and keeps the whole of a
+  name the kit gave the component itself (`titled?`), which is already the short one.
+  """
   @spec short_label(map(), MapSet.t(String.t())) :: String.t()
+  def short_label(%{titled?: true, label: label}, _prefixes), do: label
+
   def short_label(entry, prefixes) do
     case String.split(to_string(entry.name), "-") do
       [head | [_ | _] = rest] ->
@@ -17186,8 +17231,17 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
 
   defp extension_group?(entry), do: PaletteEntry.optional(entry, :extension?) == true
 
+  # The groups that are an installed extension's name, whose chip keeps its own spelling.
+  defp extension_groups(components),
+    do: for(entry <- components, extension_group?(entry), uniq: true, do: palette_group(entry))
+
   attr(:cat, :string, required: true)
   attr(:active, :string, required: true)
+
+  attr(:named, :boolean,
+    default: false,
+    doc: "an installed extension's name, written as the extension writes it, not capitalized"
+  )
 
   # One chip, drawn in two places — All is rendered on its own so the two browser-side chips can sit
   # between it and the kit's categories.
@@ -17198,7 +17252,8 @@ defmodule MishkaCmsBuilderWeb.Live.Panels do
       phx-click="palette_cat"
       phx-value-cat={@cat}
       class={[
-        "h-7 flex-none rounded-[8px] border px-[11px] text-[11px] font-semibold capitalize",
+        "h-7 flex-none rounded-[8px] border px-[11px] text-[11px] font-semibold",
+        !@named && "capitalize",
         (@active == @cat && "border-[#dcdbf5] bg-[#f2f1fc] text-[#4f4bcc]") ||
           "border-[#ecebe6] bg-white text-[#6d6a63] hover:border-[#dcdbf5]"
       ]}

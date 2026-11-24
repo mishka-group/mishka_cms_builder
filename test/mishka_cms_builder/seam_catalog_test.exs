@@ -28,7 +28,8 @@ defmodule MishkaCmsBuilder.SeamCatalogTest do
   @editor_named ~w(history_query before_draft_save after_draft_save before_comment after_comment
                    before_code_apply before_token_set before_class_save before_element_css
                    after_element_css before_ask containment examples preset_choices
-                   toolbar_invoked form_customized form_created component_notes)a
+                   toolbar_invoked form_customized form_created component_notes
+                   attr_choices)a
 
   defp source, do: "lib/**/*.ex" |> Path.wildcard() |> Enum.map_join("\n", &File.read!/1)
 

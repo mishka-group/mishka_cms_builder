@@ -1277,6 +1277,17 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         pointer-events: none;
       }
       [data-role="pb-component-note"][data-severity="note"] { border-color: #dcdbf5; background: #f6f5ff; color: #4f4bcc; }
+      /* A LIVE BLOCK DRAWS ITS OWN CHIP IN THE SAME CORNER on hover and selection ("Live · …"), so its
+         note sits at the bottom edge instead, and wraps to three lines rather than being cut. */
+      [data-pb-live] > [data-role="pb-component-note"] {
+        top: auto;
+        bottom: 4px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+      }
       /* A field is being dragged: every form it could join is outlined until the drag ends. */
       html[data-pb-field-drag] [data-pb-form] { outline: 2px dashed #8b5cf6; outline-offset: 3px; }
 
