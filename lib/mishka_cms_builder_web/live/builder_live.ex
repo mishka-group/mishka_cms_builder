@@ -4275,7 +4275,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     %{section: section, record: record, editor: editor, leave_to: to} = socket.assigns
     label = editor.draft_label || socket.assigns.draft_label
 
-    with {:ok, heex} <- Serializer.to_heex(editor.tree),
+    with {:ok, heex} <- editor.tree |> Tree.saved(editor.components || []) |> Serializer.to_heex(),
          {:ok, draft} <-
            gated_autosave(
              section,
@@ -7276,7 +7276,20 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # THE SECOND MARKUP PANE, and it was the one that wrote without asking. The drawer's HEEx pane runs
   # `compiles/2` before it replaces anything — the whole document or one element — and this modal,
   # which replaces the whole document too, ran the tokenizer and nothing else.
+  # APPLYING THE WINDOW UNCHANGED CHANGES NOTHING. What it shows is what a save writes, not the
+  # document itself, so parsing it back would drop what is for the canvas only (who a block is
+  # previewed for) for an edit nobody made.
   defp apply_source(socket, source) do
+    case source == stored_source(socket.assigns.editor) do
+      true ->
+        {:noreply, assign(socket, source_modal: false, source_error: nil, source_draft: nil)}
+
+      false ->
+        replace_source(socket, source)
+    end
+  end
+
+  defp replace_source(socket, source) do
     with {:ok, tree} <- Tree.parse(source),
          :ok <- placement_ok(socket, source),
          :ok <- compiles(socket, tree) do
@@ -8414,7 +8427,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       <Panels.leave_modal :if={@leave_to} />
       <Panels.source_modal
         :if={@source_modal}
-        source={@source_draft || page_source(@editor.tree)}
+        source={@source_draft || stored_source(@editor)}
         error={@source_error}
         label={source_label(assigns)}
         tab={@source_tab}
@@ -8466,6 +8479,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     </div>
     """
   end
+
+  # WHAT A SAVE WRITES, for the Code window that says so: `Tree.saved/2` of the document, as Publish
+  # and every draft write it. A block that declares the visitor carries the page's, and an attribute
+  # that is for the canvas only, such as who a block is previewed for, is not there.
+  defp stored_source(editor),
+    do: editor.tree |> Tree.saved(editor.components || []) |> page_source()
 
   # WHAT A SAVE WOULD WRITE. `to_heex/1` serialises, proves the result re-parses, then formats — so
   # the string on screen is the string in the column. When formatting fails the raw serialisation is
