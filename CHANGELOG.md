@@ -1,3 +1,14 @@
+# Changelog for MishkaCmsBuilder 0.0.2
+
+- A save hands a block that shows something per visitor the page's visitor. Publish, autosave and "Keep as a draft" write `current_user={assigns[:current_user]}` on a block that declares `current_user`, so a draft's preview and the published page draw it for whoever looks
+- An attribute a kit marks for the canvas only, such as which visitor a block is previewed for, stays on the canvas and is left out of the saved page; the Inspector says under it "Only for the canvas. The saved page leaves it out."
+- The Code window shows what a save writes: the page's visitor on a block that declares it, and no canvas-only attribute. Applying it unchanged changes nothing, so a block's canvas-only choice is kept
+- The canvas draws a per-visitor block for the person editing it, as the published page draws it for its visitor; a block's own "Preview as" still decides who it is drawn for
+- The Inspector follows a kit's own sections: the sections a kit names open by default and only Appearance, Layout and Behavior start folded; a select and its pills use the words the kit gives them, and the choices a kit reads from the site, such as its products or a blog's categories, are a select of their names, or a text box when there is nothing to choose. One ask for the same choices is shared for a few seconds, so typing does not ask again on every key
+- A component's own name from its kit is the whole label of its palette card, and an extension's category chip keeps the spelling the extension gives it
+- The note on a live block sits at the bottom edge of the block and wraps to three lines, clear of its "Live" chip
+- Needs mishka_cms_core 0.0.7, which brings the `builder:attr:choices` event and the saved tree's page visitor. Every dependency is at its latest release, including ash 3.38.1, image 0.74.0, color 1.0.0, eqrcode 0.3.0, lazy_html 0.1.15 and mishka_slug 0.0.3; assent 0.3.2 and bcrypt_elixir 3.3.2 stay behind because ash_authentication requires them
+
 # Changelog for MishkaCmsBuilder 0.0.1
 
 - Initial version: [mishka.tools/cms](https://mishka.tools/cms)
