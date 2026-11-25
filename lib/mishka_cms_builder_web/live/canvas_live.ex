@@ -1277,6 +1277,17 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         pointer-events: none;
       }
       [data-role="pb-component-note"][data-severity="note"] { border-color: #dcdbf5; background: #f6f5ff; color: #4f4bcc; }
+      /* A LIVE BLOCK DRAWS ITS OWN CHIP IN THE SAME CORNER on hover and selection ("Live · …"), so its
+         note sits at the bottom edge instead, and wraps to three lines rather than being cut. */
+      [data-pb-live] > [data-role="pb-component-note"] {
+        top: auto;
+        bottom: 4px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+      }
       /* A field is being dragged: every form it could join is outlined until the drag ends. */
       html[data-pb-field-drag] [data-pb-form] { outline: 2px dashed #8b5cf6; outline-offset: 3px; }
 
@@ -1638,6 +1649,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         shapers={@shapers}
         holders={@holders}
         form_marks={assigns[:form_marks]}
+        visitor={assigns[:current_user]}
       />
       {raw(elem(@layout_shell, 1))}
 
@@ -2212,6 +2224,10 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
   attr :holders, :map, default: %{}
   attr :form_marks, :any, default: nil
 
+  attr :visitor, :any,
+    default: nil,
+    doc: "who a block that declares `current_user` is drawn for: the builder's own user"
+
   defp pb_node(assigns) do
     assigns = assign(assigns, :node, Tree.get(assigns.tree, assigns.id))
     render_node(assigns)
@@ -2422,6 +2438,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         shapers={@shapers}
         holders={@holders}
         form_marks={@form_marks}
+        visitor={@visitor}
       />
     </div>
     """
@@ -2517,6 +2534,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
         shapers={@shapers}
         holders={@holders}
         form_marks={@form_marks}
+        visitor={@visitor}
       /></.dynamic_tag>
     """
   end
@@ -4066,10 +4084,25 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
     |> put_live_id(node, module)
     |> Map.merge(slot_assigns(node, tree, assigns))
     |> put_component_class(node, module)
+    |> put_visitor(declared, assigns[:visitor])
     |> Map.put(@wrapper_attrs["component_name"], name)
     |> Map.put(@wrapper_attrs["site"], scope)
     |> tracked()
   end
+
+  # THE BUILDER'S OWN USER IS WHO A PER-VISITOR BLOCK IS DRAWN FOR, as the published page draws it for
+  # whoever looks. A save hands such a block `current_user={assigns[:current_user]}`
+  # (`Tree.saved/2`), which the canvas cannot evaluate, so a block that declares the attribute and
+  # was given no value of its own gets the person editing it. A block that picks who it is drawn for
+  # itself (a kit's canvas-only "Preview as" attribute) still decides that on its own.
+  defp put_visitor(assigns_map, %{"current_user" => key}, %{} = visitor) do
+    case Map.get(assigns_map, key) do
+      nil -> Map.put(assigns_map, key, visitor)
+      _given -> assigns_map
+    end
+  end
+
+  defp put_visitor(assigns_map, _declared, _visitor), do: assigns_map
 
   # A LIVE COMPONENT IS HANDED ITS ID, it does not declare one: LiveView gives the `id` of
   # `live_component/1` to the component as `@id`, and the published page's dispatch does exactly
@@ -4334,7 +4367,8 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       conceals: assigns[:conceals],
       shapers: assigns[:shapers],
       holders: assigns[:holders] || %{},
-      form_marks: assigns[:form_marks]
+      form_marks: assigns[:form_marks],
+      visitor: assigns[:visitor]
     }
 
     ~H"""
@@ -4353,6 +4387,7 @@ defmodule MishkaCmsBuilderWeb.Live.CanvasLive do
       shapers={@shapers}
       holders={@holders}
       form_marks={@form_marks}
+      visitor={@visitor}
     />
     """
   end

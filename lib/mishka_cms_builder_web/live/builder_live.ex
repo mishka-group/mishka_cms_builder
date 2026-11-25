@@ -2059,7 +2059,8 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       :furnishing,
       :doc_url,
       :ui_kit_label,
-      :form_meta
+      :form_meta,
+      :label
     ])
     |> PartPlacement.with_kit_facts()
     # EVERY PAGE. This asked for 1000 at once, and the read takes 250 a page: a site whose own
@@ -2162,7 +2163,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       key: component.name,
       name: component.name,
       template: component.template,
-      label: humanize(component.name),
+      # THE KIT'S OWN NAME FOR IT, "Product card", when it gives one in `extra.label`; the
+      # component's name made readable otherwise. A named one keeps its whole name on its card
+      # (`titled?`), where a shared prefix is dropped from the others (`Panels.short_label/2`).
+      label: palette_label(component),
+      titled?: titled?(component.label),
       type: component.type || "general",
       group: group,
       extension?: extension?,
@@ -2255,6 +2260,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     |> Wizard.axes()
     |> Enum.any?()
   end
+
+  defp palette_label(%{label: label}) when is_binary(label) and label != "", do: label
+  defp palette_label(component), do: humanize(component.name)
+
+  defp titled?(label), do: is_binary(label) and label != ""
 
   defp humanize(name) do
     name
@@ -2928,8 +2938,10 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # THE SESSION AS STORED, handed in by `Keeper` when this write's turn comes: its tree, the draft it
   # writes to and the name that draft has, which a write that ran before this one may have just
   # given it. `label` names the sitting's first row and nothing after.
+  # Written as a save writes it (`Tree.saved/2`), so a draft's preview draws a per-visitor block for
+  # the person who looks, as the published page will.
   defp write_draft(editor, section, record, actor, label, who) do
-    case Serializer.to_heex(editor.tree) do
+    case editor.tree |> Tree.saved(editor.components || []) |> Serializer.to_heex() do
       {:ok, heex} ->
         gated_autosave(section, record, heex, actor, editor, editor.draft_label || label, who)
 
@@ -4263,7 +4275,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     %{section: section, record: record, editor: editor, leave_to: to} = socket.assigns
     label = editor.draft_label || socket.assigns.draft_label
 
-    with {:ok, heex} <- Serializer.to_heex(editor.tree),
+    with {:ok, heex} <- editor.tree |> Tree.saved(editor.components || []) |> Serializer.to_heex(),
          {:ok, draft} <-
            gated_autosave(
              section,
@@ -6575,8 +6587,11 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     end
   end
 
+  # WHAT A SAVE WRITES IS `Tree.saved/2` OF WHAT THE EDITOR DRAWS: a block that declares the visitor
+  # is handed the page's, which the Inspector never offers, and an attribute that is for the canvas
+  # only, such as which visitor a block is drawn for, stays out of the page.
   defp publish_check(editor) do
-    {heex, uncompilable} = compiled(editor.tree)
+    {heex, uncompilable} = editor.tree |> Tree.saved(editor.components || []) |> compiled()
 
     case unmet(editor) ++ slotless_layout(editor) ++ empty_entry(editor) ++ uncompilable do
       [] -> {:ok, heex}
@@ -7261,7 +7276,20 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
   # THE SECOND MARKUP PANE, and it was the one that wrote without asking. The drawer's HEEx pane runs
   # `compiles/2` before it replaces anything — the whole document or one element — and this modal,
   # which replaces the whole document too, ran the tokenizer and nothing else.
+  # APPLYING THE WINDOW UNCHANGED CHANGES NOTHING. What it shows is what a save writes, not the
+  # document itself, so parsing it back would drop what is for the canvas only (who a block is
+  # previewed for) for an edit nobody made.
   defp apply_source(socket, source) do
+    case source == stored_source(socket.assigns.editor) do
+      true ->
+        {:noreply, assign(socket, source_modal: false, source_error: nil, source_draft: nil)}
+
+      false ->
+        replace_source(socket, source)
+    end
+  end
+
+  defp replace_source(socket, source) do
     with {:ok, tree} <- Tree.parse(source),
          :ok <- placement_ok(socket, source),
          :ok <- compiles(socket, tree) do
@@ -8399,7 +8427,7 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
       <Panels.leave_modal :if={@leave_to} />
       <Panels.source_modal
         :if={@source_modal}
-        source={@source_draft || page_source(@editor.tree)}
+        source={@source_draft || stored_source(@editor)}
         error={@source_error}
         label={source_label(assigns)}
         tab={@source_tab}
@@ -8451,6 +8479,12 @@ defmodule MishkaCmsBuilderWeb.Live.BuilderLive do
     </div>
     """
   end
+
+  # WHAT A SAVE WRITES, for the Code window that says so: `Tree.saved/2` of the document, as Publish
+  # and every draft write it. A block that declares the visitor carries the page's, and an attribute
+  # that is for the canvas only, such as who a block is previewed for, is not there.
+  defp stored_source(editor),
+    do: editor.tree |> Tree.saved(editor.components || []) |> page_source()
 
   # WHAT A SAVE WOULD WRITE. `to_heex/1` serialises, proves the result re-parses, then formats — so
   # the string on screen is the string in the column. When formatting fails the raw serialisation is
